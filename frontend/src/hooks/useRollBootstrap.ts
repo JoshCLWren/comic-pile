@@ -129,6 +129,17 @@ export function useRollBootstrap(): UseRollBootstrapResult {
         }
       : null
 
+    const snoozedThreads: RollBootstrapThread[] = snoozedIds.flatMap((id) => {
+      const thread = snoozedSummaries.data?.threads.find((candidate) => candidate.id === id)
+      if (!thread) return []
+      return [{
+        id: thread.id,
+        title: thread.title,
+        format: thread.format,
+        tags: thread.tags ?? [],
+      }]
+    })
+
     const recovery = pending != null
       ? buildRollRecovery({
           pending,
@@ -147,7 +158,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
       active_thread: activeThread,
       roll_recovery: recovery,
       roll_pool: rollPool,
-      snoozed_threads: [],
+      snoozed_threads: snoozedThreads,
       snoozed_count: snoozedIds.length,
       snoozed_thread_ids: snoozedIds,
       skipped_thread_ids: [],
@@ -167,6 +178,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     prerequisiteCards.data,
     graphQuery.data,
     rateQuery.data,
+    snoozedSummaries.data,
     eligible.data?.pool_reason,
   ])
 

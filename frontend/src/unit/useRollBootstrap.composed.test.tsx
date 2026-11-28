@@ -7,6 +7,8 @@ import { useRollPendingSelection } from '../hooks/useRollPendingSelection'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { dependenciesApi } from '../services/api-dependencies'
+import { readRollSnoozes } from '../services/api-roll'
+import { threadsApi } from '../services/api-threads'
 import { rollResourcesApi } from '../services/rollResourcesApi'
 import type { IssueCardsResponse } from '../generated/nativeV2Client'
 import type { RollPendingSelection } from '../services/rollPendingSelection'
@@ -23,6 +25,8 @@ vi.mock('../services/rollResourcesApi', () => ({
 vi.mock('../services/api-dependencies', () => ({
   dependenciesApi: { getIssueDependencies: vi.fn() },
 }))
+vi.mock('../services/api-roll', () => ({ readRollSnoozes: vi.fn(() => []) }))
+vi.mock('../services/api-threads', () => ({ threadsApi: { list: vi.fn() } }))
 
 const mockedPending = vi.mocked(useRollPendingSelection)
 const mockedResources = vi.mocked(rollResourcesApi)

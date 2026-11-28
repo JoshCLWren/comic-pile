@@ -81,6 +81,14 @@ export function createRollBootstrapApi(client: HttpClient) {
           })).items
         }
       }
+      const snoozedThreads: RollBootstrapThread[] = snoozes.length > 0
+        ? (await nativeV2.listThreads({ query: { page_size: 200 } })).threads.flatMap((thread) =>
+            snoozes.includes(thread.id) ? [{
+              id: thread.id,
+              title: thread.title,
+              format: thread.format,
+            }] : [])
+        : []
       const graph = queryClient.getQueryData<ReadingGraphResponse>(
         queryKeys.readingGraph.status(),
       ) ?? null
@@ -115,7 +123,7 @@ export function createRollBootstrapApi(client: HttpClient) {
         active_thread: null,
         roll_recovery: recovery,
         roll_pool: rollPool,
-        snoozed_threads: [],
+        snoozed_threads: snoozedThreads,
         snoozed_count: snoozes.length,
         snoozed_thread_ids: snoozes,
         skipped_thread_ids: [],
