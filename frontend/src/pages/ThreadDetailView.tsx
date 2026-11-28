@@ -138,6 +138,7 @@ export default function ThreadDetailView() {
 
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  const [editError, setEditError] = useState<string | null>(null)
   // MQA-QUEUE-008 / #4356: closing a dirty Edit Series draft via the dialog
   // close control (×, Escape, backdrop) asks whether to discard, mirroring the
   // queue page's Edit Series dialog. Queued deferred issue edits count as
@@ -390,6 +391,7 @@ export default function ThreadDetailView() {
   const handleEditSubmit = async (event: FormEvent) => {
     event.preventDefault()
     const currentThread = thread!
+    setEditError(null)
 
     try {
       // First, flush any pending issue mutations (add, delete, reorder)
@@ -437,14 +439,14 @@ export default function ThreadDetailView() {
       }
     } catch (error) {
       console.error('Failed to update thread or flush issues:', error)
-      // The error is already handled by the mutation's error boundary,
-      // but we keep the console error for debugging
+      setEditError(`Failed to save series: ${getApiErrorDetail(error)}`)
     }
   }
 
   const openEditModal = () => {
     const currentThread = thread!
 
+    setEditError(null)
     setEditForm({
       title: currentThread.title,
       format: currentThread.format,
@@ -482,6 +484,7 @@ export default function ThreadDetailView() {
     if (!isEditOpen) {
       setHasPendingIssueEdits(false)
       setShowDiscardPrompt(false)
+      setEditError(null)
     }
   }, [isEditOpen])
 
@@ -1045,6 +1048,16 @@ export default function ThreadDetailView() {
               deferred={true}
               onPendingMutationsChange={setHasPendingIssueEdits}
             />
+          )}
+
+          {editError && (
+            <p
+              role="alert"
+              data-testid="thread-edit-error"
+              className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-danger)]"
+            >
+              {editError}
+            </p>
           )}
 
           <button
