@@ -382,7 +382,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
             &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
-            Some(json!({"issue_range": "3", "insert_after_issue_id": null})),
+            Some(json!({"issue_range": "3", "insert_after_issue_id": null, "append_to_end": true})),
         ),
     )
     .await;
@@ -519,7 +519,8 @@ async fn create_issues_validation_isolation_and_not_found() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // v2 uses a typed Path<i32>; axum rejects a non-numeric id with 400.
+    assert_eq!(status, StatusCode::BAD_REQUEST);
     let (status, body) = send(
         &state,
         post(
