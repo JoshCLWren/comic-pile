@@ -321,7 +321,6 @@ WITH primaries AS (
        -- non-matching primaries would end the stream early. The predicates
        -- mirror the companion joins below so the same logical actions qualify.
        AND ($7::text IS NULL
-            OR e.type = $7
             OR ($7 = 'rate'
                 AND e.type IN ('rate', 'issue_command', 'issue_unread')
                 AND e.issue_id IS NOT NULL
@@ -336,6 +335,25 @@ WITH primaries AS (
                          AND 'roll-rating-' || d.thread_id || '-'
                              || (e.context->>'issue_command_key')
                              = d.context->>'dice_command_key'))
+            OR (e.type = $7
+                -- A coalesced rating is reader-visible `rate` even when its
+                -- durable receipt is issue_command/issue_unread. Excluding it
+                -- here (rather than only at emission) keeps a bounded page from
+                -- spending a primary slot on a row the filter cannot emit.
+                AND NOT (
+                    e.type IN ('rate', 'issue_command', 'issue_unread')
+                    AND e.issue_id IS NOT NULL
+                    AND e.context->>'issue_command_key' IS NOT NULL
+                    AND EXISTS (
+                          SELECT 1 FROM events d
+                           WHERE d.user_id = $1
+                             AND d.type = 'rate'
+                             AND d.issue_id = e.issue_id
+                             AND d.thread_id IS NOT NULL
+                             AND d.context->>'dice_command_key' LIKE 'roll-rating-%'
+                             AND 'roll-rating-' || d.thread_id || '-'
+                                 || (e.context->>'issue_command_key')
+                                 = d.context->>'dice_command_key'))))
             OR ($7 = 'roll'
                 AND e.type = 'snooze'
                 AND e.context->>'dice_command_key' LIKE '%-snooze'
