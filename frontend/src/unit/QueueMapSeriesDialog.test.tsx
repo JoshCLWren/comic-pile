@@ -757,21 +757,34 @@ describe('QueueMapSeriesDialog', () => {
   })
 
   it('distinguishes a refused commit from a committed mapping whose follow-up hydration failed', async () => {
-    // #5170: the server persisted the mapping and returned success; only the
-    // post-commit cache/hydration refresh failed. That must not be reported as
-    // "Nothing was changed" — the mapping is confirmed and stays confirmed on
-    // reload. A genuinely refused commit (asserted by the neighbouring test)
-    // is the opposite case and does call onMapped.
+    // #5170: a definitive 4xx refusal leaves the series unmapped; a successful
+    // commit whose post-commit cache/hydration refresh fails is still mapped.
+    // The dialog must never report the second case as "Nothing was changed".
     const user = userEvent.setup()
-    clearIntelligenceManySpy.mockRejectedValueOnce(new Error('hydration refresh failed'))
-    const { onMapped } = renderDialog()
 
+    mockedCommit.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: 'invalid_approved_row' } },
+    })
+    const refused = renderDialog()
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not map the series. Nothing was changed.',
+    )
+    expect(refused.onMapped).not.toHaveBeenCalled()
+    refused.unmount()
+
+    clearIntelligenceManySpy.mockRejectedValueOnce(new Error('hydration refresh failed'))
+    const saved = renderDialog()
     await user.click(await screen.findByTestId('queue-map-series-result'))
     await user.click(await screen.findByTestId('queue-map-series-approve'))
 
     expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
-    expect(onMapped).toHaveBeenCalledWith([2])
+    expect(saved.onMapped).toHaveBeenCalledWith([2])
     expect(screen.queryByText('Could not map the series. Nothing was changed.')).not.toBeInTheDocument()
+    // The follow-up refresh was still attempted; only the commit result won.
+    expect(clearIntelligenceManySpy).toHaveBeenCalledWith(expect.anything(), [2])
+    expect(invalidateQueueSpy).toHaveBeenCalledTimes(1)
   })
 
   it('retries a lost commit response and accepts the replayed success', async () => {
