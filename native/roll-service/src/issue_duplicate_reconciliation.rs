@@ -1706,6 +1706,91 @@ mod tests {
         assert!(!e.is_synthetic_placeholder_read);
     }
 
+    /// #3231 rehearsal: two readers confirm the same external issue identity.
+    /// The same-owner pair is a duplicate candidate; the cross-owner pair is a
+    /// legitimate shared reference and must never be reconciled as a duplicate.
+    async fn rehearsal_fixture() -> (
+        std::sync::Arc<AppState>,
+        tokio::sync::MutexGuard<'static, ()>,
+    ) {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let guard = crate::test_support::reset_for_test(&state).await;
+        let conn = db::checkout(&state)
+            .await
+            .expect("duplicate rehearsal connection");
+        conn.batch_execute(
+            r#"
+            INSERT INTO users (id, username, created_at) VALUES
+                (9101, 'dup-a', NOW()), (9102, 'dup-b', NOW());
+            INSERT INTO external_identities
+                (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+            VALUES (8001, 'comicvine', 'issue', '4050-0001', '{}'::json, NOW(), NOW());
+            INSERT INTO threads
+                (id, user_id, title, format, issues_remaining, queue_position, status, created_at)
+            VALUES (9201, 9101, 'A one', 'comic', 1, 1, 'active', NOW()),
+                   (9202, 9101, 'A two', 'comic', 1, 2, 'active', NOW()),
+                   (9401, 9102, 'B one', 'comic', 1, 1, 'active', NOW());
+            INSERT INTO issues
+                (id, thread_id, issue_number, status, created_at, position)
+            VALUES (9201, 9201, '1', 'unread', NOW(), 1),
+                   (9202, 9202, '2', 'unread', NOW(), 1),
+                   (9401, 9401, '1', 'unread', NOW(), 1);
+            INSERT INTO issue_external_identity_mappings
+                (id, issue_id, external_identity_id, status, evidence_source, evidence_json,
+                 created_at, updated_at)
+            VALUES (9301, 9201, 8001, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW()),
+                   (9302, 9202, 8001, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW()),
+                   (9501, 9401, 8001, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW());
+            "#,
+        )
+        .await
+        .expect("seed duplicate rehearsal fixture");
+        drop(conn);
+        (state, guard)
+    }
+
+    #[tokio::test]
+    async fn rehearsal_same_owner_duplicate_is_not_a_cross_owner_shared_reference() {
+        let (state, _guard) = rehearsal_fixture().await;
+        let mut conn = db::checkout(&state)
+            .await
+            .expect("rehearsal transaction connection");
+        let tx = conn
+            .build_transaction()
+            .read_only(true)
+            .start()
+            .await
+            .expect("rehearsal transaction");
+
+        let a_pairs = load_detected_pairs(&tx, 9101)
+            .await
+            .expect("reader A duplicate pairs");
+        assert_eq!(
+            a_pairs
+                .iter()
+                .map(|p| (p.issue_ids, p.group_key.clone()))
+                .collect::<Vec<_>>(),
+            vec![([9201, 9202], "cv-issue:4050-0001".to_string())],
+            "same-owner confirmed identity is a duplicate candidate: {a_pairs:?}"
+        );
+
+        let b_pairs = load_detected_pairs(&tx, 9102)
+            .await
+            .expect("reader B duplicate pairs");
+        assert!(
+            b_pairs.is_empty(),
+            "one owner cannot duplicate against a foreign issue: {b_pairs:?}"
+        );
+        assert!(
+            !a_pairs.iter().any(|p| p.issue_ids.contains(&9401)),
+            "cross-owner shared reference must not be reported as a duplicate: {a_pairs:?}"
+        );
+
+        tx.rollback().await.expect("rollback rehearsal transaction");
+    }
+
     #[test]
     fn preview_warns_on_synthetic_read_events() {
         let canonical = evidence(
