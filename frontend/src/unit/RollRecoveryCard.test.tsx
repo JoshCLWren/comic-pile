@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { RollRecoveryCard } from '../pages/RollPage/components/RollRecoveryCard'
-import type { RollRecoveryInfo } from '../types/rollBootstrap'
+import type { RollRecoveryInfo } from '../types/rollState'
 import { issueCardsApi } from '../services/issueCardsApi'
 vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 

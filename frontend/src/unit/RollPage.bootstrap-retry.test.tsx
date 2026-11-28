@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 
@@ -13,7 +13,7 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }),
 }))
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: () => ({ mutate: vi.fn(), isPending: false }),
@@ -67,9 +67,9 @@ vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: () => null }))
 vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: () => <div>pool</div> }))
 
-// SAFETY: The mocked useRollBootstrap return value is read by the page hooks;
+// SAFETY: The mocked useRollState return value is read by the page hooks;
 // the cast reuses the same widening used across the RollPage test suite.
-const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
+const mockedUseRollState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollState))
 
 function renderRollPage() {
   return render(
@@ -87,7 +87,7 @@ describe('RollPage bounded bootstrap loading (issue #3429)', () => {
   })
 
   it('holds a bare spinner before any bootstrap attempt has failed', () => {
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: null,
       refetch: spies.refetch,
       isPending: true,
@@ -104,7 +104,7 @@ describe('RollPage bounded bootstrap loading (issue #3429)', () => {
   })
 
   it('offers Retry without a reload once a bootstrap attempt has failed', () => {
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: null,
       refetch: spies.refetch,
       isPending: true,
@@ -122,7 +122,7 @@ describe('RollPage bounded bootstrap loading (issue #3429)', () => {
   })
 
   it('offers Retry on a bootstrap failure', () => {
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: null,
       refetch: spies.refetch,
       isPending: false,
@@ -143,7 +143,7 @@ describe('RollPage bounded bootstrap loading (issue #3429)', () => {
     // React Query resets failureCount to 0 when refetch() starts. The page must
     // stay on the bounded retry affordance instead of falling back to the bare
     // splash the user just clicked Retry to escape.
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: null,
       refetch: spies.refetch,
       isPending: true,

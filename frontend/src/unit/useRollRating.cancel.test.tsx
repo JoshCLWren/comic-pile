@@ -77,14 +77,14 @@ function state(): RollPageState & RollPageStateSetters {
 describe('rating exit without server-owned pending', () => {
   const rateMutation = { mutate: vi.fn(), isPending: false }
   const dismissPendingMutation = { mutate: vi.fn(), isPending: false }
-  const refetchBootstrap = vi.fn()
+  const refetchRollState = vi.fn()
   const clearPending = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
     rateMutation.mutate.mockResolvedValue({ rate: undefined, bootstrap: null })
     dismissPendingMutation.mutate.mockResolvedValue(undefined)
-    refetchBootstrap.mockResolvedValue(undefined)
+    refetchRollState.mockResolvedValue(undefined)
   })
 
   function render() {
@@ -93,7 +93,7 @@ describe('rating exit without server-owned pending', () => {
       bootstrap: null,
       rateMutation,
       dismissPendingMutation,
-      refetchBootstrap,
+      refetchRollState,
       clearPending,
     }))
   }
@@ -103,7 +103,7 @@ describe('rating exit without server-owned pending', () => {
     await act(async () => { await result.current.handleCancelRating() })
     expect(clearPending).toHaveBeenCalledWith()
     expect(dismissPendingMutation.mutate).not.toHaveBeenCalled()
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(refetchRollState).not.toHaveBeenCalled()
   })
 
   it('clears the exact selected issue only after a successful rate', async () => {

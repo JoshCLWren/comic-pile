@@ -1,8 +1,8 @@
 import { useContext, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { AuthContext } from '../contexts/AuthContext'
-import { fetchAndPublishRollBootstrap, isAmbiguousNetworkFailure } from './rollMutationReconciliation'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { fetchAndPublishRollState, isAmbiguousNetworkFailure } from './rollMutationReconciliation'
+import { rollStateApi } from '../services/rollStateApi'
 import { useRollPendingSelection } from './useRollPendingSelection'
 import { getApiErrorDetail } from '../utils/apiError'
 
@@ -21,14 +21,14 @@ export function useRollPrerequisiteSwitch(): RollPrerequisiteSwitchState {
     mutationFn: async (issueId: number) => {
       setErrorMessage(null)
       try {
-        const response = await rollBootstrapApi.switchPrerequisite({ node_type: 'issue', node_id: issueId })
+        const response = await rollStateApi.switchPrerequisite({ node_type: 'issue', node_id: issueId })
         select({
           issue_id: response.target_issue_id,
           thread_id: response.target_thread_id,
           issue_number: response.target_issue_number,
         })
         try {
-          await fetchAndPublishRollBootstrap(rollBootstrapApi, userId)
+          await fetchAndPublishRollState(rollStateApi, userId)
         } catch {
           setErrorMessage(
             'The roll switched, but ComicPile could not refresh its recovery guidance. The new reading target may already be active.',
@@ -38,7 +38,7 @@ export function useRollPrerequisiteSwitch(): RollPrerequisiteSwitchState {
         const ambiguous = isAmbiguousNetworkFailure(error)
         const switchFailure = getApiErrorDetail(error)
         try {
-          await fetchAndPublishRollBootstrap(rollBootstrapApi, userId)
+          await fetchAndPublishRollState(rollStateApi, userId)
           setErrorMessage(
             ambiguous
               ? 'ComicPile could not confirm whether the roll switched. Recovery guidance has been refreshed.'

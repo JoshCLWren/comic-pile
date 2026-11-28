@@ -2,24 +2,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cast } from '../utils/cast'
 import {
   isAmbiguousNetworkFailure,
-  publishRollBootstrap,
+  publishRollState,
   reconcileAmbiguousRollMutation,
-  ROLL_BOOTSTRAP_RECONCILED_EVENT,
+  ROLL_STATE_RECONCILED_EVENT,
 } from '../hooks/rollMutationReconciliation'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import { rollStateApi } from '../services/rollStateApi'
+import type { RollState } from '../types/rollState'
 
-vi.mock('../services/rollBootstrapApi', () => ({
-  rollBootstrapApi: {
+vi.mock('../services/rollStateApi', () => ({
+  rollStateApi: {
     get: vi.fn(),
   },
 }))
 
-const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
+const mockedBootstrap = vi.mocked(rollStateApi.get)
 const bootstrapState = (
   sessionId: number,
   pendingThreadId: number | null,
-): RollBootstrapResponse => ({
+): RollState => ({
   session_id: sessionId,
   user_id: 1,
   pending_thread_id: pendingThreadId,
@@ -83,15 +83,15 @@ describe('Roll mutation reconciliation', () => {
 
   it('does not publish when the browser CustomEvent API is unavailable', () => {
     const reconciled = vi.fn()
-    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+    window.addEventListener(ROLL_STATE_RECONCILED_EVENT, reconciled)
     vi.stubGlobal('CustomEvent', undefined)
 
     try {
-      publishRollBootstrap(bootstrapState(8, null))
+      publishRollState(bootstrapState(8, null))
       expect(reconciled).not.toHaveBeenCalled()
     } finally {
       vi.unstubAllGlobals()
-      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+      window.removeEventListener(ROLL_STATE_RECONCILED_EVENT, reconciled)
     }
   })
 

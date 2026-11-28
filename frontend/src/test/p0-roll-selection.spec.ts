@@ -11,7 +11,7 @@
  * move-front/shuffle click settles the retained bootstrap with exactly one
  * authoritative refresh — the move/shuffle mutation's queue-movement
  * invalidation — instead of an invalidation refetch followed by an explicit
- * duplicate `refetchBootstrap()`. Delta counts around the user action make
+ * duplicate `refetchRollState()`. Delta counts around the user action make
  * that duplicate fail, and the settled pool state (new order / closed dialog)
  * is the visible acceptance.
  */

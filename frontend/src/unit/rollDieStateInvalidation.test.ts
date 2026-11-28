@@ -44,7 +44,7 @@ it('keeps refreshing bootstrap and the scoped die-state queries', async () => {
   await invalidateAfterRollDieModeUpdate(queryClient)
 
   expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-    queryKey: queryKeys.roll.bootstrap(),
+    queryKey: queryKeys.roll.state(),
     exact: true,
   })
 })

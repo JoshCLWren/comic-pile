@@ -1,8 +1,8 @@
 import { CrossoverTags } from '../../../components/CrossoverTags'
 import { useDependencyGroups } from '../../../hooks/useDependencyGroups'
-import { useRollBootstrap } from '../../../hooks/useRollBootstrap'
+import { useRollState } from '../../../hooks/useRollState'
 import { useRollPrerequisiteSwitch } from '../../../hooks/useRollPrerequisiteSwitch'
-import type { RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
+import type { RollRecoveryPrerequisite } from '../../../types/rollState'
 import { getApiErrorDetail } from '../../../utils/apiError'
 import { readingContextType } from '../readingContextTypography'
 import { RollRecoveryCard } from './RollRecoveryCard'
@@ -18,7 +18,7 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
     data: bootstrap,
     recoveryIsPending,
     recoveryError,
-  } = useRollBootstrap()
+  } = useRollState()
   const {
     isPending: isSwitching,
     errorMessage: switchError,

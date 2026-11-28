@@ -5,34 +5,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingOrderGroups } from '../pages/RollPage/components/ReadingOrderGroups'
 import { useDependencyGroups } from '../hooks/useDependencyGroups'
 import {
-  fetchAndPublishRollBootstrap,
+  fetchAndPublishRollState,
   isAmbiguousNetworkFailure,
 } from '../hooks/rollMutationReconciliation'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { useRollState } from '../hooks/useRollState'
+import { rollStateApi } from '../services/rollStateApi'
 import { issueCardsApi } from '../services/issueCardsApi'
 vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 vi.mock('../hooks/useDependencyGroups', () => ({
   useDependencyGroups: vi.fn(),
 }))
-vi.mock('../hooks/useRollBootstrap', () => ({
-  useRollBootstrap: vi.fn(),
+vi.mock('../hooks/useRollState', () => ({
+  useRollState: vi.fn(),
 }))
 vi.mock('../hooks/rollMutationReconciliation', () => ({
-  fetchAndPublishRollBootstrap: vi.fn(),
+  fetchAndPublishRollState: vi.fn(),
   isAmbiguousNetworkFailure: vi.fn(),
 }))
-vi.mock('../services/rollBootstrapApi', () => ({
-  rollBootstrapApi: {
+vi.mock('../services/rollStateApi', () => ({
+  rollStateApi: {
     switchPrerequisite: vi.fn(),
   },
 }))
 
 const mockedUseDependencyGroups = vi.mocked(useDependencyGroups)
-const mockedUseRollBootstrap = vi.mocked(useRollBootstrap)
-const mockedSwitchPrerequisite = vi.mocked(rollBootstrapApi.switchPrerequisite)
-const mockedFetchAndPublishRollBootstrap = vi.mocked(fetchAndPublishRollBootstrap)
+const mockedUseRollState = vi.mocked(useRollState)
+const mockedSwitchPrerequisite = vi.mocked(rollStateApi.switchPrerequisite)
+const mockedFetchAndPublishRollState = vi.mocked(fetchAndPublishRollState)
 const mockedIsAmbiguousNetworkFailure = vi.mocked(isAmbiguousNetworkFailure)
 
 const recovery = {
@@ -96,12 +96,12 @@ function renderGroups(threadId: number | null) {
 describe('ReadingOrderGroups', () => {
   beforeEach(() => {
     mockedUseDependencyGroups.mockReset()
-    mockedUseRollBootstrap.mockReset()
+    mockedUseRollState.mockReset()
     mockedSwitchPrerequisite.mockReset()
-    mockedFetchAndPublishRollBootstrap.mockReset()
+    mockedFetchAndPublishRollState.mockReset()
     mockedIsAmbiguousNetworkFailure.mockReset()
     mockedIsAmbiguousNetworkFailure.mockReturnValue(false)
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: null,
       isPending: false,
       isError: false,
@@ -173,7 +173,7 @@ describe('ReadingOrderGroups', () => {
   it('switches to the selected readable prerequisite and publishes fresh Roll state', async () => {
     const user = userEvent.setup()
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: bootstrapWithRecovery,
       isPending: false,
       isError: false,
@@ -191,19 +191,19 @@ describe('ReadingOrderGroups', () => {
       changed: true,
     })
     // SAFETY: mock payload supplies only the fields this test asserts
-    mockedFetchAndPublishRollBootstrap.mockResolvedValue({} as never)
+    mockedFetchAndPublishRollState.mockResolvedValue({} as never)
 
     renderGroups(17)
     await user.click(screen.getByRole('button', { name: /Earlier Series #3.*Read now/i }))
 
     expect(mockedSwitchPrerequisite).toHaveBeenCalledWith({ node_type: 'issue', node_id: 90 })
-    expect(mockedFetchAndPublishRollBootstrap).toHaveBeenCalledTimes(1)
+    expect(mockedFetchAndPublishRollState).toHaveBeenCalledTimes(1)
   })
 
   it('reports a successful switch separately when refreshing guidance fails', async () => {
     const user = userEvent.setup()
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: bootstrapWithRecovery,
       isPending: false,
       isError: false,
@@ -220,7 +220,7 @@ describe('ReadingOrderGroups', () => {
       target_issue_number: '3',
       changed: true,
     })
-    mockedFetchAndPublishRollBootstrap.mockRejectedValue(new Error('refresh failed'))
+    mockedFetchAndPublishRollState.mockRejectedValue(new Error('refresh failed'))
 
     renderGroups(17)
     await user.click(screen.getByRole('button', { name: /Earlier Series #3.*Read now/i }))
@@ -232,7 +232,7 @@ describe('ReadingOrderGroups', () => {
   it('keeps the original roll and refreshes guidance when the switch becomes stale', async () => {
     const user = userEvent.setup()
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: bootstrapWithRecovery,
       isPending: false,
       isError: false,
@@ -243,12 +243,12 @@ describe('ReadingOrderGroups', () => {
     })
     mockedSwitchPrerequisite.mockRejectedValue(new Error('stale'))
     // SAFETY: mock payload supplies only the fields this test asserts
-    mockedFetchAndPublishRollBootstrap.mockResolvedValue({} as never)
+    mockedFetchAndPublishRollState.mockResolvedValue({} as never)
 
     renderGroups(17)
     await user.click(screen.getByRole('button', { name: /Earlier Series #3.*Read now/i }))
 
-    await waitFor(() => expect(mockedFetchAndPublishRollBootstrap).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(mockedFetchAndPublishRollState).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('alert')).toHaveTextContent('guidance has been refreshed')
     expect(screen.getByText('Your original roll is still preserved.')).toBeInTheDocument()
   })
@@ -256,7 +256,7 @@ describe('ReadingOrderGroups', () => {
   it('uses neutral copy when a network failure leaves the switch outcome ambiguous', async () => {
     const user = userEvent.setup()
     mockedUseDependencyGroups.mockReturnValue({ groups: [], isLoading: false, error: null })
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: bootstrapWithRecovery,
       isPending: false,
       isError: false,
@@ -268,7 +268,7 @@ describe('ReadingOrderGroups', () => {
     mockedIsAmbiguousNetworkFailure.mockReturnValue(true)
     mockedSwitchPrerequisite.mockRejectedValue(new Error('Network Error'))
     // SAFETY: mock payload supplies only the fields this test asserts
-    mockedFetchAndPublishRollBootstrap.mockResolvedValue({} as never)
+    mockedFetchAndPublishRollState.mockResolvedValue({} as never)
 
     renderGroups(17)
     await user.click(screen.getByRole('button', { name: /Earlier Series #3.*Read now/i }))

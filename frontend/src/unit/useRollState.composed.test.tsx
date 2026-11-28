@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { useRollPendingSelection } from '../hooks/useRollPendingSelection'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -60,7 +60,7 @@ function Wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }
 
-describe('useRollBootstrap composed scoped view', () => {
+describe('useRollState composed scoped view', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     queryClient.clear()
@@ -90,7 +90,7 @@ describe('useRollBootstrap composed scoped view', () => {
       roll_reconciliation: { last_read: LAST_READ },
     })
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    const { result } = renderHook(() => useRollState(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
     expect(result.current.data?.last_read).toEqual(LAST_READ)
@@ -125,7 +125,7 @@ describe('useRollBootstrap composed scoped view', () => {
       items: ids.includes(10) ? [card(10, 3, 'unread')] : [card(20, 4, 'unread')],
     }))
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    const { result } = renderHook(() => useRollState(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
     expect(mockedResources.issueCards).toHaveBeenCalledWith([10])
@@ -188,7 +188,7 @@ describe('useRollBootstrap composed scoped view', () => {
       diagnostics: [],
     })
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    const { result } = renderHook(() => useRollState(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.data?.roll_recovery).not.toBeNull())
 
     expect(mockedResources.recovery).toHaveBeenCalledWith(10, [])
@@ -214,7 +214,7 @@ describe('useRollBootstrap composed scoped view', () => {
       }],
     })
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    const { result } = renderHook(() => useRollState(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.data?.snoozed_threads).toHaveLength(1))
 
     expect(mockedThreadsList).toHaveBeenCalledWith({ ids: '7', page_size: 1 })
@@ -227,7 +227,7 @@ describe('useRollBootstrap composed scoped view', () => {
 
   it('reflects a snooze-cookie change without remounting', async () => {
     mockedSnoozes.mockReturnValue([])
-    const { result, rerender } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    const { result, rerender } = renderHook(() => useRollState(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.isPending).toBe(false))
     expect(result.current.data?.snoozed_threads).toHaveLength(0)
 
@@ -262,7 +262,7 @@ describe('useRollBootstrap composed scoped view', () => {
       pool_reason: 'no_series',
     })
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    const { result } = renderHook(() => useRollState(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
     expect(result.current.data?.roll_pool).toEqual([])

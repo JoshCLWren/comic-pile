@@ -14,11 +14,11 @@ import { useRollActions } from '../pages/RollPage/useRollActions'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import type { SnoozeSessionResponse } from '../types'
-import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
+import type { RollState, RollThreadSummary } from '../types/rollState'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 
-function bootstrapWith(overrides: Partial<RollBootstrapResponse> = {}): RollBootstrapResponse {
+function bootstrapWith(overrides: Partial<RollState> = {}): RollState {
   // SAFETY: the literal supplies every required bootstrap field; the spread only narrows them
   return {
     session_id: 1,
@@ -35,15 +35,15 @@ function bootstrapWith(overrides: Partial<RollBootstrapResponse> = {}): RollBoot
     skipped_thread_ids: [],
     skipped_threads: [],
     ...overrides,
-  } as RollBootstrapResponse
+  } as RollState
 }
 
-function pooledThread(id: number): RollBootstrapThread {
+function pooledThread(id: number): RollThreadSummary {
   return { id, title: `Series ${id}`, format: 'Comic' }
 }
 
 interface HarnessOptions {
-  bootstrap?: RollBootstrapResponse
+  bootstrap?: RollState
   selectedThreadId?: number
   snoozeImpl?: () => Promise<SnoozeSessionResponse>
   refreshed?: boolean
@@ -61,7 +61,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
     refreshError,
   }))
   const onSnoozeRefreshFailed = vi.fn()
-  const refetchBootstrap = vi.fn(() => Promise.resolve(bootstrap))
+  const refetchRollState = vi.fn(() => Promise.resolve(bootstrap))
   // SAFETY: the hook discards the unsnooze response body; an empty stub suffices
   const unsnoozeMutate = vi.fn((_threadId: number) => Promise.resolve({} as RollUnsnoozeResponse))
 
@@ -83,7 +83,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
         shuffleQueueMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         unsnoozeMutation: { mutate: unsnoozeMutate, isPending: false },
       },
-      refetchBootstrap,
+      refetchRollState,
       enterRatingView: vi.fn(() => Promise.resolve()),
       onSnoozeRefreshFailed,
     })
@@ -92,7 +92,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
   })
 
   // `result` stays live so every assertion reads the latest render's closure.
-  return { result, snoozeMutate, snoozeResponse, refetchBootstrap, onSnoozeRefreshFailed, unsnoozeMutate }
+  return { result, snoozeMutate, snoozeResponse, refetchRollState, onSnoozeRefreshFailed, unsnoozeMutate }
 }
 
 /** Select the pooled series whose action sheet the reader opened. */
@@ -107,7 +107,7 @@ function selectThread(
 
 describe('Roll pool action sheet snooze (issue #3260)', () => {
   it('snoozes the rolled series and passes it as the expected pending thread', async () => {
-    const { result, snoozeMutate, refetchBootstrap } = renderActionSheet({
+    const { result, snoozeMutate, refetchRollState } = renderActionSheet({
       bootstrap: bootstrapWith({ pending_thread_id: 8 }),
     })
     selectThread(result, 8)
@@ -120,7 +120,7 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
     // hook's auth-failure recovery and ambiguous-failure reconciliation.
     expect(snoozeMutate).toHaveBeenCalledWith(8)
     // Successful snooze must not trigger a second bootstrap refresh.
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(refetchRollState).not.toHaveBeenCalled()
   })
 
   it('reports an exhausted authoritative refresh after a committed snooze', async () => {
@@ -168,7 +168,7 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
   })
 
   it('unsnoozes the selected series regardless of the pending thread', async () => {
-    const { result, snoozeMutate, refetchBootstrap, unsnoozeMutate } = renderActionSheet({
+    const { result, snoozeMutate, refetchRollState, unsnoozeMutate } = renderActionSheet({
       bootstrap: bootstrapWith({ snoozed_threads: [pooledThread(8)], pending_thread_id: null }),
     })
     selectThread(result, 8)
@@ -181,7 +181,7 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
     // reverts the die, #4589) and refreshes, with no legacy v1 unsnooze call.
     expect(unsnoozeMutate).toHaveBeenCalledWith(8)
     // The unsnooze mutation owns the bootstrap refresh in onSuccess; no second refetch.
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(refetchRollState).not.toHaveBeenCalled()
     expect(snoozeMutate).not.toHaveBeenCalled()
   })
 
@@ -219,7 +219,7 @@ describe('Roll move/shuffle single-refresh feedback (#4276)', () => {
   async function seedBootstrapRefreshError(): Promise<void> {
     try {
       await queryClient.fetchQuery<string>({
-        queryKey: queryKeys.roll.bootstrap(),
+        queryKey: queryKeys.roll.state(),
         queryFn: async () => {
           throw new Error('bootstrap refresh failed')
         },

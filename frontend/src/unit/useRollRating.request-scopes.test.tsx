@@ -108,7 +108,7 @@ function renderUseRollRating(
 ) {
   const state = mockState({ activeRatingThread: ACTIVE_THREAD, ...stateOverrides })
   const { result } = renderHook(
-    () => useRollRating({ state, bootstrap: null, rateMutation: mockRateMutation, dismissPendingMutation: mockDismissPendingMutation, refetchBootstrap: mockRefetchBootstrap, clearPending: mockClearPending }),
+    () => useRollRating({ state, bootstrap: null, rateMutation: mockRateMutation, dismissPendingMutation: mockDismissPendingMutation, refetchRollState: mockRefetchBootstrap, clearPending: mockClearPending }),
     { wrapper: createWrapper() },
   )
   return { result, state }

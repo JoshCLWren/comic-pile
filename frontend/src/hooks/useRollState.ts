@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { skipToken, useQuery } from '@tanstack/react-query'
-import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
+import type { RollState, RollThreadSummary } from '../types/rollState'
 import type { RateResponsePayload, SessionMode } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -15,7 +15,7 @@ import {
   useRollLastReadRecord,
 } from './useRollResources'
 import { useRollPendingSelection } from './useRollPendingSelection'
-import { publishRollBootstrap } from './rollMutationReconciliation'
+import { publishRollState } from './rollMutationReconciliation'
 
 /** Best-effort browser IANA timezone, retained for callers that display it. */
 export function resolveBrowserTimezone(): string | undefined {
@@ -26,8 +26,8 @@ export function resolveBrowserTimezone(): string | undefined {
   }
 }
 
-export interface UseRollBootstrapResult {
-  data: RollBootstrapResponse | null
+export interface UseRollStateResult {
+  data: RollState | null
   isPending: boolean
   isError: boolean
   error: unknown
@@ -36,7 +36,7 @@ export interface UseRollBootstrapResult {
   /** Optional blocked-selection diagnostics load independently of the Roll pool. */
   recoveryIsPending: boolean
   recoveryError: unknown
-  refetch: () => Promise<RollBootstrapResponse>
+  refetch: () => Promise<RollState>
 }
 
 const EMPTY_SESSION_MODE: SessionMode = {
@@ -63,7 +63,7 @@ const EMPTY_SESSION_MODE: SessionMode = {
  * the page's local view model so feature modules share one snapshot; it is
  * never sent to, or fetched from, a bootstrap/session endpoint.
  */
-export function useRollBootstrap(): UseRollBootstrapResult {
+export function useRollState(): UseRollStateResult {
   const { pending: storedPending, clear: clearPending } = useRollPendingSelection()
   const die = useRollDieState()
   // Read the cookie on every render: a committed snooze/unsnooze changes it
@@ -125,17 +125,17 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     queryKey: queryKeys.roll.lastRead(),
     queryFn: skipToken,
   })
-  const reconciled = useQuery<RollBootstrapResponse | null>({
-    queryKey: queryKeys.roll.bootstrap(),
+  const reconciled = useQuery<RollState | null>({
+    queryKey: queryKeys.roll.state(),
     queryFn: skipToken,
   })
 
-  const composed = useMemo<RollBootstrapResponse>(() => {
+  const composed = useMemo<RollState>(() => {
     const cardByIssue = new Map([
       ...(cards.data?.items ?? []),
       ...(pendingCards.data?.items ?? []),
     ].map((card) => [card.issue_id, card]))
-    const rollPool: RollBootstrapThread[] = issueIds.flatMap((issueId, index) => {
+    const rollPool: RollThreadSummary[] = issueIds.flatMap((issueId, index) => {
       const card = cardByIssue.get(issueId)
       if (!card) return []
       return [{
@@ -150,7 +150,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
       }]
     })
 
-    const activeThread: RollBootstrapThread | null = pending
+    const activeThread: RollThreadSummary | null = pending
       ? rollPool.find((thread) => thread.issue_id === pending.issue_id) ?? (() => {
           const card = cardByIssue.get(pending.issue_id)
           return card ? {
@@ -166,7 +166,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
         })()
       : null
 
-    const snoozedThreads: RollBootstrapThread[] = snoozedIds.flatMap((id) => {
+    const snoozedThreads: RollThreadSummary[] = snoozedIds.flatMap((id) => {
       const thread = snoozedSummaries.data?.threads.find((candidate) => candidate.id === id)
       if (!thread) return []
       return [{
@@ -211,7 +211,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   ])
 
   // Callers still handle a null view while the scoped queries settle.
-  const data: RollBootstrapResponse | null = reconciled.data ?? composed
+  const data: RollState | null = reconciled.data ?? composed
   const isPending = die.isPending
     || eligible.isPending
     || lastReadRecord.isPending
@@ -222,10 +222,10 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     && recoveryQuery.isPending
   const recoveryError = blockedIssueId != null ? recoveryQuery.error ?? null : null
 
-  const refetch = useCallback(async (): Promise<RollBootstrapResponse> => {
+  const refetch = useCallback(async (): Promise<RollState> => {
     // A reconciled mutation publishes its already-fetched scoped snapshot on
     // this event; consume it instead of issuing another request.
-    const reconciled = queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap())
+    const reconciled = queryClient.getQueryData<RollState>(queryKeys.roll.state())
     if (reconciled) return reconciled
     await Promise.all([
       die.refetch(),
@@ -237,7 +237,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
       ...(blockedIssueId != null ? [recoveryQuery.refetch()] : []),
       ...(snoozedIds.length > 0 ? [snoozedSummaries.refetch()] : []),
     ])
-    return queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()) ?? composed
+    return queryClient.getQueryData<RollState>(queryKeys.roll.state()) ?? composed
   }, [
     die,
     eligible,
@@ -272,6 +272,6 @@ export function useRollBootstrap(): UseRollBootstrapResult {
  * Publish a reconciled scoped snapshot. Kept as a named export so the mutation
  * reconciliation event has one owner and never performs a network fetch.
  */
-export function publishScopedRollSnapshot(snapshot: RollBootstrapResponse): void {
-  publishRollBootstrap(snapshot)
+export function publishScopedRollSnapshot(snapshot: RollState): void {
+  publishRollState(snapshot)
 }

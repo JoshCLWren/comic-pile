@@ -370,7 +370,7 @@ describe('query outage retry budget (#4271)', () => {
       // Any successful request ends the outage — here a route-style prefetch.
       // No component calls resumeQueriesAfterOutage itself.
       await client.fetchQuery({
-        queryKey: queryKeys.roll.bootstrap(),
+        queryKey: queryKeys.roll.state(),
         queryFn: () => transport.fetch('recovery'),
       })
     })

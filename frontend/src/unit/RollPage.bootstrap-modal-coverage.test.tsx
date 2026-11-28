@@ -14,8 +14,8 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }),
 }))
-vi.mock('../hooks/useRollBootstrap', () => ({
-  useRollBootstrap: () => ({
+vi.mock('../hooks/useRollState', () => ({
+  useRollState: () => ({
     data: {
       current_die: 6,
       manual_die: state.manualDie,

@@ -8,7 +8,7 @@ vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToas
 const spies = vi.hoisted(() => ({
   navigate: vi.fn(),
   refetch: vi.fn().mockResolvedValue({}),
-  invalidateRollBootstrapOnNavigation: vi.fn().mockResolvedValue({}),
+  invalidateRollStateOnNavigation: vi.fn().mockResolvedValue({}),
   setDie: vi.fn().mockResolvedValue({}),
   roll: vi.fn().mockResolvedValue({}), dismissPending: vi.fn().mockResolvedValue({}),
   snooze: vi.fn().mockResolvedValue({}),
@@ -69,7 +69,7 @@ vi.mock('../contexts/useBugReportRestore', () => ({
   }),
 }))
 vi.mock('../hooks/useSession', () => ({ useSession: () => sessionHook.value ?? ({ data: sessionData, refetch: spies.refetch }) }))
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
 vi.mock('../hooks/useRollResources', () => ({
   useRollDieState: () => dieStateHook.value ?? ({ data: undefined, isError: false }),
   useRollEligibleIssueIds: () => ({ data: undefined }),
@@ -108,7 +108,7 @@ vi.mock('../query/cacheEffects', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../query/cacheEffects')>()
   return {
     ...actual,
-    invalidateRollBootstrapOnNavigation: spies.invalidateRollBootstrapOnNavigation,
+    invalidateRollStateOnNavigation: spies.invalidateRollStateOnNavigation,
   }
 })
 vi.mock('../components/LazyDice3D', () => ({
@@ -405,7 +405,7 @@ describe('RollPage parent handlers', () => {
     // an extra HTTP request on navigation while preserving the no-stale-pending
     // guarantee (issue #4140). The reader still lands on /queue (issue #3107).
     expect(spies.dismissPending).not.toHaveBeenCalled()
-    await waitFor(() => expect(spies.invalidateRollBootstrapOnNavigation).toHaveBeenCalled())
+    await waitFor(() => expect(spies.invalidateRollStateOnNavigation).toHaveBeenCalled())
     await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
 
     // navigate is mocked here, so the page is still mounted. The preserved

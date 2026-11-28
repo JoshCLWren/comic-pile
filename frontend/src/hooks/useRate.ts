@@ -1,13 +1,13 @@
 import { useContext, useRef, useState } from 'react'
 import { AuthContext } from '../contexts/AuthContext'
-import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi } from '../services/apiTypes'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { CacheEffectsApi, ProtectedRollMutationApi, RollStateApi } from '../services/apiTypes'
+import type { RollState } from '../types/rollState'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import type { RatePayload, RateResponsePayload } from '../types'
 import {
-  fetchAndPublishRollBootstrap,
+  fetchAndPublishRollState,
   isAmbiguousNetworkFailure,
   isAuthenticationMutationFailure,
   reconcileAmbiguousRollMutation,
@@ -55,12 +55,12 @@ function shouldSnoozeAfterRating(
  */
 export interface RateMutationOutcome {
   rate: RateResponsePayload | undefined
-  bootstrap: RollBootstrapResponse | null
+  bootstrap: RollState | null
 }
 
 export interface RateDeps {
   protectedApi?: ProtectedRollMutationApi
-  bootstrapApi?: RollBootstrapApi
+  bootstrapApi?: RollStateApi
   cacheEffects?: CacheEffectsApi
   queryClientInstance?: typeof queryClient
 }
@@ -88,7 +88,7 @@ export function useRate(deps: RateDeps = {}) {
       try {
         const result = await protectedRollApi.rate(data)
         clearPendingSelectionForIssue(data.issue_id)
-        await applyCache(client, result, { refetchRollBootstrap: false })
+        await applyCache(client, result, { refetchRollState: false })
 
         // Write the temporary snooze before refetching bootstrap so the
         // published pool already excludes the just-rated below-threshold
@@ -97,9 +97,9 @@ export function useRate(deps: RateDeps = {}) {
           addRollSnooze(data.thread_id)
         }
 
-        let bootstrap: RollBootstrapResponse | null = null
+        let bootstrap: RollState | null = null
         try {
-          bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap, userId)
+          bootstrap = await fetchAndPublishRollState(rollBootstrap, userId)
         } catch (reconciliationError: unknown) {
           console.error(
             'Rating saved but authoritative Roll state failed to refresh:',
@@ -120,13 +120,13 @@ export function useRate(deps: RateDeps = {}) {
             )
             if (recovery.status === 'retried') {
               clearPendingSelectionForIssue(data.issue_id)
-              await applyCache(client, recovery.value, { refetchRollBootstrap: false })
+              await applyCache(client, recovery.value, { refetchRollState: false })
               if (shouldSnoozeAfterRating(data, recovery.value?.issues_remaining)) {
                 addRollSnooze(data.thread_id)
               }
-              let bootstrap: RollBootstrapResponse | null = null
+              let bootstrap: RollState | null = null
               try {
-                bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap, userId)
+                bootstrap = await fetchAndPublishRollState(rollBootstrap, userId)
               } catch (reconciliationError: unknown) {
                 console.error(
                   'Rating saved but authoritative Roll state failed to refresh:',
@@ -156,7 +156,7 @@ export function useRate(deps: RateDeps = {}) {
                 // The reconciling bootstrap was fetched before the snooze was
                 // recorded; refetch so the published pool excludes the comic.
                 addRollSnooze(data.thread_id)
-                const bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap, userId)
+                const bootstrap = await fetchAndPublishRollState(rollBootstrap, userId)
                 return { rate: undefined, bootstrap }
               }
               return { rate: undefined, bootstrap: reconciliation.bootstrap }

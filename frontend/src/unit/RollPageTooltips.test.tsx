@@ -12,7 +12,7 @@ import {
 import { useSnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
@@ -37,7 +37,7 @@ vi.mock('../components/GlossaryLink', () => ({
 }))
 
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: vi.fn() }))
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
@@ -62,7 +62,7 @@ vi.mock('../hooks', async (importOriginal) => {
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
-const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
+const mockedUseRollState = vi.mocked(useRollState) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseSetDie = vi.mocked(useSetDie) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
@@ -102,7 +102,7 @@ beforeEach(() => {
       { id: 7, title: 'Paper Girls', format: 'Comics' },
     ],
   }
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: mockBootstrapData,
     refetch: vi.fn(),
     isPending: false,
@@ -189,7 +189,7 @@ it('renders tooltip for die indicator', async () => {
 })
 
 it('does not render snoozed indicators when no snoozed threads', async () => {
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: {
       current_die: 6,
       last_rolled_result: null,

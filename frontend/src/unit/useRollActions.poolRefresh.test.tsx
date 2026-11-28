@@ -3,7 +3,7 @@
  * issuing a second request.
  *
  * The move/shuffle hooks own the retained roll-bootstrap invalidation, so the
- * action handler must not call `refetchBootstrap()` again. The single-refresh
+ * action handler must not call `refetchRollState()` again. The single-refresh
  * contract still has to report a refresh that failed, and it does so by reading
  * the already-settled query state.
  *
@@ -26,7 +26,7 @@ import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueu
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
+import type { RollState, RollThreadSummary } from '../types/rollState'
 
 /**
  * The production invalidation pass, bound to the shared query client.
@@ -37,7 +37,7 @@ import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBo
 const realInvalidation = (client: typeof queryClient) => invalidateAfterQueueMovement(client)
 
 /** A bootstrap payload the action sheet can render; the pool content is irrelevant here. */
-function bootstrapWith(overrides: Partial<RollBootstrapResponse> = {}): RollBootstrapResponse {
+function bootstrapWith(overrides: Partial<RollState> = {}): RollState {
   // SAFETY: the literal supplies every required bootstrap field; the spread only narrows them
   return {
     session_id: 1,
@@ -54,14 +54,14 @@ function bootstrapWith(overrides: Partial<RollBootstrapResponse> = {}): RollBoot
     skipped_thread_ids: [],
     skipped_threads: [],
     ...overrides,
-  } as RollBootstrapResponse
+  } as RollState
 }
 
-function pooledThread(id: number): RollBootstrapThread {
+function pooledThread(id: number): RollThreadSummary {
   return { id, title: `Series ${id}`, format: 'Comic' }
 }
 
-const bootstrapKey = queryKeys.roll.bootstrap()
+const bootstrapKey = queryKeys.roll.state()
 
 /**
  * Refetch counter for the observed bootstrap query.
@@ -82,7 +82,7 @@ function resetBootstrapFetches(): void {
  * TanStack Query's `invalidateQueries` defaults to `refetchType: 'active'`, so
  * the query only refetches while something observes it. The harness mounts a
  * real observer for the bootstrap key, exactly as the Roll page's
- * `useRollBootstrap` does while the page is mounted.
+ * `useRollState` does while the page is mounted.
  */
 function useBootstrapObserver(): void {
   useQuery({
@@ -101,7 +101,7 @@ function useBootstrapObserver(): void {
 
 interface Harness {
   result: { current: { state: ReturnType<typeof useRollPageState>; actions: ReturnType<typeof useRollActions> } }
-  refetchBootstrap: ReturnType<typeof vi.fn>
+  refetchRollState: ReturnType<typeof vi.fn>
 }
 
 /**
@@ -112,16 +112,16 @@ interface Harness {
  * Stubbing the mutation would remove the very pass being relied on, so the
  * real hooks are used and only their API transport is replaced.
  */
-function renderActionSheet(bootstrap: RollBootstrapResponse): Harness {
+function renderActionSheet(bootstrap: RollState): Harness {
   const moveToFrontMutate = vi.fn(() => Promise.resolve())
   const moveToBackMutate = vi.fn(() => Promise.resolve())
   const shuffleMutate = vi.fn(() => Promise.resolve())
-  const refetchBootstrap = vi.fn(() => Promise.resolve(bootstrap))
+  const refetchRollState = vi.fn(() => Promise.resolve(bootstrap))
 
   const { result } = renderHook(() => {
     const state = useRollPageState()
     // Observe the bootstrap query so the invalidation refetches it, the way
-    // the Roll page's own `useRollBootstrap` does while the page is mounted.
+    // the Roll page's own `useRollState` does while the page is mounted.
     useBootstrapObserver()
     // The real queue hooks must run inside the provider so they read the
     // shared client, exactly as the production Roll page composes them. The
@@ -172,7 +172,7 @@ function renderActionSheet(bootstrap: RollBootstrapResponse): Harness {
         unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}), isPending: false },
         shuffleQueueMutation: { mutate: shuffleQueue.mutate, isPending: shuffleQueue.isPending },
       },
-      refetchBootstrap,
+      refetchRollState,
       enterRatingView: vi.fn(() => Promise.resolve()),
     })
     return { state, actions }
@@ -183,7 +183,7 @@ function renderActionSheet(bootstrap: RollBootstrapResponse): Harness {
     ),
   })
 
-  return { result, refetchBootstrap }
+  return { result, refetchRollState }
 }
 
 /** Await the mount fetch so the query is healthy before the action runs. */
@@ -208,7 +208,7 @@ describe('Roll pool action sheet pool-refresh feedback (#4276)', () => {
 
   it('reports a failed pool refresh after a move-to-front, with no second request', async () => {
     const bootstrap = bootstrapWith({ roll_pool: [pooledThread(1)] })
-    const { result, refetchBootstrap } = renderActionSheet(bootstrap)
+    const { result, refetchRollState } = renderActionSheet(bootstrap)
     await settleMount()
 
     act(() => {
@@ -224,13 +224,13 @@ describe('Roll pool action sheet pool-refresh feedback (#4276)', () => {
     expect(bootstrapFetches).toBe(2)
     expect(queryClient.getQueryState(bootstrapKey)?.error).not.toBeNull()
     // The single-refresh contract: the handler must not issue another request.
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(refetchRollState).not.toHaveBeenCalled()
     expect(result.current.state.errorMessage).toContain('did not refresh')
   })
 
   it('reports a failed pool refresh after a move-to-back, with no second request', async () => {
     const bootstrap = bootstrapWith({ roll_pool: [pooledThread(1)] })
-    const { result, refetchBootstrap } = renderActionSheet(bootstrap)
+    const { result, refetchRollState } = renderActionSheet(bootstrap)
     await settleMount()
 
     act(() => {
@@ -243,13 +243,13 @@ describe('Roll pool action sheet pool-refresh feedback (#4276)', () => {
 
     expect(bootstrapFetches).toBe(2)
     expect(queryClient.getQueryState(bootstrapKey)?.error).not.toBeNull()
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(refetchRollState).not.toHaveBeenCalled()
     expect(result.current.state.errorMessage).toContain('did not refresh')
   })
 
   it('keeps the shuffle dialog open and reports the failed pool refresh', async () => {
     const bootstrap = bootstrapWith({ roll_pool: [pooledThread(1)] })
-    const { result, refetchBootstrap } = renderActionSheet(bootstrap)
+    const { result, refetchRollState } = renderActionSheet(bootstrap)
     await settleMount()
 
     // The reader has the confirmation open and is committing it.
@@ -264,7 +264,7 @@ describe('Roll pool action sheet pool-refresh feedback (#4276)', () => {
 
     expect(bootstrapFetches).toBe(2)
     expect(queryClient.getQueryState(bootstrapKey)?.error).not.toBeNull()
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(refetchRollState).not.toHaveBeenCalled()
     // The dialog must stay open so the reader can retry, with the reason shown
     // inside it (a toast would paint below the modal layer, #4193).
     expect(result.current.state.isShuffleOpen).toBe(true)

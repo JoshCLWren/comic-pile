@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
 import LazyDice3D from '../../components/LazyDice3D'
-import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollState } from '../../hooks/useRollState'
 import { useRollPendingSelection } from '../../hooks/useRollPendingSelection'
 import {
   useRollDieState,
@@ -29,7 +29,7 @@ import { readRollSnoozes } from '../../services/api-roll'
 import type { Thread } from '../../types'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
-import { useRollBootstrapSync } from './useRollBootstrapSync'
+import { useRollStateSync } from './useRollStateSync'
 import { useRollPendingSession } from './useRollPendingSession'
 import { useRollRating } from './useRollRating'
 import { useRollSnooze } from './useRollSnooze'
@@ -42,7 +42,7 @@ import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useToast } from '../../contexts/useToast'
-import { invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { invalidateDirectReadIssueSelection, invalidateRollStateOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
@@ -56,7 +56,7 @@ import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCar
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
- * feature modules (`useRollBootstrapSync`, `useRollPendingSession`,
+ * feature modules (`useRollStateSync`, `useRollPendingSession`,
  * `useRollRating`, `useRollSnooze`, `useRollActions`,
  * `useRollModals`, `useRollViewport`) plus the page-level navigation and
  * error boundary concerns.
@@ -73,12 +73,12 @@ export default function RollPage() {
 
   const {
     data: bootstrap,
-    refetch: refetchBootstrap,
+    refetch: refetchRollState,
     isPending: isBootstrapLoading,
     isError: isBootstrapError,
     error: bootstrapError,
     isRetrying: isBootstrapRetrying,
-  } = useRollBootstrap()
+  } = useRollState()
   // The pending roll is an exact browser-owned issue selection, not server
   // session state. It survives reload and tabs and is cleared only on a
   // committed read/rate of that same issue or an explicit Reset (#4350).
@@ -123,7 +123,7 @@ export default function RollPage() {
     // Leaving for the queue is navigation, not resolution: the browser-owned
     // selection is restored on return. Marking the local view stale forces the
     // scoped inputs to refresh on re-entry without an eager request now.
-    void invalidateRollBootstrapOnNavigation(queryClient)
+    void invalidateRollStateOnNavigation(queryClient)
     navigate('/queue')
   }, [navigate, queryClient])
 
@@ -159,7 +159,7 @@ export default function RollPage() {
     )
   }, [showToast, retrySnoozeRefresh])
 
-  useRollBootstrapSync({
+  useRollStateSync({
     isBootstrapError,
     bootstrapError,
     navigate,
@@ -199,7 +199,7 @@ export default function RollPage() {
     bootstrap,
     rateMutation,
     dismissPendingMutation,
-    refetchBootstrap,
+    refetchRollState,
     clearPending: pendingSelection.clear,
   })
 
@@ -230,7 +230,7 @@ export default function RollPage() {
     unsnoozeMutation,
     enterRatingView: rating.enterRatingView,
     seedPending: pendingSelection.seedFromOffer,
-    refetchBootstrap,
+    refetchRollState,
     onRefreshFailed: reportSnoozeRefreshFailed,
   })
 
@@ -248,7 +248,7 @@ export default function RollPage() {
       unsnoozeMutation,
       shuffleQueueMutation,
     },
-    refetchBootstrap,
+    refetchRollState,
     enterRatingView: rating.enterRatingView,
     onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
     pendingThreadId: pendingSelection.pending?.thread_id ?? null,
@@ -271,7 +271,7 @@ export default function RollPage() {
     if (!state.selectedThread) return
     try {
       const response = await threadsApi.setCurrentIssue(state.selectedThread.id, issueNumber)
-      await refetchBootstrap()
+      await refetchRollState()
       const threadMetadata: ThreadMetadata = {
         id: response.thread_id,
         title: response.title,
@@ -364,7 +364,7 @@ export default function RollPage() {
             </p>
             <button
               type="button"
-              onClick={() => refetchBootstrap()}
+              onClick={() => refetchRollState()}
               className="px-4 py-2 bg-[var(--theme-warning)]/20 border border-[var(--theme-warning)]/50 rounded-lg text-xs font-black uppercase tracking-widest text-[var(--theme-warning)] hover:bg-[var(--theme-warning)]/30 transition-colors"
             >
               Retry
@@ -398,7 +398,7 @@ export default function RollPage() {
             </button>
           ) : (
             <button
-              onClick={() => refetchBootstrap()}
+              onClick={() => refetchRollState()}
               className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors"
             >
               Retry

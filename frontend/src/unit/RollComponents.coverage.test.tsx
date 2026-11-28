@@ -14,8 +14,8 @@ vi.mock('../contexts/useToast', () => ({
 }))
 vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 vi.mock('../components/IssueCorrectionDialog', () => ({ default: ({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClose: () => void; onSuccess: () => void }) => isOpen ? <><button onClick={onClose}>Close correction</button><button onClick={onSuccess}>Correct successfully</button></> : null }))
-vi.mock('../hooks/useRollBootstrap', () => ({
-  useRollBootstrap: () => ({ data: null, isPending: false, isError: false, error: null }),
+vi.mock('../hooks/useRollState', () => ({
+  useRollState: () => ({ data: null, isPending: false, isError: false, error: null }),
 }))
 vi.mock('../hooks/useReaderContext', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()

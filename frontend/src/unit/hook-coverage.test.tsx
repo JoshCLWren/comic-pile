@@ -41,7 +41,7 @@ vi.mock('../services/api-undo', () => ({ undoApi: api.undoApi }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: api.sessionApi }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn(), create: vi.fn(), get: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn(), move: vi.fn(), reorder: vi.fn(), delete: vi.fn(), migrateThread: vi.fn(), setCurrentIssue: vi.fn(), getReaderContext: vi.fn() } }))
 vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: protectedApi }))
-vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: bootstrapApi }))
+vi.mock('../services/rollStateApi', () => ({ rollStateApi: bootstrapApi }))
 const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'

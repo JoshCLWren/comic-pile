@@ -24,7 +24,7 @@ import {
   ROLL_WORKSPACE_MAX_WIDTH,
   ROLL_WORKSPACE_TRACKS,
 } from '../pages/RollPage/workspaceLayout'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
 vi.mock('../components/Tooltip', () => ({
@@ -35,7 +35,7 @@ vi.mock('../components/GlossaryLink', () => ({
 }))
 
 // SAFETY: test fixture supplies only the fields the header component reads for session state
-const BOOTSTRAP = cast<RollBootstrapResponse>({
+const BOOTSTRAP = cast<RollState>({
   session_mode: null,
 })
 

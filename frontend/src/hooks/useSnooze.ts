@@ -1,11 +1,11 @@
 import { useCallback, useContext, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AuthContext } from '../contexts/AuthContext'
-import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, RollMutationDeps } from '../services/apiTypes'
+import type { CacheEffectsApi, ProtectedRollMutationApi, RollStateApi, RollMutationDeps } from '../services/apiTypes'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import {
-  fetchAndPublishRollBootstrap,
+  fetchAndPublishRollState,
   isAmbiguousNetworkFailure,
   isAuthenticationMutationFailure,
   reconcileAmbiguousRollMutation,
@@ -61,7 +61,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     const request = (async (): Promise<RefreshOutcome> => {
       for (let attempt = 1; attempt <= SNOOZE_REFRESH_ATTEMPTS; attempt += 1) {
         try {
-          await fetchAndPublishRollBootstrap(rollBootstrap, userId)
+          await fetchAndPublishRollState(rollBootstrap, userId)
           setRefreshError(null)
           return { refreshed: true, error: null }
         } catch (error: unknown) {

@@ -3,7 +3,7 @@ import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { DiceSide } from '../../../components/diceTypes'
-import type { RollBootstrapResponse, RollBootstrapThread, SessionModeState } from '../../../types/rollBootstrap'
+import type { RollState, RollThreadSummary, SessionModeState } from '../../../types/rollState'
 import {
   ROLL_WORKSPACE_GUTTER,
   ROLL_WORKSPACE_MAX_WIDTH,
@@ -13,12 +13,12 @@ import { ReadingModeControl } from './ReadingModeControl'
 import type { DieStateResponse } from '../../../generated/nativeV2Client'
 
 interface RollHeaderProps {
-  bootstrap: RollBootstrapResponse
+  bootstrap: RollState
   currentDie: number
   dieSize: number
   displayDie: DiceSide
-  snoozedThreads: RollBootstrapThread[]
-  pool: RollBootstrapThread[]
+  snoozedThreads: RollThreadSummary[]
+  pool: RollThreadSummary[]
   isRatingView: boolean
   setDiePending: boolean
   onSetDie: (die: number) => Promise<boolean> | boolean

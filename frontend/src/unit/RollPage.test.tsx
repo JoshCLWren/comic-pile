@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import {
   useRollDieState,
   useRollEligibleIssueIds,
@@ -42,7 +42,7 @@ vi.mock('../components/GlossaryLink', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useRollResources', () => ({
   useRollDieState: vi.fn(),
   useRollEligibleIssueIds: vi.fn(),
@@ -93,7 +93,7 @@ vi.mock('../services/api', async (importOriginal) => {
 })
 
 // SAFETY: vi.mocked returns a typed mock whose mockReturnValue surface matches the hook; cast preserves the mock call API.
-const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
+const mockedUseRollState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollState))
 // SAFETY: Same mock-shape widening for the scoped resource hooks; safe because the test only reads their return objects.
 const mockedUseRollEligibleIssueIds = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollEligibleIssueIds))
 const mockedUseRollIssueCards = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollIssueCards))
@@ -133,7 +133,7 @@ beforeEach(() => {
   mockedUseRollDieState.mockReturnValue({ data: undefined })
   mockedUseRollEligibleIssueIds.mockReturnValue({ data: undefined })
   mockedUseRollIssueCards.mockReturnValue({ data: undefined })
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: bootstrap,
     refetch: vi.fn().mockResolvedValue(bootstrap),
     isPending: false,
@@ -192,7 +192,7 @@ it('renders the scoped eligible order and passes browser snoozes to the resource
 })
 
 it('drives the pool cutoff and 3D die from scoped die-state when present (#4719)', () => {
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: {
       ...bootstrap,
       current_die: 20,
@@ -228,7 +228,7 @@ it('drives the pool cutoff and 3D die from scoped die-state when present (#4719)
 })
 
 it('requests one scoped card batch and prefers its title and issue number (#4719)', () => {
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: {
       ...bootstrap,
       roll_pool: [{
@@ -270,7 +270,7 @@ it('requests one scoped card batch and prefers its title and issue number (#4719
 })
 
 it('prefers the scoped pool reason over bootstrap for the empty-pool copy (#4719)', () => {
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: {
       ...bootstrap,
       roll_pool: [],
@@ -295,7 +295,7 @@ it('prefers the scoped pool reason over bootstrap for the empty-pool copy (#4719
 })
 
 it('ignores retired diagnostic reports while retaining the active pool (#4441)', () => {
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: {
       ...bootstrap,
       pool_reason: 'all_blocked',
@@ -356,7 +356,7 @@ it('loads every active override page only after the modal opens', async () => {
 
 it('uses the scoped die in the die-selection modal when bootstrap differs (#4719)', async () => {
   const user = userEvent.setup()
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: { ...bootstrap, current_die: 8 },
     refetch: vi.fn().mockResolvedValue(bootstrap),
     isPending: false,
@@ -379,7 +379,7 @@ it('uses the scoped die in the die-selection modal when bootstrap differs (#4719
 
 it('uses the d6 default after a scoped refetch error, ignoring the bootstrap die (#4352)', async () => {
   const user = userEvent.setup()
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: { ...bootstrap, current_die: 8 },
     refetch: vi.fn().mockResolvedValue(bootstrap),
     isPending: false,
@@ -415,7 +415,7 @@ it('names the mobile die control for the event-derived die without an Auto mode 
 it('shows a retry action when bootstrap loading fails', async () => {
   const user = userEvent.setup()
   const refetch = vi.fn()
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: null,
     refetch,
     isPending: false,
@@ -485,7 +485,7 @@ async function setupRealResetHarness(emptyPool: boolean) {
   const bootstrapRefetch = vi.fn().mockResolvedValue(bootstrap)
   vi.mocked(useRoll).mockReturnValue(cast<ReturnType<typeof useRoll>>({ mutate: rollMutate, isPending: false }))
   vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: rateMutate, isPending: false }))
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: {
       ...bootstrap,
       current_die: 20,

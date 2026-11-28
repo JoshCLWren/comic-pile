@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { RollBootstrapThread } from '../../types/rollBootstrap'
+import type { RollThreadSummary } from '../../types/rollState'
 import type { RatingThread } from './types'
 
 export interface RollPageState {
@@ -12,7 +12,7 @@ export interface RollPageState {
   snoozedExpanded: boolean
   isDieModalOpen: boolean
   isSetCurrentIssueOpen: boolean
-  selectedThread: RollBootstrapThread | null
+  selectedThread: RollThreadSummary | null
   isActionSheetOpen: boolean
   isDirectReadOpen: boolean
   activeRatingThread: RatingThread | null
@@ -40,7 +40,7 @@ export interface RollPageStateSetters {
   setSnoozedExpanded: (value: boolean) => void
   setIsDieModalOpen: (value: boolean) => void
   setIsSetCurrentIssueOpen: (value: boolean) => void
-  setSelectedThread: (value: RollBootstrapThread | null) => void
+  setSelectedThread: (value: RollThreadSummary | null) => void
   setIsActionSheetOpen: (value: boolean) => void
   setIsDirectReadOpen: (value: boolean) => void
   setActiveRatingThread: (value: RatingThread | null) => void
@@ -64,7 +64,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
   const [isSetCurrentIssueOpen, setIsSetCurrentIssueOpen] = useState(false)
-  const [selectedThread, setSelectedThread] = useState<RollBootstrapThread | null>(null)
+  const [selectedThread, setSelectedThread] = useState<RollThreadSummary | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [isDirectReadOpen, setIsDirectReadOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)

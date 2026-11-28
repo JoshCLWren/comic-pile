@@ -7,7 +7,7 @@
  * the pending selection should be preserved without a stale empty-dice flash.
  *
  * This test verifies:
- * 1. When leaving Roll via the back to queue button, invalidateRollBootstrapOnNavigation is called
+ * 1. When leaving Roll via the back to queue button, invalidateRollStateOnNavigation is called
  * 2. When returning to Roll after navigating away, the pending selection is preserved
  */
 import { expect } from '@playwright/test'

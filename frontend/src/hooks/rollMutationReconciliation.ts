@@ -1,11 +1,11 @@
 import type {
   ProtectedRollMutationApi,
-  RollBootstrapApi,
+  RollStateApi,
   RollPendingUserId,
 } from '../services/apiTypes'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import { rollStateApi } from '../services/rollStateApi'
+import type { RollState } from '../types/rollState'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { clearAllPendingSelections } from '../services/rollPendingSelection'
@@ -17,7 +17,7 @@ import {
   isNonNullObject,
 } from '../utils/runtimeChecks'
 
-export const ROLL_BOOTSTRAP_RECONCILED_EVENT = 'comic-pile:roll-bootstrap-reconciled'
+export const ROLL_STATE_RECONCILED_EVENT = 'comic-pile:roll-state-reconciled'
 
 const AUTH_RECOVERY_DELAYS_MS = [250, 500, 1000, 2000, 4000]
 
@@ -65,39 +65,39 @@ export function isAuthenticationMutationFailure(error: unknown): boolean {
   return response?.status === 403 && response.data?.detail === 'Not authenticated'
 }
 
-export function publishRollBootstrap(state: RollBootstrapResponse): void {
+export function publishRollState(state: RollState): void {
   // Active Roll observers consume this cache-only snapshot immediately; the
   // event remains for non-React reconciliation listeners and focused tests.
-  queryClient.setQueryData(queryKeys.roll.bootstrap(), state)
+  queryClient.setQueryData(queryKeys.roll.state(), state)
   if (!isWindowDefined() || !isFunction(CustomEvent)) return
 
-  window.dispatchEvent(new CustomEvent<RollBootstrapResponse>(
-    ROLL_BOOTSTRAP_RECONCILED_EVENT,
+  window.dispatchEvent(new CustomEvent<RollState>(
+    ROLL_STATE_RECONCILED_EVENT,
     { detail: state },
   ))
 }
 
-export async function fetchAndPublishRollBootstrap(
-  bootstrapApi: RollBootstrapApi = rollBootstrapApi,
+export async function fetchAndPublishRollState(
+  bootstrapApi: RollStateApi = rollStateApi,
   userId?: RollPendingUserId,
-): Promise<RollBootstrapResponse> {
+): Promise<RollState> {
   const state = await bootstrapApi.get(userId)
-  publishRollBootstrap(state)
+  publishRollState(state)
   return state
 }
 
 export interface AmbiguousRollMutationReconciliation {
   committed: boolean
   /** Authoritative state fetched and published while reconciling. */
-  bootstrap: RollBootstrapResponse
+  bootstrap: RollState
 }
 
 export async function reconcileAmbiguousRollMutation(
   expectedPendingThreadId?: number,
-  bootstrapApi: RollBootstrapApi = rollBootstrapApi,
+  bootstrapApi: RollStateApi = rollStateApi,
   userId?: RollPendingUserId,
 ): Promise<AmbiguousRollMutationReconciliation> {
-  const state = await fetchAndPublishRollBootstrap(bootstrapApi, userId)
+  const state = await fetchAndPublishRollState(bootstrapApi, userId)
   const pendingThreadId = normalizePendingThreadId(state.pending_thread_id)
 
   const committed = expectedPendingThreadId === undefined
@@ -126,7 +126,7 @@ export async function recoverProtectedRollMutation<T>(
       await wait(AUTH_RECOVERY_DELAYS_MS[attempt - 1])
     }
 
-    let state: RollBootstrapResponse
+    let state: RollState
     try {
       state = await mutationApi.bootstrap(userId)
     } catch (error: unknown) {
@@ -136,7 +136,7 @@ export async function recoverProtectedRollMutation<T>(
       throw error
     }
 
-    publishRollBootstrap(state)
+    publishRollState(state)
 
     if (normalizePendingThreadId(state.pending_thread_id) !== expectedPendingThreadId) {
       return { status: 'stale' }

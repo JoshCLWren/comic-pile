@@ -13,7 +13,7 @@ import type {
   RollRecoveryDiagnostic,
   RollRecoveryInfo,
   RollRecoveryPrerequisite,
-} from '../types/rollBootstrap'
+} from '../types/rollState'
 
 function positiveInteger(value: unknown): number | null {
   return isNumber(value) && Number.isSafeInteger(value) && value > 0 ? value : null

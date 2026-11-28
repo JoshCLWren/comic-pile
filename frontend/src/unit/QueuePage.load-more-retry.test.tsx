@@ -13,7 +13,7 @@ import {
   useQueueThreads,
   useShuffleQueue,
 } from '../hooks/useQueue'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { useSnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
@@ -49,7 +49,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
@@ -77,7 +77,7 @@ vi.mock('../contexts/useToast', () => ({
 }))
 
 const mockedUseQueueThreads = cast<ReturnType<typeof vi.fn>>(vi.mocked(useQueueThreads))
-const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
+const mockedUseRollState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollState))
 const mockedUseSnooze = cast<ReturnType<typeof vi.fn>>(vi.mocked(useSnooze))
 
 class NoopIntersectionObserver {
@@ -162,7 +162,7 @@ it('offers a retry affordance when the next-page fetch fails', async () => {
     nextPageToken: 'page-2',
     loadMore,
   })
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   })
@@ -198,7 +198,7 @@ it('does not offer a retry affordance when there is no further page', async () =
     nextPageToken: null,
     loadMore: vi.fn().mockResolvedValue(undefined),
   })
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   })

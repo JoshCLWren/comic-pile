@@ -8,7 +8,7 @@ import {
   SNOOZE_REQUIRES_PENDING_SERIES_REASON,
 } from '../../components/snoozeAvailability'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
-import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
+import type { RollState, RollThreadSummary } from '../../types/rollState'
 import type { RollOfferSeed } from '../../hooks/useRollPendingSelection'
 import type { RollResponse } from '../../types'
 import type { RollUnsnoozeResponse } from '../../services/apiTypes'
@@ -32,11 +32,11 @@ interface RollMutations {
 
 interface UseRollActionsParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse | null
-  rollPool: RollBootstrapThread[]
+  bootstrap?: RollState | null
+  rollPool: RollThreadSummary[]
   navigate: NavigateFunction
   mutations: RollMutations
-  refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
+  refetchRollState: () => Promise<RollState | undefined>
   enterRatingView: (
     threadId: number | null,
     result?: number | null,
@@ -66,11 +66,11 @@ interface UseRollActionsParams {
  * already-run refresh's state costs no network request, so the single-refresh
  * contract keeps its feedback: a committed move/shuffle whose pool refresh
  * failed is reported the same way the snooze hook reports an exhausted
- * refresh (#4276), instead of the retired duplicate `refetchBootstrap()` whose
+ * refresh (#4276), instead of the retired duplicate `refetchRollState()` whose
  * rejection used to surface through the action catch.
  */
 function bootstrapRefreshSettledErrored(): boolean {
-  const state = queryClient.getQueryState(queryKeys.roll.bootstrap())
+  const state = queryClient.getQueryState(queryKeys.roll.state())
   return (state?.error ?? null) != null
 }
 
@@ -82,7 +82,7 @@ export function useRollActions({
   rollPool,
   navigate,
   mutations,
-  refetchBootstrap,
+  refetchRollState,
   enterRatingView,
   onSnoozeRefreshFailed,
   pendingThreadId,
@@ -112,7 +112,7 @@ export function useRollActions({
     unsnoozeMutation,
   } = mutations
 
-  function handleThreadClick(thread: RollBootstrapThread) {
+  function handleThreadClick(thread: RollThreadSummary) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
   }
@@ -229,7 +229,7 @@ export function useRollActions({
   async function recoverPendingRollConflict() {
     // Refresh scoped inputs only; the browser-owned selection stays the source
     // of truth. The retained refetch seam returns the already-composed view.
-    const latest = await refetchBootstrap?.()
+    const latest = await refetchRollState?.()
     const pendingId = Number(
       pendingThreadId ?? latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0,
     )

@@ -130,8 +130,8 @@ vi.mock('../contexts/useBugReportRestore', () => ({
     clearRestoreAction: vi.fn(),
   }),
 }))
-vi.mock('../hooks/useRollBootstrap', () => ({
-  useRollBootstrap: () =>
+vi.mock('../hooks/useRollState', () => ({
+  useRollState: () =>
     bootstrapHook.value ??
     ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }),
 }))

@@ -23,7 +23,7 @@ import {
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import type { RateResponsePayload, Thread } from '../types'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 import type { CustomCBL } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 
@@ -96,7 +96,7 @@ describe('canonical query keys', () => {
     ])
 
     expect(queryKeys.roll.all).toEqual(['roll'])
-    expect(queryKeys.roll.bootstrap()).toEqual(['roll', 'bootstrap'])
+    expect(queryKeys.roll.state()).toEqual(['roll', 'bootstrap'])
 
     expect(queryKeys.completed.all).toEqual(['completed'])
     expect(queryKeys.completed.pages()).toEqual(['completed', 'pages'])
@@ -253,7 +253,7 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.lastRead(), exact: true })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.state(), exact: true })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
@@ -264,10 +264,10 @@ describe('targeted cache effects', () => {
   it('can mark roll bootstrap stale without refetch when the caller owns the authoritative fetch (#5264)', async () => {
     const { client, invalidateQueries } = createSpiedClient()
 
-    await applyRatedThreadCache(client, thread, { refetchRollBootstrap: false })
+    await applyRatedThreadCache(client, thread, { refetchRollState: false })
 
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
       refetchType: 'none',
     })
@@ -288,7 +288,7 @@ describe('targeted cache effects', () => {
         },
       },
     }
-    client.setQueryData<Partial<RollBootstrapResponse>>(queryKeys.roll.bootstrap(), {
+    client.setQueryData<Partial<RollState>>(queryKeys.roll.state(), {
       session_id: 12,
       last_read: null,
     })
@@ -297,7 +297,7 @@ describe('targeted cache effects', () => {
 
     expect(client.getQueryData(queryKeys.roll.lastRead())).toEqual(rated)
     expect(
-      client.getQueryData<Partial<RollBootstrapResponse>>(queryKeys.roll.bootstrap())?.last_read,
+      client.getQueryData<Partial<RollState>>(queryKeys.roll.state())?.last_read,
     ).toEqual(rated.roll_reconciliation?.last_read)
   })
 
@@ -334,7 +334,7 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.queue.pages(),
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -491,7 +491,7 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.state(), exact: true })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
@@ -529,7 +529,7 @@ describe('targeted cache effects', () => {
     })
     expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -563,7 +563,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).not.toHaveBeenCalled()
     expect(invalidateQueries).toHaveBeenCalledTimes(8)
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -590,7 +590,7 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledTimes(5)
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -648,7 +648,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -700,7 +700,7 @@ describe('targeted cache effects', () => {
     // reader-progress surfaces; no unscoped invalidateQueries blast.
     expect(invalidateQueries).toHaveBeenCalledTimes(12)
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -763,7 +763,7 @@ describe('targeted cache effects', () => {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
-      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.state(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
       // Saving a list changes the confirmed identities its CBL candidates were
       // compared with, so the candidate query must not serve the stale match set.
@@ -813,7 +813,7 @@ describe('targeted cache effects', () => {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.list(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.reader(readingPlan.id) })
       expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
-      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.state(), exact: true })
     })
   })
 
@@ -823,7 +823,7 @@ describe('targeted cache effects', () => {
 
       await invalidateSessionRecoveryCache(client)
 
-      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.state(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })

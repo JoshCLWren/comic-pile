@@ -21,7 +21,7 @@ export type RollPoolReason =
   | 'all_out_of_pool'
 
 /** Lightweight thread summary returned by the Roll bootstrap endpoint. */
-export interface RollBootstrapThread {
+export interface RollThreadSummary {
   id: number
   title: string
   format: string
@@ -131,7 +131,7 @@ export function formatSessionMode(mode: SessionModeState | null | undefined): st
 }
 
 /** Bounded bootstrap payload for the Roll initial render. */
-export interface RollBootstrapResponse {
+export interface RollState {
   /**
    * Retired session identity (#4350). The browser owns pending selection, so a
    * client view model must never synthesize one; kept optional only for legacy
@@ -144,13 +144,13 @@ export interface RollBootstrapResponse {
   session_mode: SessionMode
   active_thread: SessionThread | null
   roll_recovery?: RollRecoveryInfo | null
-  roll_pool: RollBootstrapThread[]
-  snoozed_threads: RollBootstrapThread[]
+  roll_pool: RollThreadSummary[]
+  snoozed_threads: RollThreadSummary[]
   snoozed_count: number
   /** Complete, uncapped snoozed series ids; `snoozed_threads` is a 20-row display summary. */
   snoozed_thread_ids?: number[]
   skipped_thread_ids: number[]
-  skipped_threads: RollBootstrapThread[]
+  skipped_threads: RollThreadSummary[]
   /** Minimal empty-pool explanation; absent only for legacy fixtures. */
   pool_reason?: RollPoolReason
   timezone?: string | null

@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import {
   useRollDieState,
   useRollEligibleIssueIds,
@@ -67,7 +67,7 @@ vi.mock('../pages/RollPage/components/RollHeader', async (importOriginal) => {
   }
 })
 
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useRollResources', () => ({
   useRollDieState: vi.fn(),
   useRollEligibleIssueIds: vi.fn(),
@@ -117,7 +117,7 @@ vi.mock('../services/api', async (importOriginal) => {
 })
 
 // SAFETY: vi.mocked returns a typed mock whose mockReturnValue surface matches the hook; cast preserves the mock call API.
-const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
+const mockedUseRollState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollState))
 // SAFETY: Same mock-shape widening for the scoped resource hooks; safe because the test only reads their return objects.
 const mockedUseRollEligibleIssueIds = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollEligibleIssueIds))
 const mockedUseRollIssueCards = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollIssueCards))
@@ -168,7 +168,7 @@ beforeEach(() => {
   mockedUseRollDieState.mockReturnValue({ data: undefined })
   mockedUseRollEligibleIssueIds.mockReturnValue({ data: undefined })
   mockedUseRollIssueCards.mockReturnValue({ data: undefined })
-  mockedUseRollBootstrap.mockReturnValue({
+  mockedUseRollState.mockReturnValue({
     data: bootstrap,
     refetch: vi.fn().mockResolvedValue(bootstrap),
     isPending: false,
@@ -271,8 +271,8 @@ describe('Roll page state carries no server-die copy (#4768 audit)', () => {
     expect(found).toEqual([])
   })
 
-  it('useRollBootstrapSync stays redirect-only with no die projection (#4768)', () => {
-    const source = readFileSync(join(SOURCE_ROOT, 'pages/RollPage/useRollBootstrapSync.ts'), 'utf-8')
+  it('useRollStateSync stays redirect-only with no die projection (#4768)', () => {
+    const source = readFileSync(join(SOURCE_ROOT, 'pages/RollPage/useRollStateSync.ts'), 'utf-8')
     const found = FORBIDDEN_IN_BOOTSTRAP_SYNC.filter((pattern) => source.includes(pattern))
     expect(found).toEqual([])
   })

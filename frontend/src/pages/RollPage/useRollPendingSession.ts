@@ -1,13 +1,13 @@
 import { useEffect } from 'react'
-import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
+import type { RollState, RollThreadSummary } from '../../types/rollState'
 import type { RollPendingSelection } from '../../services/rollPendingSelection'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { ThreadMetadata } from './types'
 
 interface UseRollPendingSessionParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse | null
-  rollPool: RollBootstrapThread[]
+  bootstrap?: RollState | null
+  rollPool: RollThreadSummary[]
   /** Exact browser-owned selection restored from storage, never server state. */
   pending?: RollPendingSelection | null
 }

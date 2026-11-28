@@ -24,7 +24,7 @@ import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { dependenciesApi } from '../services/api-dependencies'
 import { createAppQueryClient, queryClient as sharedQueryClient } from '../query/queryClient'
-import { resetRollBootstrapSessionState } from '../services/rollBootstrapApi'
+import { resetRollStateSessionState } from '../services/rollStateApi'
 import { queryKeys } from '../query/queryKeys'
 import { adaptRollV2Bootstrap } from '../services/adaptRollV2Bootstrap'
 import api from '../services/api'
@@ -40,14 +40,14 @@ import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import { useRollActions } from '../pages/RollPage/useRollActions'
 import RollPage from '../pages/RollPage'
 import HistoryPage from '../pages/HistoryPage'
 import SessionPage from '../pages/SessionPage'
 import QueuePage from '../pages/QueuePage/QueuePage'
-import type { RollBootstrapThread } from '../types/rollBootstrap'
+import type { RollThreadSummary } from '../types/rollState'
 import type { ThreadListItem, RollResponse } from '../types'
 import {
   createRequestRecorder,
@@ -175,7 +175,7 @@ function renderSharedProbe(element: ReactNode): ReactNode {
 }
 
 let rollMoveHandle: {
-  pick: (thread: RollBootstrapThread) => void
+  pick: (thread: RollThreadSummary) => void
   act: (action: string) => Promise<void>
 } | null = null
 
@@ -187,7 +187,7 @@ let rollMoveHandle: {
  */
 function RollMoveBudgetProbe() {
   const state = useRollPageState()
-  const { data: bootstrapState, refetch: refetchBootstrap } = useRollBootstrap()
+  const { data: bootstrapState, refetch: refetchRollState } = useRollState()
   const moveToFrontMutation = useMoveToFront()
   const actions = useRollActions({
     state,
@@ -206,7 +206,7 @@ function RollMoveBudgetProbe() {
       unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}), isPending: false },
       shuffleQueueMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
     },
-    refetchBootstrap,
+    refetchRollState,
     enterRatingView: budgetEnterRatingView,
   })
 
@@ -430,7 +430,7 @@ beforeEach(() => {
   // The singleton bootstrap service resolves the reading session once per
   // client lifetime; without this reset a later budget would skip the cold
   // session POST its cold-load assertion counts (#4276).
-  resetRollBootstrapSessionState()
+  resetRollStateSessionState()
   routeQueryClient = createAppQueryClient()
   const defaults = routeQueryClient.getDefaultOptions()
   routeQueryClient.setDefaultOptions({
@@ -690,7 +690,7 @@ describe('core route request budgets', () => {
 
     // Seed the shared client as a roll:active page would hold it, so this
     // budget counts only the refresh the move action owns.
-    sharedQueryClient.setQueryData(queryKeys.roll.bootstrap(), adaptRollV2Bootstrap(rollV2Bootstrap))
+    sharedQueryClient.setQueryData(queryKeys.roll.state(), adaptRollV2Bootstrap(rollV2Bootstrap))
 
     render(renderSharedProbe(<RollMoveBudgetProbe />))
     await waitFor(() => expect(rollMoveHandle).not.toBeNull())

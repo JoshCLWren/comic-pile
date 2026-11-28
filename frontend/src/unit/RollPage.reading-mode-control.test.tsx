@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
 import { ReadingModeControl } from '../pages/RollPage/components/ReadingModeControl'
-import type { RollBootstrapResponse, SessionMode, SessionModeState } from '../types/rollBootstrap'
-import { formatSessionMode, readingModeLabel } from '../types/rollBootstrap'
+import type { RollState, SessionMode, SessionModeState } from '../types/rollState'
+import { formatSessionMode, readingModeLabel } from '../types/rollState'
 
 function toSessionMode(state: SessionModeState | null | undefined): SessionMode {
   if (!state) {
@@ -39,7 +39,7 @@ function toSessionMode(state: SessionModeState | null | undefined): SessionMode 
   }
 }
 
-function bootstrapWithMode(mode: SessionModeState | null | undefined): RollBootstrapResponse {
+function bootstrapWithMode(mode: SessionModeState | null | undefined): RollState {
   return {
     session_id: 1,
     user_id: 1,

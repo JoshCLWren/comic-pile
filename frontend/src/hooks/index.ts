@@ -40,7 +40,7 @@ export {
 export { useReaderContext, useReadingOrdersForThread, useConnectedThreads } from './useReaderContext'
 export { useTasteDiscoveries } from './useTasteDiscoveries'
 export { useCreatorDiscoveries } from './useCreatorDiscoveries'
-export { useRollBootstrap, resolveBrowserTimezone } from './useRollBootstrap'
+export { useRollState, resolveBrowserTimezone } from './useRollState'
 export {
   useRollPendingSelection,
   type RollOfferSeed,

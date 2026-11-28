@@ -1,4 +1,4 @@
-import type { RollBootstrapResponse, RollPoolReason } from '../types/rollBootstrap'
+import type { RollState, RollPoolReason } from '../types/rollState'
 import type { RollV2BootstrapResponse } from '../types/rollV2'
 
 const POOL_REASONS: readonly RollPoolReason[] = [
@@ -18,7 +18,7 @@ function isPoolReason(value: unknown): value is RollPoolReason {
  * issue-level candidate projection. Visible die-face tags come directly
  * from native Rust; retired exclusion reports are not required.
  */
-export function adaptRollV2Bootstrap(state: RollV2BootstrapResponse): RollBootstrapResponse {
+export function adaptRollV2Bootstrap(state: RollV2BootstrapResponse): RollState {
   if (!Array.isArray(state.rollable) || !isPoolReason(state.pool_reason)) {
     throw new Error('Incomplete native Roll v2 bootstrap response')
   }

@@ -175,7 +175,7 @@ describe('die-mode mutations invalidate scoped die-state', () => {
 
     expect(setDie).toHaveBeenCalledWith(20)
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     })
     // #4352: the header is render-derived from the scoped die-state query, so

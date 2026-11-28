@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
-import { invalidateRollBootstrapOnNavigation } from '../query/cacheEffects'
+import { invalidateRollStateOnNavigation } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 
 const queryClient = new QueryClient()
@@ -11,10 +11,10 @@ beforeEach(() => {
 })
 
 it('invalidates roll bootstrap query without refetching on navigation', async () => {
-  await invalidateRollBootstrapOnNavigation(queryClient)
+  await invalidateRollStateOnNavigation(queryClient)
 
   expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-    queryKey: queryKeys.roll.bootstrap(),
+    queryKey: queryKeys.roll.state(),
     exact: true,
     refetchType: 'none',
   })
@@ -31,7 +31,7 @@ it('marks the query stale but does not trigger immediate refetch', async () => {
     }
   })
 
-  await invalidateRollBootstrapOnNavigation(queryClient)
+  await invalidateRollStateOnNavigation(queryClient)
 
   expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(1)
 })

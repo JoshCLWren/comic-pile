@@ -3,7 +3,7 @@ import type {
   RateResponsePayload,
   RollResponse,
 } from '../types'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 
 /** Native unsnooze response; `restored` is false when only the snooze was removed. */
 export type RollUnsnoozeResponse = RollResponse & { restored: boolean }
@@ -23,12 +23,12 @@ export type RollPendingUserId = number | string | null | undefined
 export interface ProtectedRollMutationApi {
   rate: (data: RatePayload) => Promise<RateResponsePayload>
   snooze: () => Promise<RollResponse>
-  bootstrap: (userId?: RollPendingUserId) => Promise<RollBootstrapResponse>
+  bootstrap: (userId?: RollPendingUserId) => Promise<RollState>
 }
 
-export interface RollBootstrapApi {
-  get: (userId?: RollPendingUserId) => Promise<RollBootstrapResponse>
-  switchPrerequisite: (request: import('../types/rollBootstrap').RollPrerequisiteSwitchRequest) => Promise<import('../types/rollBootstrap').RollPrerequisiteSwitchResponse>
+export interface RollStateApi {
+  get: (userId?: RollPendingUserId) => Promise<RollState>
+  switchPrerequisite: (request: import('../types/rollState').RollPrerequisiteSwitchRequest) => Promise<import('../types/rollState').RollPrerequisiteSwitchResponse>
 }
 
 export type SessionApi = ReturnType<typeof import('./api-sessions').createSessionApi>
@@ -37,7 +37,7 @@ export interface CacheEffectsApi {
   applyRatedThreadCache: (
     client: import('@tanstack/react-query').QueryClient,
     thread: RateResponsePayload,
-    options?: { refetchRollBootstrap?: boolean },
+    options?: { refetchRollState?: boolean },
   ) => Promise<void>
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
 }
@@ -45,7 +45,7 @@ export interface CacheEffectsApi {
 /** Injectable dependencies for the Roll mutation hooks (snooze/rate). */
 export interface RollMutationDeps {
   protectedApi?: ProtectedRollMutationApi
-  bootstrapApi?: RollBootstrapApi
+  bootstrapApi?: RollStateApi
   cacheEffects?: CacheEffectsApi
 }
 

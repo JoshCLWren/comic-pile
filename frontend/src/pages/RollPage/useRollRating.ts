@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { useConnectedThreads, useReadingOrdersForThread } from '../../hooks/useReaderContext'
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RatePayload, Thread } from '../../types'
-import type { RollBootstrapResponse } from '../../types/rollBootstrap'
+import type { RollState } from '../../types/rollState'
 import { queryClient } from '../../query/queryClient'
 import { queryKeys } from '../../query/queryKeys'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
@@ -13,10 +13,10 @@ import { RATING_THRESHOLD, buildRatingThread, createExplosion } from './utils'
 
 interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse | null
+  bootstrap?: RollState | null
   rateMutation: { mutate: (payload: RatePayload) => Promise<RateMutationOutcome>; isPending: boolean }
   dismissPendingMutation: { mutate: () => Promise<void>; isPending: boolean }
-  refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
+  refetchRollState: () => Promise<RollState | undefined>
   /** Clear the browser-owned selection after a committed rate of that issue. */
   clearPending?: (issueId?: number) => void
 }
@@ -32,7 +32,7 @@ export function useRollRating({
   bootstrap,
   rateMutation,
   dismissPendingMutation,
-  refetchBootstrap,
+  refetchRollState,
   clearPending,
 }: UseRollRatingParams) {
   void dismissPendingMutation
@@ -150,7 +150,7 @@ export function useRollRating({
 
   const handleMigrationComplete = useCallback(
     (migratedThread: Thread) => {
-      refetchBootstrap()
+      refetchRollState()
       setShowMigrationDialog(false)
       setThreadToMigrate(null)
       // Migration materializes this series' issues; it does not change which
@@ -166,7 +166,7 @@ export function useRollRating({
         next_issue_number: retained?.next_issue_number ?? migratedThread.next_unread_issue_number ?? null,
       })
     },
-    [refetchBootstrap, enterRatingView, setShowMigrationDialog, setThreadToMigrate, threadToMigrate],
+    [refetchRollState, enterRatingView, setShowMigrationDialog, setThreadToMigrate, threadToMigrate],
   )
 
   const handleMigrationSkip = useCallback(() => {
@@ -335,8 +335,8 @@ export function useRollRating({
       const forceRefresh = options?.forceRefresh === true
       const cached = forceRefresh
         ? undefined
-        : queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap())
-      const latest = cached ?? (await refetchBootstrap())
+        : queryClient.getQueryData<RollState>(queryKeys.roll.state())
+      const latest = cached ?? (await refetchRollState())
       const refreshedThread = latest?.active_thread
 
       if (activeRatingThread && refreshedThread?.id === activeRatingThread.id) {

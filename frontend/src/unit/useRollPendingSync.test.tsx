@@ -1,9 +1,9 @@
 import { vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { useRollPendingSync } from '../pages/QueuePage/useRollPendingSync'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 
-function bootstrap(overrides: Partial<RollBootstrapResponse> = {}): RollBootstrapResponse {
+function bootstrap(overrides: Partial<RollState> = {}): RollState {
   return {
     session_id: 1,
     user_id: 1,

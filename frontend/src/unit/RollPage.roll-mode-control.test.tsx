@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { DICE_LADDER } from '../components/diceLadder'
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
-import type { RollBootstrapResponse, SessionMode } from '../types/rollBootstrap'
+import type { RollState, SessionMode } from '../types/rollState'
 
 const ACTIVE_FILL = 'bg-[var(--theme-primary-action)]'
 
@@ -24,7 +24,7 @@ function emptySessionMode(): SessionMode {
   }
 }
 
-function makeBootstrap(overrides: Partial<RollBootstrapResponse> = {}): RollBootstrapResponse {
+function makeBootstrap(overrides: Partial<RollState> = {}): RollState {
   return {
     session_id: 1,
     user_id: 1,
@@ -70,7 +70,7 @@ const headerBaseProps = {
   onOpenDieModal: vi.fn(),
 }
 
-function renderHeader(bootstrap: RollBootstrapResponse, currentDie = 6) {
+function renderHeader(bootstrap: RollState, currentDie = 6) {
   return render(
     <MemoryRouter>
       <RollHeader bootstrap={bootstrap} {...headerBaseProps} currentDie={currentDie} />

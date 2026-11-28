@@ -11,7 +11,7 @@ import {
   SNOOZE_REQUIRES_PENDING_SERIES_REASON,
 } from '../../../components/snoozeAvailability'
 import type { Thread, ThreadListItem } from '../../../types'
-import type { RollBootstrapThread } from '../../../types/rollBootstrap'
+import type { RollThreadSummary } from '../../../types/rollState'
 import type { RatingThread } from '../types'
 import { buildManualPickerOptions } from '../manualPickerOptions'
 import { ManualPickerSearch } from './ManualPickerSearch'
@@ -101,7 +101,7 @@ interface RollModalsProps {
   onOverrideThreadIdChange: (value: string) => void
   overrideErrorMessage: string
   onSubmitOverride: (event: FormEvent<HTMLFormElement>) => void
-  snoozedThreads: RollBootstrapThread[]
+  snoozedThreads: RollThreadSummary[]
   onCloseOverride: () => void
   isDieModalOpen: boolean
   onCloseDieModal: () => void
@@ -115,7 +115,7 @@ interface RollModalsProps {
   isDirectReadOpen: boolean
   onCloseDirectRead: () => void
   onMigrateDirectRead?: () => void
-  selectedThread: RollBootstrapThread | null
+  selectedThread: RollThreadSummary | null
   /**
    * The reading session's pending thread. The native Roll offer acts on this
    * thread, so the action sheet's Snooze entry is only available for it.

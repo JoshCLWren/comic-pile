@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { threadsApi } from '../../services/api-threads'
-import type { RollBootstrapResponse } from '../../types/rollBootstrap'
+import type { RollState } from '../../types/rollState'
 import type { ThreadListItem } from '../../types'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 
 interface UseRollModalsParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse | null
+  bootstrap?: RollState | null
   setRestoreAction: (action: () => void) => void
   clearRestoreAction: () => void
 }

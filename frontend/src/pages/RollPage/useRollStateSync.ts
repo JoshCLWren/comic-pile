@@ -18,7 +18,7 @@ interface UseRollBootstrapSyncParams {
  * `rolledResult != null`. The scoped `last_roll` spans every session and must
  * never light a stale “rolled” state on a fresh idle die.
  */
-export function useRollBootstrapSync({
+export function useRollStateSync({
   isBootstrapError,
   bootstrapError,
   navigate,

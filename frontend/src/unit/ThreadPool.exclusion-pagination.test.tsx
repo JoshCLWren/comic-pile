@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
-import type { RollBootstrapThread } from '../types/rollBootstrap'
+import type { RollThreadSummary } from '../types/rollState'
 
 type PoolProps = Parameters<typeof ThreadPool>[0]
 
@@ -29,7 +29,7 @@ function mount(overrides: Partial<PoolProps> = {}) {
   )
 }
 
-const eligible: RollBootstrapThread = {
+const eligible: RollThreadSummary = {
   id: 8, title: 'Saga', format: 'Comic', issue_number: '2',
 }
 

@@ -5,7 +5,7 @@ import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { useSnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
@@ -41,7 +41,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
@@ -142,7 +142,7 @@ beforeEach(() => {
   // SAFETY: QueuePage needs only mutate/isPending from this snooze mock.
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   // SAFETY: QueuePage reads only pending/snoozed data and refetch here.
-  vi.mocked(useRollBootstrap).mockReturnValue({
+  vi.mocked(useRollState).mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   } as never)

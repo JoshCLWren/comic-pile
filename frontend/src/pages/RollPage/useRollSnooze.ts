@@ -1,5 +1,5 @@
 import { getApiErrorDetail } from '../../utils/apiError'
-import type { RollBootstrapResponse } from '../../types/rollBootstrap'
+import type { RollState } from '../../types/rollState'
 import type { RollResponse } from '../../types'
 import type { RollUnsnoozeResponse } from '../../services/apiTypes'
 import type { RollOfferSeed } from '../../hooks/useRollPendingSelection'
@@ -24,7 +24,7 @@ interface UseRollSnoozeParams {
   ) => Promise<void>
   /** Replace browser-owned pending with the exact replacement offer. */
   seedPending?: (offer: RollOfferSeed) => void
-  refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
+  refetchRollState: () => Promise<RollState | undefined>
   /**
    * Reports that the committed snooze could not refresh authoritative Roll
    * state. The page owns a visible recovery surface (a toast with a
@@ -48,7 +48,7 @@ export function useRollSnooze({
   unsnoozeMutation,
   enterRatingView,
   seedPending,
-  refetchBootstrap,
+  refetchRollState,
   onRefreshFailed,
 }: UseRollSnoozeParams) {
   const {
@@ -87,7 +87,7 @@ export function useRollSnooze({
         // leave the just-snoozed thread open in the rating view.
         await enterRatingView(response.thread_id, response.result, response)
       } else {
-        await refetchBootstrap()
+        await refetchRollState()
         setIsRolling(false)
         setIsRatingView(false)
         setRolledResult(null)

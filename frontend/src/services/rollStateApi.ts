@@ -12,10 +12,10 @@ import { queryKeys } from '../query/queryKeys'
 import type { RateResponsePayload } from '../types'
 import type { RollPendingUserId } from './apiTypes'
 import type {
-  RollBootstrapResponse,
-  RollBootstrapThread,
+  RollState,
+  RollThreadSummary,
   RollPrerequisiteSwitchRequest,
-} from '../types/rollBootstrap'
+} from '../types/rollState'
 
 /**
  * Client-side composition of the scoped Roll resources.
@@ -27,11 +27,11 @@ import type {
  * seam so mutation reconciliation and its tests can ask for the current view
  * without reaching into React hooks.
  */
-export function createRollBootstrapApi(client: HttpClient) {
+export function createRollStateApi(client: HttpClient) {
   const nativeV2 = createNativeV2Client(client)
 
   return {
-    get: async (userId?: RollPendingUserId): Promise<RollBootstrapResponse> => {
+    get: async (userId?: RollPendingUserId): Promise<RollState> => {
       const [eligible, snoozes, lastRead] = await Promise.all([
         nativeV2.eligibleIssueIds({
           query: readRollSnoozes().length > 0
@@ -46,7 +46,7 @@ export function createRollBootstrapApi(client: HttpClient) {
         ? await nativeV2.issueCards({ body: { issue_ids: issueIds } })
         : { items: [] }
       const cardByIssue = new Map(cards.items.map((card) => [card.issue_id, card]))
-      const rollPool: RollBootstrapThread[] = issueIds.flatMap((issueId, index) => {
+      const rollPool: RollThreadSummary[] = issueIds.flatMap((issueId, index) => {
         const card = cardByIssue.get(issueId)
         if (!card) return []
         return [{
@@ -86,7 +86,7 @@ export function createRollBootstrapApi(client: HttpClient) {
         if (snoozes.length > 0) query.snoozed = snoozes.join(',')
         recovery = await nativeV2.recovery({ query })
       }
-      const snoozedThreads: RollBootstrapThread[] = snoozes.length > 0
+      const snoozedThreads: RollThreadSummary[] = snoozes.length > 0
         ? (await nativeV2.listThreads({
             query: { ids: snoozes.join(','), page_size: snoozes.length },
           })).threads.flatMap((thread) =>
@@ -135,9 +135,9 @@ export function createRollBootstrapApi(client: HttpClient) {
   }
 }
 
-export const rollBootstrapApi = createRollBootstrapApi(defaultHttpClient())
+export const rollStateApi = createRollStateApi(defaultHttpClient())
 
 /** Retained compatibility hook; there is no session-resolution state to clear. */
-export function resetRollBootstrapSessionState(): void {
-  rollBootstrapApi.resetSessionState()
+export function resetRollStateSessionState(): void {
+  rollStateApi.resetSessionState()
 }

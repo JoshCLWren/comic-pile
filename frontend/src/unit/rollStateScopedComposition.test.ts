@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import type { IssueCardsResponse } from '../generated/nativeV2Client'
-import { createRollBootstrapApi } from '../services/rollBootstrapApi'
+import { createRollStateApi } from '../services/rollStateApi'
 import {
   resetRollPendingSelectionMemory,
   writePendingSelection,
@@ -59,7 +59,7 @@ describe('scoped Roll composition service', () => {
     writePendingSelection(99, { issue_id: 77, thread_id: 8, selected_at: 1 })
     writePendingSelection(42, { issue_id: 10, thread_id: 3, selected_at: 2 })
 
-    const state = await createRollBootstrapApi(client).get(42)
+    const state = await createRollStateApi(client).get(42)
 
     expect(state.pending_thread_id).toBe(3)
     expect(state.last_read).toEqual(LAST_READ)
@@ -110,7 +110,7 @@ describe('scoped Roll composition service', () => {
     })
     writePendingSelection(42, { issue_id: 10, thread_id: 3, selected_at: 2 })
 
-    const state = await createRollBootstrapApi(client).get(42)
+    const state = await createRollStateApi(client).get(42)
 
     expect(state.roll_recovery).toMatchObject({
       original_thread_id: 3,

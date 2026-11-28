@@ -6,9 +6,9 @@ import { useRate } from '../hooks/useRate'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { rollStateApi } from '../services/rollStateApi'
 import type { RatePayload, Thread } from '../types'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 
 // Deliberately DO NOT mock ../query/cacheEffects here: the whole point of this
 // file is to exercise the real applyRatedThreadCache against a live bootstrap
@@ -17,10 +17,10 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 vi.mock('../services/protectedRollMutationApi', () => ({
   protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() },
 }))
-vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: { get: vi.fn() } }))
+vi.mock('../services/rollStateApi', () => ({ rollStateApi: { get: vi.fn() } }))
 
 const mockedRate = vi.mocked(protectedRollMutationApi.rate)
-const mockedBootstrapGet = vi.mocked(rollBootstrapApi.get)
+const mockedBootstrapGet = vi.mocked(rollStateApi.get)
 
 const thread: Thread = {
   id: 1,
@@ -39,7 +39,7 @@ const thread: Thread = {
   created_at: '2026-08-03T00:00:00Z',
 }
 
-const bootstrapState = (): RollBootstrapResponse => ({
+const bootstrapState = (): RollState => ({
   session_id: 1,
   user_id: 1,
   pending_thread_id: null,
@@ -81,7 +81,7 @@ function makeClient(): QueryClient {
  */
 function BootstrapObserver() {
   useQuery({
-    queryKey: queryKeys.roll.bootstrap(),
+    queryKey: queryKeys.roll.state(),
     queryFn: () => mockedBootstrapGet(),
     // Finite staleTime keeps the observer non-static: TanStack skips refetch
     // for queries whose observers all use a static (Infinity) staleTime.
@@ -128,7 +128,7 @@ it('does not issue a second bootstrap GET when useRate owns the authoritative fe
   })
 
   // Exactly one GET: the authoritative one owned by the rating flow. The real
-  // applyRatedThreadCache ran with refetchRollBootstrap:false, so the live
+  // applyRatedThreadCache ran with refetchRollState:false, so the live
   // observer above did not re-fetch. The control test below proves this
   // observer does detect a refetch when one is actually triggered.
   expect(mockedBootstrapGet).toHaveBeenCalledTimes(1)

@@ -2,7 +2,7 @@ import type { SessionMode, SessionThread } from './index'
 import type { RollPoolReason, RollRecoveryInfo } from './rollBootstrap'
 import type { Tag } from '../services/api-tags'
 
-export type { RollBootstrapResponse, RollBootstrapThread } from './rollBootstrap'
+export type { RollState, RollThreadSummary } from './rollBootstrap'
 
 /** Frozen v2 identity derived-state enum. */
 export type RollV2IdentityState =

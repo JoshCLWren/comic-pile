@@ -1,4 +1,4 @@
-import { formatSessionMode, type SessionModeState } from '../../../types/rollBootstrap'
+import { formatSessionMode, type SessionModeState } from '../../../types/rollState'
 
 interface ReadingModeControlProps {
   mode: SessionModeState | null | undefined

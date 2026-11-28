@@ -4,7 +4,7 @@ import {
   recoverProtectedRollMutation,
 } from '../hooks/rollMutationReconciliation'
 import type { ProtectedRollMutationApi } from '../services/apiTypes'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 
 function makeProtectedApi(): ProtectedRollMutationApi {
   return { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }
@@ -13,7 +13,7 @@ function makeProtectedApi(): ProtectedRollMutationApi {
 const protectedRollMutationApi = makeProtectedApi()
 const mockedProtectedApi = vi.mocked(protectedRollMutationApi)
 
-function bootstrapState(pendingThreadId: number | null): RollBootstrapResponse {
+function bootstrapState(pendingThreadId: number | null): RollState {
   return {
     session_id: 1,
     user_id: 1,

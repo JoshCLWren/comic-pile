@@ -5,7 +5,7 @@ import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from '../hooks/useThread'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { useCompletedThreads } from '../hooks/useCompletedThreads'
 import { useSnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
@@ -24,7 +24,7 @@ vi.mock('../hooks/useCompletedThreads', () => ({
 vi.mock('../hooks/useThread', () => ({ useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
 vi.mock('../hooks/useQueue', () => ({ useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })), useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: vi.fn() } }))
 vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
@@ -78,7 +78,7 @@ beforeEach(() => {
    })
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useRollBootstrap).mockReturnValue({ data: { snoozed_threads: [] }, refetch: mocks.refetchSession } as never)
+  vi.mocked(useRollState).mockReturnValue({ data: { snoozed_threads: [] }, refetch: mocks.refetchSession } as never)
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type

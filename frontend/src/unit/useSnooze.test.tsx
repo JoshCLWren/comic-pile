@@ -3,8 +3,8 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSnooze } from '../hooks/useSnooze'
-import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import { ROLL_STATE_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
+import type { RollState } from '../types/rollState'
 
 let client: QueryClient
 
@@ -26,13 +26,13 @@ function makeBootstrapApi() {
 
 const snoozeApi = makeSnoozeApi()
 const protectedRollMutationApi = makeProtectedApi()
-const rollBootstrapApi = makeBootstrapApi()
+const rollStateApi = makeBootstrapApi()
 const invalidateCurrentSessionAfterSnooze = vi.fn()
 const cacheEffects = {
   applyRatedThreadCache: vi.fn(),
   invalidateCurrentSessionAfterSnooze,
 }
-const deps = { snoozeApi, protectedApi: protectedRollMutationApi, bootstrapApi: rollBootstrapApi, cacheEffects }
+const deps = { snoozeApi, protectedApi: protectedRollMutationApi, bootstrapApi: rollStateApi, cacheEffects }
 
 function renderSnooze() {
   return renderHook(() => useSnooze(deps), { wrapper })
@@ -41,7 +41,7 @@ function renderSnooze() {
 const bootstrapState = (
   pendingThreadId: number | null,
   sessionId = 1,
-): RollBootstrapResponse => ({
+): RollState => ({
   session_id: sessionId,
   user_id: 1,
   pending_thread_id: pendingThreadId,
@@ -75,24 +75,24 @@ describe('snooze hooks', () => {
     vi.clearAllMocks()
     invalidateCurrentSessionAfterSnooze.mockReset()
     protectedRollMutationApi.snooze.mockResolvedValue(undefined)
-    rollBootstrapApi.get.mockResolvedValue(bootstrapState(null))
+    rollStateApi.get.mockResolvedValue(bootstrapState(null))
   })
 
   it('snoozes and publishes authoritative Roll state', async () => {
     const reconciled = vi.fn()
-    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+    window.addEventListener(ROLL_STATE_RECONCILED_EVENT, reconciled)
 
     try {
       const snooze = renderSnooze()
       await act(async () => await snooze.result.current.mutate(7))
 
       expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
-      expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
+      expect(rollStateApi.get).toHaveBeenCalledTimes(1)
       expect(reconciled).toHaveBeenCalledTimes(1)
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(client)
       expect(snooze.result.current.isError).toBe(false)
     } finally {
-      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+      window.removeEventListener(ROLL_STATE_RECONCILED_EVENT, reconciled)
     }
   })
 
@@ -119,66 +119,66 @@ describe('snooze hooks', () => {
       await Promise.all([firstRequest, secondRequest])
     })
 
-    expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
+    expect(rollStateApi.get).toHaveBeenCalledTimes(1)
     expect(snooze.result.current.isPending).toBe(false)
     expect(snooze.result.current.isError).toBe(false)
   })
 
   it('retries a failed post-snooze refresh once and publishes authoritative state', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
-    rollBootstrapApi.get
+    rollStateApi.get
       .mockRejectedValueOnce(refreshFailure)
       .mockResolvedValueOnce(bootstrapState(null, 20))
     const reconciled = vi.fn()
-    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+    window.addEventListener(ROLL_STATE_RECONCILED_EVENT, reconciled)
 
     try {
       const snooze = renderSnooze()
       await act(async () => await snooze.result.current.mutate(7))
 
       expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
-      expect(rollBootstrapApi.get).toHaveBeenCalledTimes(2)
+      expect(rollStateApi.get).toHaveBeenCalledTimes(2)
       expect(reconciled).toHaveBeenCalledTimes(1)
       expect(snooze.result.current.isError).toBe(false)
       expect(snooze.result.current.hasRefreshError).toBe(false)
     } finally {
-      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
+      window.removeEventListener(ROLL_STATE_RECONCILED_EVENT, reconciled)
     }
   })
 
   it('exposes exhausted refresh recovery and retries without repeating the snooze', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
-    rollBootstrapApi.get.mockRejectedValue(refreshFailure)
+    rollStateApi.get.mockRejectedValue(refreshFailure)
     const snooze = renderSnooze()
 
     await act(async () => await snooze.result.current.mutate(7))
 
     expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
-    expect(rollBootstrapApi.get).toHaveBeenCalledTimes(2)
+    expect(rollStateApi.get).toHaveBeenCalledTimes(2)
     expect(snooze.result.current.isError).toBe(false)
     expect(snooze.result.current.hasRefreshError).toBe(true)
     expect(snooze.result.current.refreshError).toBe(refreshFailure)
 
-    rollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 20))
+    rollStateApi.get.mockResolvedValue(bootstrapState(null, 20))
     await act(async () => {
       await expect(snooze.result.current.retryRefresh()).resolves.toBe(true)
     })
 
     expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
-    expect(rollBootstrapApi.get).toHaveBeenCalledTimes(3)
+    expect(rollStateApi.get).toHaveBeenCalledTimes(3)
     expect(snooze.result.current.hasRefreshError).toBe(false)
     expect(snooze.result.current.isPending).toBe(false)
   })
 
   it('blocks duplicate snooze submission while an explicit refresh retry is pending', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
-    rollBootstrapApi.get.mockRejectedValue(refreshFailure)
+    rollStateApi.get.mockRejectedValue(refreshFailure)
     const snooze = renderSnooze()
 
     await act(async () => await snooze.result.current.mutate(7))
 
-    let resolveRefresh: ((value: RollBootstrapResponse) => void) | undefined
-    rollBootstrapApi.get.mockReturnValue(new Promise((resolve) => {
+    let resolveRefresh: ((value: RollState) => void) | undefined
+    rollStateApi.get.mockReturnValue(new Promise((resolve) => {
       resolveRefresh = resolve
     }))
 
@@ -210,7 +210,7 @@ describe('snooze hooks', () => {
     protectedRollMutationApi.snooze.mockImplementation(() => new Promise((_, reject) => {
       setTimeout(() => reject(timeout), 10_000)
     }))
-    rollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 20))
+    rollStateApi.get.mockResolvedValue(bootstrapState(null, 20))
 
     try {
       const snooze = renderSnooze()
@@ -226,7 +226,7 @@ describe('snooze hooks', () => {
       })
 
       expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
-      expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
+      expect(rollStateApi.get).toHaveBeenCalledTimes(1)
       expect(snooze.result.current.isError).toBe(false)
       expect(snooze.result.current.isPending).toBe(false)
     } finally {
@@ -242,7 +242,7 @@ describe('snooze hooks', () => {
     protectedRollMutationApi.snooze.mockImplementation(() => new Promise((_, reject) => {
       setTimeout(() => reject(timeout), 10_000)
     }))
-    rollBootstrapApi.get.mockResolvedValue(bootstrapState(7, 10))
+    rollStateApi.get.mockResolvedValue(bootstrapState(7, 10))
 
     try {
       const snooze = renderSnooze()
@@ -258,7 +258,7 @@ describe('snooze hooks', () => {
         await rejection
       })
 
-      expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
+      expect(rollStateApi.get).toHaveBeenCalledTimes(1)
       expect(snooze.result.current.isError).toBe(true)
       expect(snooze.result.current.isPending).toBe(false)
     } finally {
@@ -285,7 +285,7 @@ describe('snooze hooks', () => {
     })
 
     expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
-    expect(rollBootstrapApi.get).not.toHaveBeenCalled()
+    expect(rollStateApi.get).not.toHaveBeenCalled()
     expect(snooze.result.current.isError).toBe(true)
   })
 })

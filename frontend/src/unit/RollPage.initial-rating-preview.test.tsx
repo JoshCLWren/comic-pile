@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { useRollDieState } from '../hooks/useRollResources'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
@@ -14,7 +14,7 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }),
 }))
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useRollResources', () => ({
   useRollDieState: vi.fn(),
   useRollEligibleIssueIds: () => ({ data: undefined }),
@@ -103,9 +103,9 @@ const pendingBootstrap = {
   skipped_threads: [],
 }
 
-// SAFETY: The mocked useRollBootstrap return value is read by the page hooks;
+// SAFETY: The mocked useRollState return value is read by the page hooks;
 // the cast reuses the same widening used across the RollPage test suite.
-const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
+const mockedUseRollState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollState))
 // SAFETY: Same mock-shape widening for the scoped die-state hook; the test only reads its return object.
 const mockedUseRollDieState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollDieState))
 
@@ -122,7 +122,7 @@ describe('RollPage initial rating preview (issue #2533 regression)', () => {
     vi.clearAllMocks()
     spies.list.mockResolvedValue({ threads: [], next_page_token: null })
     spies.refetch.mockResolvedValue({})
-    mockedUseRollBootstrap.mockReturnValue({
+    mockedUseRollState.mockReturnValue({
       data: pendingBootstrap,
       refetch: spies.refetch,
       isPending: false,

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 import { useSnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
@@ -41,7 +41,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollState', () => ({ useRollState: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
@@ -99,7 +99,7 @@ beforeEach(() => {
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
-  vi.mocked(useRollBootstrap).mockReturnValue({ data: { snoozed_threads: [] }, refetch: vi.fn() } as any)
+  vi.mocked(useRollState).mockReturnValue({ data: { snoozed_threads: [] }, refetch: vi.fn() } as any)
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   // SAFETY: useBugReportRestore returns a context shape; cast to any for partial stub

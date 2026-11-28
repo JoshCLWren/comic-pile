@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import type { RollBootstrapResponse } from '../../types/rollBootstrap'
+import type { RollState } from '../../types/rollState'
 import { queryClient } from '../../query/queryClient'
 
 /**
@@ -14,7 +14,7 @@ export interface QueueRollState {
 
 /** Only the browser-owned fields the Queue actually needs. */
 type QueueRollSource = Pick<
-  RollBootstrapResponse,
+  RollState,
   'pending_thread_id' | 'snoozed_thread_ids' | 'snoozed_threads'
 >
 

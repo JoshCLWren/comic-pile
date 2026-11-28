@@ -155,7 +155,7 @@ export const queryKeys = {
   },
   roll: {
     all: ['roll'] as const,
-    bootstrap: () => ['roll', 'bootstrap'] as const,
+    state: () => ['roll', 'state'] as const,
     dieState: () => ['roll', 'die-state'] as const,
     eligibleIssueIds: (snoozedThreadIds: readonly number[] = []) =>
       ['roll', 'eligible-issue-ids', [...new Set(snoozedThreadIds)].sort((a, b) => a - b)] as const,

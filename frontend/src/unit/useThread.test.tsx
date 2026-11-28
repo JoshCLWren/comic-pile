@@ -129,7 +129,7 @@ it('refreshes Roll and plan views when a thread is renamed (#5264)', async () =>
   })
 
   expect(invalidateQueries).toHaveBeenCalledWith({
-    queryKey: queryKeys.roll.bootstrap(),
+    queryKey: queryKeys.roll.state(),
     exact: true,
   })
   expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })

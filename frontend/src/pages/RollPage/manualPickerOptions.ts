@@ -4,7 +4,7 @@ type ComicVineMappingHealth = components['schemas']['ComicVineMappingHealth']
 
 /**
  * Minimal shape the manual Roll picker can label. Queue list rows
- * (`ThreadListItem`) and bootstrap summary threads (`RollBootstrapThread`)
+ * (`ThreadListItem`) and bootstrap summary threads (`RollThreadSummary`)
  * both satisfy it; every disambiguating field is optional.
  */
 export interface ManualPickerThread {

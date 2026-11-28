@@ -4,14 +4,14 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRate } from '../hooks/useRate'
 import type { RateMutationOutcome } from '../hooks/useRate'
-import { publishRollBootstrap } from '../hooks/rollMutationReconciliation'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { publishRollState } from '../hooks/rollMutationReconciliation'
+import { useRollState } from '../hooks/useRollState'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { rollStateApi } from '../services/rollStateApi'
 import { ToastProvider } from '../contexts/ToastProvider'
 import type { RatePayload, Thread } from '../types'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import { useRollRating } from '../pages/RollPage/useRollRating'
 import type { ThreadMetadata } from '../pages/RollPage/types'
@@ -19,15 +19,15 @@ import type { ThreadMetadata } from '../pages/RollPage/types'
 vi.mock('../services/protectedRollMutationApi', () => ({
   protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() },
 }))
-vi.mock('../services/rollBootstrapApi', () => ({
-  rollBootstrapApi: { get: vi.fn(), switchPrerequisite: vi.fn() },
+vi.mock('../services/rollStateApi', () => ({
+  rollStateApi: { get: vi.fn(), switchPrerequisite: vi.fn() },
 }))
 vi.mock('../query/cacheEffects', () => ({
   applyRatedThreadCache: vi.fn().mockResolvedValue(undefined),
 }))
 
 const mockedProtectedApi = vi.mocked(protectedRollMutationApi)
-const mockedBootstrapApi = vi.mocked(rollBootstrapApi)
+const mockedBootstrapApi = vi.mocked(rollStateApi)
 
 const THREAD: Thread = {
   id: 1,
@@ -60,7 +60,7 @@ const METADATA: ThreadMetadata = {
   next_issue_number: '6',
 }
 
-function bootstrapState(overrides: Partial<RollBootstrapResponse> = {}): RollBootstrapResponse {
+function bootstrapState(overrides: Partial<RollState> = {}): RollState {
   return {
     session_id: 1,
     user_id: 1,
@@ -123,7 +123,7 @@ beforeEach(() => {
 })
 
 function useRateTransportHarness() {
-  const bootstrap = useRollBootstrap()
+  const bootstrap = useRollState()
   const rateMutation = useRate()
   const state = useRollPageState()
   const rating = useRollRating({
@@ -131,7 +131,7 @@ function useRateTransportHarness() {
     bootstrap: bootstrap.data,
     rateMutation,
     dismissPendingMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
-    refetchBootstrap: bootstrap.refetch,
+    refetchRollState: bootstrap.refetch,
   })
   return { bootstrap, rateMutation, state, rating }
 }
@@ -248,9 +248,9 @@ interface DirectRateMutation {
 }
 
 function useDirectRatingHarness(
-  bootstrap: RollBootstrapResponse,
+  bootstrap: RollState,
   rateMutation: DirectRateMutation,
-  refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>,
+  refetchRollState: () => Promise<RollState | undefined>,
 ) {
   const state = useRollPageState()
   const rating = useRollRating({
@@ -258,7 +258,7 @@ function useDirectRatingHarness(
     bootstrap,
     rateMutation,
     dismissPendingMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
-    refetchBootstrap,
+    refetchRollState,
   })
   return { state, rating }
 }
@@ -268,9 +268,9 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
     const authoritative = authoritativeState()
     const mutate = vi.fn<(payload: RatePayload) => Promise<RateMutationOutcome>>()
     const rateMutation: DirectRateMutation = { mutate, isPending: false }
-    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
+    const refetchRollState = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(
-      () => useDirectRatingHarness(bootstrapState(), rateMutation, refetchBootstrap),
+      () => useDirectRatingHarness(bootstrapState(), rateMutation, refetchRollState),
       { wrapper: wrap() },
     )
 
@@ -280,7 +280,7 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
     mutate.mockImplementation(async () => {
       // Mirrors useRate: publish the authoritative snapshot, then let the
       // event-loop reconciliation window expire before the page callback runs.
-      publishRollBootstrap(authoritative)
+      publishRollState(authoritative)
       await new Promise((resolve) => setTimeout(resolve, 25))
       return { rate: THREAD, bootstrap: authoritative }
     })
@@ -291,7 +291,7 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
 
     expect(mockedProtectedApi.rate).not.toHaveBeenCalled()
     expect(mutate).toHaveBeenCalledTimes(1)
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(refetchRollState).not.toHaveBeenCalled()
     expect(result.current.state.errorMessage).toBe('')
   })
 
@@ -299,12 +299,12 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
     const mutate = vi.fn<(payload: RatePayload) => Promise<RateMutationOutcome>>()
       .mockResolvedValue({ rate: THREAD, bootstrap: null })
     const rateMutation: DirectRateMutation = { mutate, isPending: false }
-    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
+    const refetchRollState = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(
       () => useDirectRatingHarness(
         bootstrapState({ active_thread: null, pending_thread_id: null }),
         rateMutation,
-        refetchBootstrap,
+        refetchRollState,
       ),
       { wrapper: wrap() },
     )
@@ -327,7 +327,7 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
     })
 
     expect(mutate).toHaveBeenCalledTimes(1)
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    expect(refetchRollState).not.toHaveBeenCalled()
     expect(result.current.state.errorMessage).toBe('')
   })
 })

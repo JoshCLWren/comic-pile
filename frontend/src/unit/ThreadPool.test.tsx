@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
-import type { RollBootstrapThread } from '../types/rollBootstrap'
+import type { RollThreadSummary } from '../types/rollState'
 
 type ThreadPoolProps = Parameters<typeof ThreadPool>[0]
 
-const mockPool: RollBootstrapThread[] = [
+const mockPool: RollThreadSummary[] = [
   {
     id: 1,
     title: 'The Amazing Spider-Man',

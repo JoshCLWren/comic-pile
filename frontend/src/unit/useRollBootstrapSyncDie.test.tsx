@@ -1,9 +1,9 @@
 import { render, renderHook, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { useRollBootstrapSync } from '../pages/RollPage/useRollBootstrapSync'
+import { useRollStateSync } from '../pages/RollPage/useRollStateSync'
 import { useRollPendingSession } from '../pages/RollPage/useRollPendingSession'
 import { RollCta } from '../pages/RollPage/components/RollCta'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useRollPageState'
 
 // Die selection is render-derived in `RollPage` (#4352); this hook only
@@ -17,8 +17,8 @@ const setRolledResult = vi.fn<(result: number | null) => void>()
 const navigate = vi.fn()
 
 function bootstrapWith(
-  overrides: Partial<RollBootstrapResponse> = {},
-): RollBootstrapResponse {
+  overrides: Partial<RollState> = {},
+): RollState {
   return {
     session_id: 1,
     user_id: 1,
@@ -48,11 +48,11 @@ function bootstrapWith(
 }
 
 function renderSync(
-  _bootstrap: RollBootstrapResponse | null | undefined,
+  _bootstrap: RollState | null | undefined,
 ) {
   // SAFETY: the hook now only reads bootstrap-error navigation; state params are gone and no die/rolled write exists to exercise.
   return renderHook(() =>
-    useRollBootstrapSync({
+    useRollStateSync({
       isBootstrapError: false,
       bootstrapError: null,
       navigate: navigate as never,
@@ -60,7 +60,7 @@ function renderSync(
   )
 }
 
-describe('useRollBootstrapSync redirect-only (#4352)', () => {
+describe('useRollStateSync redirect-only (#4352)', () => {
   it('keeps the hook redirect-only and never writes rolled or die', () => {
     renderSync(bootstrapWith({ last_rolled_result: null }))
 
@@ -88,7 +88,7 @@ describe('useRollBootstrapSync redirect-only (#4352)', () => {
     // the cleared derivation (rolledResult null -> idle/Begin) cannot be
     // resurrected by any stale bootstrap or cross-session last_roll refetch.
     const { rerender } = renderHook(() =>
-      useRollBootstrapSync({
+      useRollStateSync({
         isBootstrapError: false,
         bootstrapError: null,
         // SAFETY: minimal vi.fn stub satisfying the navigate type; no navigation behavior is exercised here.

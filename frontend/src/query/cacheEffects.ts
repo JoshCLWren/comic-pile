@@ -6,7 +6,7 @@ import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 import type { RateResponsePayload } from '../types'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollState } from '../types/rollState'
 import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
@@ -21,7 +21,7 @@ import { notifyReadingPlansChanged } from './crossTabDataSync'
  * of this module are prohibited in production code.
  * 
  * Intentional exceptions:
- * - `useRollBootstrap.ts` reconciliation events: The real-time reconciliation system
+ * - `useRollState.ts` reconciliation events: The real-time reconciliation system
  *   requires direct `setQueryData` calls to update the bootstrap cache immediately
  *   when external events occur. This is explicitly documented and justified by the
  *   real-time nature of the reconciliation system.
@@ -112,7 +112,7 @@ export interface ApplyRatedThreadCacheOptions {
    * observers. Roll rating flows that fetch/publish the authoritative
    * bootstrap themselves should disable auto-refetch to avoid duplicates.
    */
-  refetchRollBootstrap?: boolean
+  refetchRollState?: boolean
   /** False when a mutation-owned scoped snapshot will replace these queries. */
   refetchRollResources?: boolean
 }
@@ -122,7 +122,7 @@ export async function applyRatedThreadCache(
   thread: RateResponsePayload,
   options: ApplyRatedThreadCacheOptions = {},
 ): Promise<void> {
-  const { refetchRollBootstrap = true } = options
+  const { refetchRollState = true } = options
   // The native PATCH writer returns issue/thread progress, not a complete
   // ThreadResponse. The compatibility adapter fills other fields solely for
   // legacy callers. Never overwrite real cached thread metadata, queue rank,
@@ -148,9 +148,9 @@ export async function applyRatedThreadCache(
   const lastRead = thread.roll_reconciliation?.last_read
   if (lastRead) {
     client.setQueryData(queryKeys.roll.lastRead(), thread)
-    const bootstrap = client.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap())
+    const bootstrap = client.getQueryData<RollState>(queryKeys.roll.state())
     if (bootstrap) {
-      client.setQueryData(queryKeys.roll.bootstrap(), { ...bootstrap, last_read: lastRead })
+      client.setQueryData(queryKeys.roll.state(), { ...bootstrap, last_read: lastRead })
     }
   }
 
@@ -175,8 +175,8 @@ export async function applyRatedThreadCache(
     // invalidated) to avoid refetching loaded pages through stale cursors
     // (#933). Other read/progress flows keep ordinary invalidation semantics.
     invalidateAfterReaderProgress(client, {
-      refetchRollBootstrap,
-      refetchRollResources: !refetchRollBootstrap,
+      refetchRollState,
+      refetchRollResources: !refetchRollState,
       resetQueue: true,
     }),
   ])
@@ -195,7 +195,7 @@ export async function applyUpdatedThreadCache(
       ? [client.resetQueries({ queryKey: queryKeys.completed.pages() })]
       : []),
     client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     }),
     client.invalidateQueries({
@@ -265,7 +265,7 @@ export async function invalidateCurrentSessionAfterSnooze(
 export async function invalidateAfterResumeRecovery(client: QueryClient): Promise<void> {
   await Promise.all([
     client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     }),
     client.invalidateQueries({
@@ -298,12 +298,12 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
  * an invalidated-but-cached bootstrap would still be handed to Roll on mount
  * and briefly render the empty dice view before the refetch settles.
  */
-export async function resetRollBootstrapAfterManualSelection(
+export async function resetRollStateAfterManualSelection(
   client: QueryClient,
 ): Promise<void> {
   await Promise.all([
     client.resetQueries({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     }),
     client.resetQueries({
@@ -329,7 +329,7 @@ export async function invalidateAfterQueueMovement(client: QueryClient): Promise
       exact: true,
     }),
     client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     }),
     client.invalidateQueries({
@@ -418,7 +418,7 @@ export async function invalidateComicVineImportStatus(
 export async function invalidateAfterThreadMetadataEdit(client: QueryClient): Promise<void> {
   await Promise.all([
     client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     }),
     client.invalidateQueries({
@@ -451,7 +451,7 @@ export async function invalidateAfterIssueMappingChange(client: QueryClient): Pr
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
     client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     }),
     client.invalidateQueries({
@@ -901,7 +901,7 @@ export async function invalidateSessionRecoveryCache(
   client: QueryClient,
 ): Promise<void> {
   await Promise.all([
-    client.invalidateQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.state(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
@@ -1082,7 +1082,7 @@ export async function invalidateAfterRollDieModeUpdate(
 ): Promise<void> {
   await Promise.all([
     client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     }),
     // The Roll header now reads its selected die from the scoped resource, so a
@@ -1110,11 +1110,11 @@ export async function invalidateAfterRollDieModeUpdate(
  * will refetch on the next active use (returning to Roll) instead of
  * replaying a stale snapshot with `pending_thread_id: null`.
  */
-export async function invalidateRollBootstrapOnNavigation(
+export async function invalidateRollStateOnNavigation(
   client: QueryClient,
 ): Promise<void> {
   await client.invalidateQueries({
-    queryKey: queryKeys.roll.bootstrap(),
+    queryKey: queryKeys.roll.state(),
     exact: true,
     refetchType: 'none',
   })
@@ -1124,9 +1124,9 @@ export async function invalidateRollBootstrapOnNavigation(
  * Refresh the roll bootstrap so active Roll views refetch authoritative state
  * (used after direct issue corrections that bypass cache-effect helpers).
  */
-export async function invalidateRollBootstrap(client: QueryClient): Promise<void> {
+export async function invalidateRollState(client: QueryClient): Promise<void> {
   await client.invalidateQueries({
-    queryKey: queryKeys.roll.bootstrap(),
+    queryKey: queryKeys.roll.state(),
     exact: true,
   })
 }
@@ -1150,7 +1150,7 @@ export async function invalidateAfterTagMutation(
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.tags.all }),
     client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
+      queryKey: queryKeys.roll.state(),
       exact: true,
     }),
   ])
@@ -1163,7 +1163,7 @@ interface ReadingEligibilityInvalidationOptions {
    * observers. Use when the caller will fetch and publish the authoritative
    * bootstrap itself (e.g. Roll rating flow) to avoid duplicate requests.
    */
-  refetchRollBootstrap?: boolean
+  refetchRollState?: boolean
   /** Skip scoped Roll refetches when an authoritative snapshot is already owned. */
   refetchRollResources?: boolean
   /**
@@ -1182,14 +1182,14 @@ async function invalidateReadingEligibility(
 ): Promise<void> {
   const {
     includeAuthoringLists = false,
-    refetchRollBootstrap = true,
+    refetchRollState = true,
     refetchRollResources = true,
     resetQueue = false,
   } = options
   // A published snapshot is a replacement, not another cache layer. Remove it
   // before scoped queries invalidate so normal Roll commands cannot keep
   // rendering an older reconciled snapshot forever.
-  client.removeQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+  client.removeQueries({ queryKey: queryKeys.roll.state(), exact: true })
   // An initial request with no cached data is not restarted by invalidateQueries.
   // It may have started before the committed read and return stale blockers or
   // progress. Cancel those requests before refetching the same projections.
@@ -1204,7 +1204,7 @@ async function invalidateReadingEligibility(
       queryKeys.roll.dieState(),
     ] : []),
     queryKeys.roll.lastRead(),
-    ...(refetchRollBootstrap ? [queryKeys.roll.bootstrap()] : []),
+    ...(refetchRollState ? [queryKeys.roll.state()] : []),
     queryKeys.dependencies.all,
     queryKeys.readerContext.all,
     queryKeys.readingPlans.all,
@@ -1244,9 +1244,9 @@ async function invalidateReadingEligibility(
     ] : []),
     client.invalidateQueries({ queryKey: queryKeys.roll.lastRead(), exact: true }),
     client.invalidateQueries(
-      refetchRollBootstrap
-        ? { queryKey: queryKeys.roll.bootstrap(), exact: true }
-        : { queryKey: queryKeys.roll.bootstrap(), exact: true, refetchType: 'none' },
+      refetchRollState
+        ? { queryKey: queryKeys.roll.state(), exact: true }
+        : { queryKey: queryKeys.roll.state(), exact: true, refetchType: 'none' },
     ),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
     // Reader context includes neighboring issues' statuses and rating counts.
@@ -1264,14 +1264,14 @@ async function invalidateReadingEligibility(
 export async function invalidateAfterReaderProgress(
   client: QueryClient,
   options: {
-    refetchRollBootstrap?: boolean
+    refetchRollState?: boolean
     refetchRollResources?: boolean
     resetQueue?: boolean
   } = {},
 ): Promise<void> {
   await invalidateReadingEligibility(client, {
     includeAuthoringLists: true,
-    refetchRollBootstrap: options.refetchRollBootstrap,
+    refetchRollState: options.refetchRollState,
     refetchRollResources: options.refetchRollResources,
     resetQueue: options.resetQueue,
   })

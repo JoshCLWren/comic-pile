@@ -4,11 +4,11 @@ import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
 import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
-import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
+import type { RollThreadSummary, RollPoolReason } from '../../../types/rollState'
 import type { IssueCardsResponse } from '../../../generated/nativeV2Client'
 
 interface ThreadPoolProps {
-  pool: RollBootstrapThread[]
+  pool: RollThreadSummary[]
   dieSize?: number
   isRatingView: boolean
   selectedThreadId: number | null
@@ -21,7 +21,7 @@ interface ThreadPoolProps {
   snoozedCovers?: Record<number, string | null>
   snoozedCount?: number
   snoozedExpanded: boolean
-  onThreadClick: (thread: RollBootstrapThread) => void
+  onThreadClick: (thread: RollThreadSummary) => void
   onUnsnooze: (threadId: number) => void
   onToggleSnoozed: () => void
   onShuffle: () => void

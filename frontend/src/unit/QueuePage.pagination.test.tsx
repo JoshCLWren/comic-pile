@@ -5,7 +5,7 @@ import QueuePage from '../pages/QueuePage'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../hooks/useThread'
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollState } from '../hooks/useRollState'
 
 vi.mock('../hooks/useCompletedThreads', () => ({
   useCompletedThreads: vi.fn(() => ({
@@ -30,8 +30,8 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({
-  useRollBootstrap: vi.fn(),
+vi.mock('../hooks/useRollState', () => ({
+  useRollState: vi.fn(),
 }))
 
 vi.mock('../hooks/useQueueBlockingInfo', () => ({
@@ -96,7 +96,7 @@ const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
+const mockedUseRollState = vi.mocked(useRollState) as any
 
 const thread = {
   id: 1,
@@ -123,7 +123,7 @@ beforeEach(() => {
   mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseRollBootstrap.mockReturnValue({ data: { snoozed_threads: [] }, refetch: vi.fn() })
+  mockedUseRollState.mockReturnValue({ data: { snoozed_threads: [] }, refetch: vi.fn() })
 })
 
 it('shows the initial full-screen loader before any queue data exists', () => {

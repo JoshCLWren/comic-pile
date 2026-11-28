@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { RollRecoveryInfo, RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
+import type { RollRecoveryInfo, RollRecoveryPrerequisite } from '../../../types/rollState'
 import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import { indexIssueCards } from '../../../hooks/useIssueCards'
 import { useRollIssueCards } from '../../../hooks/useRollResources'
