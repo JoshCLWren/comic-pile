@@ -177,6 +177,8 @@ test.describe('Night Shift single visual identity (#5980)', () => {
     await expect(sidebar.getByRole('group', { name: /appearance/i })).toHaveCount(0)
     await expect(sidebar.locator('[data-theme]')).toHaveCount(0)
     await expect(sidebar.getByRole('button', { name: /classic|ink.gold|command.center/i })).toHaveCount(0)
+    // ComicPile has no standalone settings route; the retired appearance
+    // settings lived in this shell, so capture the remaining user controls.
     await sidebar.screenshot({
       path: join(SCREENSHOT_DIRECTORY, 'settings-shell-desktop.png'),
       animations: 'disabled',
