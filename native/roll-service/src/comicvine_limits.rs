@@ -20,10 +20,7 @@
 //! throttled.
 
 use crate::{
-    comicvine_provider::{
-        envelope_failure, log_provider_failure, provider_exchange, Exchange, ProviderFailure,
-        ProviderUnavailableCategory,
-    },
+    comicvine_provider::{provider_exchange, Exchange, ProviderFailure},
     outbound::OutboundHttp,
 };
 use chrono::{DateTime, Utc};
@@ -249,22 +246,10 @@ impl ComicVineLimits {
         let request_started_at = Instant::now();
         match self.admit(bucket, &cache_key, fresh, request_started_at) {
             Admission::Cached(value) | Admission::Denied(_, Some(value)) => return Ok(value),
-            Admission::Denied(wait, None) => {
-                let failure = ProviderFailure::RateLimited {
-                    retry_after_seconds: wait,
-                };
-                log_provider_failure("comicvine_limits_admission", failure);
-                return Err(failure);
-            }
+            Admission::Denied(wait, None) => return Err(ProviderFailure::RateLimited(wait)),
             Admission::Go => {}
         }
-        // Transport-level failures were already classified and logged by
-        // `provider_exchange`; only the classes decided here are logged below.
-        let exchange = match provider_exchange(outbound, resource, extra_query, api_key).await {
-            Ok(exchange) => exchange,
-            Err(failure) => return Err(failure),
-        };
-        let failure = match exchange {
+        match provider_exchange(outbound, resource, extra_query, api_key).await? {
             Exchange::Payload(value) if python_envelope_ok(&value) => {
                 self.record_success(
                     bucket,
@@ -273,29 +258,23 @@ impl ComicVineLimits {
                     request_started_at,
                     Instant::now(),
                 );
-                return Ok(value);
+                Ok(value)
             }
-            Exchange::Payload(value) => envelope_failure(&value),
+            Exchange::Payload(_) => Err(ProviderFailure::Unavailable),
             // Python `ComicVineClient`: 420 and 429 are throttles; any other
-            // non-2xx status (403 included) is a plain provider error, now
-            // classified by its safe HTTP-status category.
-            Exchange::Throttled { retry_after } => {
+            // non-2xx status (403 included) is a plain provider error.
+            Exchange::Throttled {
+                status: 420 | 429,
+                retry_after,
+            } => {
                 let retry_after = retry_after.and_then(|raw| parse_retry_after(&raw, Utc::now()));
                 match self.record_throttle(bucket, &cache_key, retry_after, Instant::now()) {
-                    (_, Some(cached)) => return Ok(cached),
-                    (wait, None) => ProviderFailure::RateLimited {
-                        retry_after_seconds: wait,
-                    },
+                    (_, Some(cached)) => Ok(cached),
+                    (wait, None) => Err(ProviderFailure::RateLimited(wait)),
                 }
             }
-            Exchange::HttpStatus { status } => {
-                ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus {
-                    status,
-                })
-            }
-        };
-        log_provider_failure("comicvine_limits", failure);
-        Err(failure)
+            Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
+        }
     }
 }
 

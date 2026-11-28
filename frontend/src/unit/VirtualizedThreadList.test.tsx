@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi, beforeAll, beforeEach } from 'vitest'
+import { getRowThreads } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
 import type {
   QueueVirtualizer,
@@ -257,6 +258,38 @@ it('sets aria-label and role on the scroll container', () => {
 
   expect(screen.getByRole('list')).toBeInTheDocument()
   expect(screen.getByLabelText('Series queue')).toBeInTheDocument()
+})
+
+// ── Pure getRowThreads helper tests (Finding #4) ──
+
+it('getRowThreads returns one row of threads', () => {
+  const threads = [1, 2, 3, 4, 5, 6]
+  expect(getRowThreads(threads, 0)).toEqual([1])
+  expect(getRowThreads(threads, 1)).toEqual([2])
+})
+
+it('getRowThreads returns partial row for the last row', () => {
+  const threads = [1, 2, 3, 4, 5]
+  expect(getRowThreads(threads, 0)).toEqual([1])
+  expect(getRowThreads(threads, 4)).toEqual([5])
+})
+
+it('getRowThreads returns empty array when row is beyond data', () => {
+  const threads = [1, 2]
+  expect(getRowThreads(threads, 2)).toEqual([])
+})
+
+it('getRowThreads works with single column', () => {
+  const threads = [1, 2, 3]
+  expect(getRowThreads(threads, 0)).toEqual([1])
+  expect(getRowThreads(threads, 1)).toEqual([2])
+  expect(getRowThreads(threads, 2)).toEqual([3])
+})
+
+it('getRowThreads preserves object references', () => {
+  const objs = [{ id: 1 }, { id: 2 }]
+  const row = getRowThreads(objs, 0)
+  expect(row[0]).toBe(objs[0])
 })
 
 // ── data-index contract tests (Finding #2) ──

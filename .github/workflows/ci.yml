@@ -300,12 +300,6 @@ jobs:
       - name: Check for unused frontend modules
         run: pnpm --filter frontend run check:unused
 
-      # Exclude test entry points so tests cannot hide unreachable production exports.
-      # Report existing findings without weakening the required unused-file gate above.
-      # Knip config/parser failures remain nonzero, even with --no-exit-code.
-      - name: Report unused production frontend files and exports
-        run: pnpm --filter frontend exec knip --production --include files,exports --no-exit-code
-
       - name: Verify generated API contract freshness
         run: pnpm --filter frontend run check:api-types
 

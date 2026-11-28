@@ -94,6 +94,37 @@ export function getIssueTotalCount(
 }
 
 /**
+ * Query for all issues in a thread (all-pages drain, used by IssueToggleList).
+ * Fetches all pages at once and returns the flattened list.
+ */
+export function useThreadAllIssues(threadId: number) {
+  return useQuery<Issue[]>({
+    queryKey: queryKeys.thread.issuePagesAll(threadId),
+    queryFn: async () => {
+      const allIssues: Issue[] = []
+      const seenPageTokens = new Set<string>()
+      let nextPageToken: string | null = null
+
+      while (true) {
+        const params: IssueListParams = { page_size: 100 }
+        if (nextPageToken) {
+          params.page_token = nextPageToken
+        }
+        const data = await issuesApi.list(threadId, params)
+        allIssues.push(...data.issues)
+
+        if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+          return allIssues
+        }
+
+        seenPageTokens.add(data.next_page_token)
+        nextPageToken = data.next_page_token
+      }
+    },
+  })
+}
+
+/**
  * Query for thread issue dependencies.
  */
 export function useThreadDependencies(threadId: number) {
@@ -137,6 +168,23 @@ export function useToggleIssueStatus(threadId: number) {
     },
     onError: (_err, _vars, context) => {
       context?.rollback?.()
+    },
+    onSuccess: async () => {
+      await invalidateAfterIssueEdit(queryClient, threadId)
+    },
+  })
+}
+
+/**
+ * Mutation to create issues from a range string.
+ */
+export function useCreateIssues(threadId: number) {
+  return useMutation({
+    mutationFn: async ({
+      issueRange,
+      insertAfterIssueId,
+    }: { issueRange: string; insertAfterIssueId?: number | null }) => {
+      return issuesApi.create(threadId, issueRange, { insert_after_issue_id: insertAfterIssueId })
     },
     onSuccess: async () => {
       await invalidateAfterIssueEdit(queryClient, threadId)

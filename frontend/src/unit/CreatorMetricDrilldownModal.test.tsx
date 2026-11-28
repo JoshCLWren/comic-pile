@@ -11,6 +11,9 @@ import type { CreatorMetricDrilldown } from '../types/index'
 vi.mock('../services/creatorMetricDrilldownApi', () => ({
   creatorMetricDrilldownApi: {
     getMetricDrilldown: vi.fn(),
+    getRatingDistributionDrilldown: vi.fn(),
+    getRoleDrilldown: vi.fn(),
+    getSeriesDrilldown: vi.fn(),
   },
 }))
 

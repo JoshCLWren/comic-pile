@@ -26,128 +26,12 @@ const COMPLETE_FRESH_DAYS: i64 = 30;
 const EMPTY_CREDIT_RECHECK_DAYS: i64 = 7;
 
 pub(crate) const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
-
-/// Closed set of *safe* reasons a provider call can be unavailable. No variant
-/// carries provider-controlled text, headers or a credential-bearing URL.
-/// Callers use this to tell a real HTTP status from a reported error envelope
-/// from a connectivity failure instead of collapsing all three into one class.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ProviderUnavailableCategory {
-    /// A non-success HTTP status was observed before any body was trusted.
-    HttpStatus { status: u16 },
-    /// A 2xx response whose ComicVine envelope reported failure.
-    ErrorEnvelope,
-    /// Connect/TLS/HTTP/body-stream failure: no usable provider response.
-    Transport,
-}
-
-impl ProviderUnavailableCategory {
-    /// Stable diagnostic code; safe to log and to use as a wire discriminator.
-    pub(crate) fn code(self) -> &'static str {
-        match self {
-            Self::HttpStatus { .. } => "http_status",
-            Self::ErrorEnvelope => "error_envelope",
-            Self::Transport => "transport",
-        }
-    }
-}
-
-/// Bounded, typed vocabulary for every ComicVine boundary failure.
-///
-/// Each variant is deliberately small and secret-free so it can be logged and
-/// eventually surfaced to handlers without exposing the request URL (which
-/// embeds `api_key`). `RateLimited` always carries a bounded delay sourced from
-/// the provider's `Retry-After` (or the local cooldown when none was sent).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 pub(crate) enum ProviderFailure {
-    /// No usable credential is configured (empty, whitespace or malformed).
-    ProviderNotConfigured,
-    /// The provider failed without a usable payload; category says how.
-    ProviderUnavailable(ProviderUnavailableCategory),
-    /// The provider asked for a bounded backoff before retrying.
-    RateLimited { retry_after_seconds: u32 },
-    /// The request exceeded the bounded provider deadline.
+    RateLimited(u32),
+    Unavailable,
     Timeout,
-    /// Missing, oversized or non-JSON provider payload.
-    InvalidResponse,
-    /// A successful fetch could not be persisted.
-    PersistFailed,
-}
-
-impl ProviderFailure {
-    /// Stable snake-case diagnostic code for this failure class.
-    pub(crate) fn code(self) -> &'static str {
-        match self {
-            Self::ProviderNotConfigured => "provider_not_configured",
-            Self::ProviderUnavailable(_) => "provider_unavailable",
-            Self::RateLimited { .. } => "rate_limited",
-            Self::Timeout => "timeout",
-            Self::InvalidResponse => "invalid_response",
-            Self::PersistFailed => "persist_failed",
-        }
-    }
-}
-
-/// The single redacted diagnostic emitter for classified provider failures.
-///
-/// `context` is a code-owned static label. Only typed codes, numeric HTTP
-/// status, the bounded retry delay and a type name are ever logged: never a
-/// key, token, cookie, query string, credential-bearing URL or provider body.
-pub(crate) fn log_provider_failure(context: &'static str, failure: ProviderFailure) {
-    match failure {
-        ProviderFailure::ProviderNotConfigured => tracing::warn!(
-            comicvine_failure = failure.code(),
-            context,
-            "comicvine provider credential not configured"
-        ),
-        ProviderFailure::ProviderUnavailable(category) => {
-            let status = match category {
-                ProviderUnavailableCategory::HttpStatus { status } => Some(status),
-                _ => None,
-            };
-            tracing::warn!(
-                comicvine_failure = failure.code(),
-                comicvine_category = category.code(),
-                comicvine_status = ?status,
-                context,
-                "comicvine provider unavailable"
-            );
-        }
-        ProviderFailure::RateLimited {
-            retry_after_seconds,
-        } => tracing::warn!(
-            comicvine_failure = failure.code(),
-            retry_after_seconds,
-            context,
-            "comicvine provider rate limited"
-        ),
-        ProviderFailure::Timeout => tracing::warn!(
-            comicvine_failure = failure.code(),
-            context,
-            "comicvine provider timeout"
-        ),
-        ProviderFailure::InvalidResponse => tracing::warn!(
-            comicvine_failure = failure.code(),
-            context,
-            "comicvine provider invalid response"
-        ),
-        ProviderFailure::PersistFailed => tracing::warn!(
-            comicvine_failure = failure.code(),
-            context,
-            "comicvine provider metadata persist failed"
-        ),
-    }
-}
-
-/// Classify a decoded envelope that failed [`python_envelope_ok`]. A JSON
-/// object carrying a non-success `status_code` is an error envelope; anything
-/// else is a malformed payload. No field value is copied into the classification.
-pub(crate) fn envelope_failure(payload: &Value) -> ProviderFailure {
-    if payload.is_object() {
-        ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::ErrorEnvelope)
-    } else {
-        ProviderFailure::InvalidResponse
-    }
+    InvalidPayload,
 }
 
 fn issue_id(external_id: &str) -> Option<u32> {
@@ -227,9 +111,9 @@ fn normalized_metadata(
     result: &Value,
     expected_id: u32,
 ) -> Result<(Value, bool, Option<String>, Option<String>), ProviderFailure> {
-    let obj = result.as_object().ok_or(ProviderFailure::InvalidResponse)?;
+    let obj = result.as_object().ok_or(ProviderFailure::InvalidPayload)?;
     if obj.get("id").and_then(Value::as_u64) != Some(u64::from(expected_id)) {
-        return Err(ProviderFailure::InvalidResponse);
+        return Err(ProviderFailure::InvalidPayload);
     }
     for field in [
         "name",
@@ -245,7 +129,7 @@ fn normalized_metadata(
         "date_last_updated",
     ] {
         if !obj.contains_key(field) {
-            return Err(ProviderFailure::InvalidResponse);
+            return Err(ProviderFailure::InvalidPayload);
         }
     }
     let image = obj.get("image").and_then(Value::as_object);
@@ -312,11 +196,11 @@ fn provider_timestamp(value: &Value) -> Option<String> {
 pub(crate) enum Exchange {
     /// A decoded JSON body from a 2xx response.
     Payload(Value),
-    /// HTTP 420/429 throttle with the raw `Retry-After` header, if any. The
-    /// provider-supplied delay is preserved by the caller, never discarded.
-    Throttled { retry_after: Option<String> },
-    /// Any other non-success HTTP status. The body is never read or logged.
-    HttpStatus { status: u16 },
+    /// HTTP 403, 420 or 429 with the raw `Retry-After` header, if any.
+    Throttled {
+        status: u16,
+        retry_after: Option<String>,
+    },
 }
 
 /// Parse Python-compatible delta-seconds or an HTTP-date, then apply the
@@ -339,27 +223,31 @@ pub(crate) async fn provider_response(
     extra_query: &str,
     api_key: &str,
 ) -> Result<Value, ProviderFailure> {
-    // Transport-level failures were already classified and logged by
-    // `provider_exchange`; only the classes decided here are logged below.
-    let exchange = match provider_exchange(outbound, resource, extra_query, api_key).await {
-        Ok(exchange) => exchange,
-        Err(failure) => return Err(failure),
-    };
-    let failure = match exchange {
-        Exchange::Payload(payload) if python_envelope_ok(&payload) => return Ok(payload),
-        Exchange::Payload(payload) => envelope_failure(&payload),
-        Exchange::Throttled { retry_after } => ProviderFailure::RateLimited {
-            retry_after_seconds: repair_retry_after_seconds(
-                retry_after.as_deref(),
-                chrono::Utc::now(),
-            ),
-        },
-        Exchange::HttpStatus { status } => {
-            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus { status })
+    match provider_exchange(outbound, resource, extra_query, api_key).await? {
+        Exchange::Throttled {
+            status: 420 | 429,
+            retry_after,
+        } => Err(ProviderFailure::RateLimited(repair_retry_after_seconds(
+            retry_after.as_deref(),
+            chrono::Utc::now(),
+        ))),
+        Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
+        Exchange::Payload(payload) => {
+            let status_code = payload.get("status_code").and_then(Value::as_i64);
+            if python_envelope_ok(&payload) {
+                Ok(payload)
+            } else {
+                // Never log provider-controlled error text: it can reflect the
+                // credential-bearing request URL. Keep only typed categories.
+                tracing::warn!(
+                    comicvine_status_code = ?status_code,
+                    resource,
+                    "comicvine provider returned non-success envelope"
+                );
+                Err(ProviderFailure::Unavailable)
+            }
         }
-    };
-    log_provider_failure("provider_response", failure);
-    Err(failure)
+    }
 }
 
 /// Normalize one configured credential value. ComicVine keys are alphanumeric
@@ -389,50 +277,19 @@ pub(crate) async fn provider_exchange(
     extra_query: &str,
     api_key: &str,
 ) -> Result<Exchange, ProviderFailure> {
-    provider_exchange_with_timeout(outbound, resource, extra_query, api_key, PROVIDER_TIMEOUT).await
-}
-
-/// One exchange under an injectable deadline. The production wrapper always
-/// uses [`PROVIDER_TIMEOUT`]; tests use a tiny deadline with a pending fake so
-/// the timeout class is exercised without sleeping or opening a socket.
-///
-/// Every failure produced at the transport boundary is classified and logged
-/// exactly once here. Callers only log the classes they add themselves (rate
-/// limit, envelope, HTTP status), so no failure is silently collapsed and no
-/// class is emitted twice.
-async fn provider_exchange_with_timeout(
-    outbound: &Arc<dyn OutboundHttp>,
-    resource: &str,
-    extra_query: &str,
-    api_key: &str,
-    deadline: Duration,
-) -> Result<Exchange, ProviderFailure> {
-    let result = provider_exchange_inner(outbound, resource, extra_query, api_key, deadline).await;
-    if let Err(failure) = result {
-        log_provider_failure("provider_exchange", failure);
-    }
-    result
-}
-
-async fn provider_exchange_inner(
-    outbound: &Arc<dyn OutboundHttp>,
-    resource: &str,
-    extra_query: &str,
-    api_key: &str,
-    deadline: Duration,
-) -> Result<Exchange, ProviderFailure> {
     // Callers construct only trusted resource names and numeric query values.
     // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
     // Normalizing here as well as at the read boundary makes the invariant hold
     // for every caller, including future ones: whitespace can never turn into
-    // `ProviderNotConfigured` being mistaken for an outage (#5695).
+    // `Unavailable` without a provider round trip (#5695).
     let Some(api_key) = normalize_provider_api_key(api_key) else {
-        return Err(ProviderFailure::ProviderNotConfigured);
+        tracing::debug!("comicvine provider credential is not configured");
+        return Err(ProviderFailure::Unavailable);
     };
     if !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         // Never log the value, any fragment of it, or the credential-bearing URL.
         tracing::warn!("comicvine provider credential contains non-alphanumeric bytes");
-        return Err(ProviderFailure::ProviderNotConfigured);
+        return Err(ProviderFailure::Unavailable);
     }
     // ComicVine's API appends a slash to every resource, singular ones
     // included: `/api/volume/4050-<id>` and `/api/issue/4000-<id>` answer 301
@@ -459,15 +316,24 @@ async fn provider_exchange_inner(
         let response = outbound.send(HOST, request).await.map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
-                "comicvine transport error classified"
+                "preserved underlying error before mapping"
             );
-            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::Transport)
+            ProviderFailure::Unavailable
         })?;
         let status = response.status;
-        if status == StatusCode::TOO_MANY_REQUESTS || status.as_u16() == 420 {
-            // Retain only the raw header; the caller bounds and records the
-            // delay. Never log the credential-bearing URL, body or headers.
+        if status == StatusCode::TOO_MANY_REQUESTS
+            || status == StatusCode::FORBIDDEN
+            || status.as_u16() == 420
+        {
+            // Retain only a redacted status/resource category: never log the
+            // credential-bearing URL, response body, or provider headers.
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned throttled or forbidden status"
+            );
             return Ok(Exchange::Throttled {
+                status: status.as_u16(),
                 retry_after: response
                     .headers
                     .get("retry-after")
@@ -476,12 +342,12 @@ async fn provider_exchange_inner(
             });
         }
         if !status.is_success() {
-            // 403 stays a plain provider error (Python parity). Hand the status
-            // to the callers so both the repair and browser paths classify it
-            // as a distinct HTTP-status failure rather than a generic outage.
-            return Ok(Exchange::HttpStatus {
-                status: status.as_u16(),
-            });
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned non-success status"
+            );
+            return Err(ProviderFailure::Unavailable);
         }
         if response
             .headers
@@ -490,7 +356,7 @@ async fn provider_exchange_inner(
             .and_then(|n| n.parse::<usize>().ok())
             .is_some_and(|n| n > MAX_BODY)
         {
-            return Err(ProviderFailure::InvalidResponse);
+            return Err(ProviderFailure::InvalidPayload);
         }
         let mut data = Vec::new();
         let mut body = response.body;
@@ -498,13 +364,13 @@ async fn provider_exchange_inner(
             let frame = frame.map_err(|e| {
                 tracing::debug!(
                     error_kind = crate::error_kind(&e),
-                    "comicvine transport error classified"
+                    "preserved underlying error before mapping"
                 );
-                ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::Transport)
+                ProviderFailure::Unavailable
             })?;
             if let Ok(bytes) = frame.into_data() {
                 if data.len() + bytes.len() > MAX_BODY {
-                    return Err(ProviderFailure::InvalidResponse);
+                    return Err(ProviderFailure::InvalidPayload);
                 }
                 data.extend_from_slice(&bytes);
             }
@@ -512,18 +378,18 @@ async fn provider_exchange_inner(
         let payload: Value = serde_json::from_slice(&data).map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
-                "comicvine malformed payload classified"
+                "preserved underlying error before mapping"
             );
-            ProviderFailure::InvalidResponse
+            ProviderFailure::InvalidPayload
         })?;
         Ok(Exchange::Payload(payload))
     };
-    tokio::time::timeout(deadline, exchange)
+    tokio::time::timeout(PROVIDER_TIMEOUT, exchange)
         .await
         .map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
-                "comicvine deadline classified"
+                "preserved underlying error before mapping"
             );
             ProviderFailure::Timeout
         })?
@@ -543,15 +409,7 @@ async fn provider_issue(
     .await?
     .get("results")
     .cloned()
-    .ok_or(ProviderFailure::InvalidResponse)
-}
-
-/// Classify and log a provider failure at a catalog call site before mapping
-/// it to the unchanged public `provider_unavailable` API error. Later children
-/// consume the typed vocabulary directly; this child only adds diagnostics.
-fn log_and_unavailable(failure: ProviderFailure) -> ApiError {
-    log_provider_failure("catalog_volume_roster", failure);
-    ApiError::ServiceUnavailable("provider_unavailable".to_owned())
+    .ok_or(ProviderFailure::InvalidPayload)
 }
 
 /// Read the same ComicVine volume and complete, validated issue roster used
@@ -577,17 +435,11 @@ pub(crate) async fn catalog_volume_roster(
         .ok()
         .filter(|v| *v > 0)
         .ok_or_else(unavailable)?;
-    let api_key = provider_api_key().ok_or_else(|| {
-        log_provider_failure(
-            "catalog_volume_roster",
-            ProviderFailure::ProviderNotConfigured,
-        );
-        unavailable()
-    })?;
+    let api_key = provider_api_key().ok_or_else(unavailable)?;
     let volume = limits
         .call(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
-        .map_err(log_and_unavailable)?;
+        .map_err(|_| unavailable())?;
     let volume_info = volume
         .get("results")
         .filter(|v| v.is_object())
@@ -610,7 +462,7 @@ pub(crate) async fn catalog_volume_roster(
         let page = limits
             .call(outbound, "issues", &query, &api_key)
             .await
-            .map_err(log_and_unavailable)?;
+            .map_err(|_| unavailable())?;
         let results = page
             .get("results")
             .and_then(Value::as_array)
@@ -800,26 +652,16 @@ async fn hydrate_catalog_commit_with_key(
             let Some(comicvine_id) = issue_id(&external_id) else {
                 continue;
             };
-            let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
-                Ok(value) => value,
-                Err(failure) => {
-                    log_provider_failure("catalog_commit_hydration", failure);
-                    continue;
-                }
+            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, api_key).await
+            else {
+                continue;
             };
-            let (patch, _, external_url, provider_updated_at) =
-                match normalized_metadata(&provider_data, comicvine_id) {
-                    Ok(value) => value,
-                    Err(failure) => {
-                        log_provider_failure("catalog_commit_hydration_normalize", failure);
-                        continue;
-                    }
-                };
+            let Ok((patch, _, external_url, provider_updated_at)) =
+                normalized_metadata(&provider_data, comicvine_id)
+            else {
+                continue;
+            };
             let Ok(json_patch) = serde_json::to_string(&patch) else {
-                log_provider_failure(
-                    "catalog_commit_hydration_serialize",
-                    ProviderFailure::InvalidResponse,
-                );
                 continue;
             };
             // The identity transaction has committed; a failed metadata
@@ -837,10 +679,9 @@ async fn hydrate_catalog_commit_with_key(
                 )
                 .await
             {
-                log_provider_failure("catalog_commit_persist", ProviderFailure::PersistFailed);
-                tracing::debug!(
+                tracing::warn!(
                     error_kind = crate::error_kind(&err),
-                    "catalog commit persist error classified"
+                    "catalog commit metadata hydration failed"
                 );
             }
         }
@@ -935,16 +776,25 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
         };
         let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
             Ok(value) => value,
-            Err(failure) => {
-                log_provider_failure("inline_identity_hydration", failure);
+            Err(error) => {
+                match &error {
+                    ProviderFailure::RateLimited(retry_after_seconds) => tracing::info!(
+                        retry_after_seconds,
+                        "inline hydration throttled; retry is user-controlled"
+                    ),
+                    _ => tracing::info!(?error, "inline identity hydration provider call failed"),
+                }
                 return;
             }
         };
         let (mut patch, has, url, updated) = match normalized_metadata(&provider_data, comicvine_id)
         {
             Ok(ok) => ok,
-            Err(failure) => {
-                log_provider_failure("inline_identity_hydration_normalize", failure);
+            Err(error) => {
+                tracing::info!(
+                    ?error,
+                    "inline identity hydration normalization failed; refresh row kept"
+                );
                 return;
             }
         };
@@ -953,10 +803,6 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             preserve_cached_credits(&mut patch, cached.as_ref());
         }
         let Ok(json_patch) = serde_json::to_string(&patch) else {
-            log_provider_failure(
-                "inline_identity_hydration_serialize",
-                ProviderFailure::InvalidResponse,
-            );
             return;
         };
         if let Err(err) = conn
@@ -972,10 +818,9 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             )
             .await
         {
-            log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
-            tracing::debug!(
+            tracing::warn!(
                 error_kind = crate::error_kind(&err),
-                "inline identity persist error classified"
+                "inline identity hydration metadata write failed"
             );
         }
     };
@@ -1020,82 +865,10 @@ fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::outbound::{OutboundError, OutboundFuture, OutboundResponse};
+    use crate::outbound::{OutboundFuture, OutboundResponse};
     use axum::{body::Body, http::HeaderMap};
     use deadpool_postgres::Object;
     use std::{any::Any, sync::Mutex};
-    use tracing_subscriber::fmt::MakeWriter;
-
-    /// Thread-local log capture. `set_default` plus a current-thread runtime
-    /// keeps every event emitted by the call under test in this buffer so
-    /// redaction can be asserted on the actual emitted lines.
-    #[derive(Clone, Default)]
-    struct LogBuffer(Arc<Mutex<Vec<u8>>>);
-
-    impl LogBuffer {
-        fn text(&self) -> String {
-            let bytes = self.0.lock().unwrap_or_else(|p| p.into_inner()).clone();
-            String::from_utf8(bytes).expect("log lines are utf8")
-        }
-    }
-
-    impl std::io::Write for LogBuffer {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            self.0
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .extend_from_slice(bytes);
-            Ok(bytes.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl<'a> MakeWriter<'a> for LogBuffer {
-        type Writer = Self;
-
-        fn make_writer(&'a self) -> Self::Writer {
-            self.clone()
-        }
-    }
-
-    fn capture_logs() -> (LogBuffer, tracing::subscriber::DefaultGuard) {
-        let buffer = LogBuffer::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(buffer.clone())
-            .with_ansi(false)
-            .with_max_level(tracing::Level::DEBUG)
-            .finish();
-        (buffer.clone(), tracing::subscriber::set_default(subscriber))
-    }
-
-    /// No emitted line may contain a credential, token, cookie, query string
-    /// or credential-bearing URL, even when the provider body echoes one.
-    fn assert_redacted(logs: &str) {
-        for line in logs.lines() {
-            assert!(!line.contains("TESTKEY123"), "credential leaked: {line}");
-            assert!(!line.contains("api_key="), "credential URL leaked: {line}");
-            assert!(!line.contains("format=json"), "query string leaked: {line}");
-            assert!(!line.contains("SECRET_TOKEN"), "token leaked: {line}");
-            assert!(!line.contains("session="), "cookie leaked: {line}");
-        }
-    }
-
-    /// A transport that never resolves: used with a tiny injected deadline so
-    /// the timeout class is exercised without sleeping or opening a socket.
-    struct PendingOutbound;
-
-    impl OutboundHttp for PendingOutbound {
-        fn send(&self, _host: &str, _request: OutboundRequest) -> OutboundFuture {
-            Box::pin(std::future::pending())
-        }
-
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-    }
 
     fn deep_provider_result(issue_id: u32, date_last_updated: &str) -> Value {
         json!({
@@ -1181,13 +954,13 @@ mod tests {
         let error = provider_exchange(&outbound, "issue/4000-1", "", " \n\t")
             .await
             .expect_err("blank credential must be unconfigured");
-        assert!(matches!(error, ProviderFailure::ProviderNotConfigured));
+        assert!(matches!(error, ProviderFailure::Unavailable));
         assert!(fake.calls().is_empty());
 
         let error = provider_exchange(&outbound, "issue/4000-1", "", "TEST KEY123")
             .await
             .expect_err("internal whitespace must remain malformed");
-        assert!(matches!(error, ProviderFailure::ProviderNotConfigured));
+        assert!(matches!(error, ProviderFailure::Unavailable));
         assert!(fake.calls().is_empty());
     }
 
@@ -1693,35 +1466,19 @@ mod tests {
         let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
             .await
             .expect_err("420 must be rate limited");
-        assert_eq!(
-            err,
-            ProviderFailure::RateLimited {
-                retry_after_seconds: 120
-            }
-        );
+        assert!(matches!(err, ProviderFailure::RateLimited(120)));
     }
 
     /// #5592: 403 is a plain provider error (Python parity), not a throttle.
-    /// #5919: it is now classified by its safe HTTP-status category instead of
-    /// being collapsed into a generic unavailable result.
     #[tokio::test]
     async fn provider_response_treats_403_as_unavailable() {
         let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        fake.push_ok(
-            StatusCode::FORBIDDEN,
-            HeaderMap::new(),
-            Bytes::from_static(br#"{"status_code":100,"error":{"message":"forbidden"}}"#),
-        );
+        fake.push_ok(StatusCode::FORBIDDEN, HeaderMap::new(), Bytes::new());
         let outbound: Arc<dyn crate::outbound::OutboundHttp> = fake;
         let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
             .await
             .expect_err("403 must be unavailable");
-        assert_eq!(
-            err,
-            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus {
-                status: 403
-            })
-        );
+        assert!(matches!(err, ProviderFailure::Unavailable));
     }
 
     /// Minimal ComicVine stand-in: a missing trailing slash on any resource
@@ -1857,243 +1614,5 @@ mod tests {
         assert_eq!(paths.len(), 2, "one volume read and one roster page");
         assert!(paths[0].starts_with("/api/volume/4050-5851001/?"));
         assert!(paths[1].starts_with("/api/issues/?"));
-    }
-
-    /// #5919: the vocabulary is closed and each class has a stable, secret-free
-    /// code. Quota, body and timeout limits remain in force.
-    #[test]
-    fn provider_failure_codes_are_stable_and_limits_are_bounded() {
-        assert_eq!(
-            ProviderFailure::ProviderNotConfigured.code(),
-            "provider_not_configured"
-        );
-        assert_eq!(
-            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::Transport).code(),
-            "provider_unavailable"
-        );
-        assert_eq!(
-            ProviderUnavailableCategory::HttpStatus { status: 403 }.code(),
-            "http_status"
-        );
-        assert_eq!(
-            ProviderUnavailableCategory::ErrorEnvelope.code(),
-            "error_envelope"
-        );
-        assert_eq!(ProviderUnavailableCategory::Transport.code(), "transport");
-        assert_eq!(
-            ProviderFailure::RateLimited {
-                retry_after_seconds: 120
-            }
-            .code(),
-            "rate_limited"
-        );
-        assert_eq!(ProviderFailure::Timeout.code(), "timeout");
-        assert_eq!(ProviderFailure::InvalidResponse.code(), "invalid_response");
-        assert_eq!(ProviderFailure::PersistFailed.code(), "persist_failed");
-        assert_eq!(PROVIDER_TIMEOUT, Duration::from_secs(5));
-        assert_eq!(MAX_BODY, 2_000_000);
-        assert_eq!(crate::comicvine_limits::REQUESTS_PER_HOUR, 180);
-    }
-
-    /// #5919: a 429 preserves the provider's `Retry-After` as a bounded typed
-    /// delay, and no emitted line leaks the credential-bearing request URL.
-    #[tokio::test(flavor = "current_thread")]
-    async fn provider_response_classifies_429_with_bounded_retry_after() {
-        let (logs, _guard) = capture_logs();
-        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        let mut headers = HeaderMap::new();
-        headers.insert("retry-after", "120".parse().unwrap());
-        fake.push_ok(StatusCode::TOO_MANY_REQUESTS, headers, Bytes::new());
-        let outbound: Arc<dyn OutboundHttp> = fake.clone();
-
-        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
-            .await
-            .expect_err("429 must be rate limited");
-        assert_eq!(
-            err,
-            ProviderFailure::RateLimited {
-                retry_after_seconds: 120
-            }
-        );
-        assert_eq!(fake.calls().len(), 1);
-        let logged = logs.text();
-        assert!(logged.contains("rate_limited"), "{logged}");
-        assert_redacted(&logged);
-    }
-
-    /// #5919: an absurd provider delay is bounded before it enters the typed
-    /// failure, so downstream cooldowns cannot overflow or stall forever.
-    #[tokio::test(flavor = "current_thread")]
-    async fn provider_response_bounds_an_absurd_retry_after() {
-        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        let mut headers = HeaderMap::new();
-        headers.insert("retry-after", "999999999999".parse().unwrap());
-        fake.push_ok(StatusCode::TOO_MANY_REQUESTS, headers, Bytes::new());
-        let outbound: Arc<dyn OutboundHttp> = fake;
-
-        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
-            .await
-            .expect_err("429 must be rate limited");
-        let ProviderFailure::RateLimited {
-            retry_after_seconds,
-        } = err
-        else {
-            panic!("expected a bounded rate limit, got {err:?}");
-        };
-        assert!((60..=3600).contains(&retry_after_seconds));
-    }
-
-    /// #5919: an error envelope is its own safe category. Provider-controlled
-    /// text (here echoing a credential) never appears in a log line.
-    #[tokio::test(flavor = "current_thread")]
-    async fn provider_response_classifies_error_envelope_without_logging_the_body() {
-        let (logs, _guard) = capture_logs();
-        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        let body = json!({
-            "status_code": 100,
-            "error": {"message": "bad api_key=TESTKEY123; SECRET_TOKEN session=abc"}
-        })
-        .to_string();
-        fake.push_ok(StatusCode::OK, HeaderMap::new(), Bytes::from(body));
-        let outbound: Arc<dyn OutboundHttp> = fake;
-
-        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
-            .await
-            .expect_err("an error envelope must be classified");
-        assert_eq!(
-            err,
-            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::ErrorEnvelope)
-        );
-        let logged = logs.text();
-        assert!(logged.contains("error_envelope"), "{logged}");
-        assert_redacted(&logged);
-    }
-
-    /// #5919: a malformed payload is distinct from an error envelope.
-    #[tokio::test(flavor = "current_thread")]
-    async fn provider_response_classifies_malformed_payload() {
-        let (logs, _guard) = capture_logs();
-        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        fake.push_ok(
-            StatusCode::OK,
-            HeaderMap::new(),
-            Bytes::from_static(b"not json"),
-        );
-        let outbound: Arc<dyn OutboundHttp> = fake;
-
-        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
-            .await
-            .expect_err("malformed JSON must be invalid_response");
-        assert_eq!(err, ProviderFailure::InvalidResponse);
-        let logged = logs.text();
-        assert!(logged.contains("invalid_response"), "{logged}");
-        assert_redacted(&logged);
-    }
-
-    /// #5919: a transport failure is its own category, even when the transport
-    /// error text embeds the full credential-bearing URL and a token.
-    #[tokio::test(flavor = "current_thread")]
-    async fn provider_response_classifies_transport_error_and_redacts_logs() {
-        let (logs, _guard) = capture_logs();
-        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        fake.push_error(OutboundError::Send(
-            "GET https://comicvine.gamespot.com/api/issue/4000-1/?api_key=TESTKEY123&format=json failed with SECRET_TOKEN".to_owned(),
-        ));
-        let outbound: Arc<dyn OutboundHttp> = fake;
-
-        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
-            .await
-            .expect_err("a transport error must be classified");
-        assert_eq!(
-            err,
-            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::Transport)
-        );
-        let logged = logs.text();
-        assert!(logged.contains("transport"), "{logged}");
-        assert_redacted(&logged);
-    }
-
-    /// #5919: the deadline is classified as `timeout` rather than a generic
-    /// unavailable, using an injectable deadline and a pending fake.
-    #[tokio::test(flavor = "current_thread")]
-    async fn provider_exchange_classifies_timeout() {
-        let (logs, _guard) = capture_logs();
-        let outbound: Arc<dyn OutboundHttp> = Arc::new(PendingOutbound);
-
-        let err = provider_exchange_with_timeout(
-            &outbound,
-            "issue/4000-1",
-            "",
-            "TESTKEY123",
-            Duration::from_millis(10),
-        )
-        .await
-        .expect_err("the deadline must classify as timeout");
-        assert_eq!(err, ProviderFailure::Timeout);
-        let logged = logs.text();
-        assert!(logged.contains("timeout"), "{logged}");
-        assert_redacted(&logged);
-    }
-
-    /// #5919: persisted-metadata failures are classified, not silently
-    /// collapsed into `provider_unavailable`, and the diagnostic stays redacted.
-    #[tokio::test(flavor = "current_thread")]
-    async fn persist_failure_emits_a_typed_redacted_diagnostic() {
-        let (logs, _guard) = capture_logs();
-        log_provider_failure("test_persist", ProviderFailure::PersistFailed);
-        let logged = logs.text();
-        assert!(logged.contains("persist_failed"), "{logged}");
-        assert_redacted(&logged);
-    }
-
-    /// #5919: credential normalization and the canonical slash URL remain in
-    /// force at the transport boundary, with no secret in any emitted line.
-    #[tokio::test(flavor = "current_thread")]
-    async fn normalization_and_canonical_slash_url_never_leak_in_logs() {
-        let (logs, _guard) = capture_logs();
-        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        fake.push_ok(
-            StatusCode::OK,
-            HeaderMap::new(),
-            Bytes::from_static(br#"{"status_code":1,"results":{}}"#),
-        );
-        let outbound: Arc<dyn OutboundHttp> = fake.clone();
-
-        let exchange = provider_exchange(&outbound, "issue/4000-1/", "", "  TESTKEY123\n")
-            .await
-            .expect("padded credential must be normalized and fetched");
-        assert!(matches!(exchange, Exchange::Payload(_)));
-        let calls = fake.calls();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(
-            calls[0].path,
-            "/api/issue/4000-1/?api_key=TESTKEY123&format=json"
-        );
-        assert_redacted(&logs.text());
-    }
-
-    /// #5919: the limits path also classifies a 403 by HTTP status instead of
-    /// collapsing it into a generic unavailable result.
-    #[tokio::test(flavor = "current_thread")]
-    async fn limits_call_classifies_403_by_http_status() {
-        let (logs, _guard) = capture_logs();
-        let limits = crate::comicvine_limits::ComicVineLimits::default();
-        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        fake.push_ok(StatusCode::FORBIDDEN, HeaderMap::new(), Bytes::new());
-        let outbound: Arc<dyn OutboundHttp> = fake;
-
-        let err = limits
-            .call(&outbound, "issues", "", "TESTKEY123")
-            .await
-            .expect_err("403 must be a classified provider failure");
-        assert_eq!(
-            err,
-            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus {
-                status: 403
-            })
-        );
-        let logged = logs.text();
-        assert!(logged.contains("http_status"), "{logged}");
-        assert_redacted(&logged);
     }
 }

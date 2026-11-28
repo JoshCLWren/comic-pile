@@ -5,18 +5,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   useCreatorMetricDrilldown,
+  useCreatorRatingDistributionDrilldown,
+  useCreatorRoleDrilldown,
+  useCreatorSeriesDrilldown,
   useDrilldownPresentation,
 } from '../hooks/useCreatorMetricDrilldown'
 import { creatorMetricDrilldownApi } from '../services/creatorMetricDrilldownApi'
-import type { CreatorMetricDrilldown } from '../types/index'
+import type {
+  CreatorMetricDrilldown,
+  CreatorRatingDistributionDrilldown,
+  CreatorRoleDrilldown,
+  CreatorSeriesDrilldown,
+} from '../types/index'
 
 vi.mock('../services/creatorMetricDrilldownApi', () => ({
   creatorMetricDrilldownApi: {
     getMetricDrilldown: vi.fn(),
+    getRatingDistributionDrilldown: vi.fn(),
+    getRoleDrilldown: vi.fn(),
+    getSeriesDrilldown: vi.fn(),
   },
 }))
 
 const mockedGetMetric = vi.mocked(creatorMetricDrilldownApi.getMetricDrilldown)
+const mockedGetDistribution = vi.mocked(creatorMetricDrilldownApi.getRatingDistributionDrilldown)
+const mockedGetRole = vi.mocked(creatorMetricDrilldownApi.getRoleDrilldown)
+const mockedGetSeries = vi.mocked(creatorMetricDrilldownApi.getSeriesDrilldown)
 
 function makeResponse(): CreatorMetricDrilldown {
   return {
@@ -35,6 +49,39 @@ function makeResponse(): CreatorMetricDrilldown {
   }
 }
 
+function makeDistributionResponse(): CreatorRatingDistributionDrilldown {
+  return {
+    ...makeResponse(),
+    metric_type: 'rating-distribution',
+    rating_value: '5.0',
+    bucket_count: 1,
+    bucket_percentage: 100.0,
+  }
+}
+
+function makeRoleResponse(): CreatorRoleDrilldown {
+  return {
+    ...makeResponse(),
+    metric_type: 'role-stats',
+    role: 'writer',
+    role_issue_count: 1,
+    role_rated_issue_count: 1,
+    role_average_rating: 3.5,
+  }
+}
+
+function makeSeriesResponse(): CreatorSeriesDrilldown {
+  return {
+    ...makeResponse(),
+    metric_type: 'series-stats',
+    series_id: 7,
+    series_title: 'Series',
+    series_issue_count: 1,
+    series_rated_issue_count: 1,
+    series_average_rating: 3.5,
+  }
+}
+
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -45,6 +92,9 @@ function createWrapper() {
 beforeEach(() => {
   vi.clearAllMocks()
   mockedGetMetric.mockResolvedValue(makeResponse())
+  mockedGetDistribution.mockResolvedValue(makeDistributionResponse())
+  mockedGetRole.mockResolvedValue(makeRoleResponse())
+  mockedGetSeries.mockResolvedValue(makeSeriesResponse())
 })
 
 describe('useCreatorMetricDrilldown', () => {
@@ -69,17 +119,25 @@ describe('useCreatorMetricDrilldown', () => {
     expect(mockedGetMetric).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['rating-distribution', { ratingValue: '5.0', page: 1 }],
-    ['role-stats', { role: 'writer' }],
-    ['series-stats', { seriesKey: 'thread:7' }],
-  ] as const)('passes %s filters through the live generic query', async (metricType, params) => {
-    const { result } = renderHook(
-      () => useCreatorMetricDrilldown('creator:1', metricType, params),
+  it('fetches distribution, role, and series drilldowns from their endpoints', async () => {
+    const distribution = renderHook(
+      () => useCreatorRatingDistributionDrilldown('creator:1', '5.0', { page: 1 }),
       { wrapper: createWrapper() },
     )
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(mockedGetMetric).toHaveBeenCalledWith('creator:1', metricType, params)
+    const role = renderHook(() => useCreatorRoleDrilldown('creator:1', 'writer'), {
+      wrapper: createWrapper(),
+    })
+    const series = renderHook(() => useCreatorSeriesDrilldown('creator:1', 'thread:7'), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(distribution.result.current.isPending).toBe(false))
+    await waitFor(() => expect(role.result.current.isPending).toBe(false))
+    await waitFor(() => expect(series.result.current.isPending).toBe(false))
+
+    expect(mockedGetDistribution).toHaveBeenCalledWith('creator:1', '5.0', { page: 1 })
+    expect(mockedGetRole).toHaveBeenCalledWith('creator:1', 'writer', undefined)
+    expect(mockedGetSeries).toHaveBeenCalledWith('creator:1', 'thread:7', undefined)
   })
 })
 
