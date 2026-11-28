@@ -16,7 +16,6 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
-import { cast } from '../utils/cast'
 import { RollFooter } from '../pages/RollPage/components/RollFooter'
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
 import { resolveRollSelectedDie } from '../pages/RollPage/selectedDie'
@@ -24,7 +23,6 @@ import {
   ROLL_WORKSPACE_MAX_WIDTH,
   ROLL_WORKSPACE_TRACKS,
 } from '../pages/RollPage/workspaceLayout'
-import type { RollState } from '../types/rollState'
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
 vi.mock('../components/Tooltip', () => ({
@@ -34,13 +32,8 @@ vi.mock('../components/GlossaryLink', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-// SAFETY: test fixture supplies only the fields the header component reads for session state
-const BOOTSTRAP = cast<RollState>({
-})
-
 function headerProps(overrides: Partial<React.ComponentProps<typeof RollHeader>> = {}) {
   return {
-    bootstrap: BOOTSTRAP,
     currentDie: 6,
     dieSize: 6,
     displayDie: 6 as const,

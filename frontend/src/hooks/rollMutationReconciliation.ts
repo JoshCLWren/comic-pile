@@ -7,7 +7,7 @@ import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollStateApi } from '../services/rollStateApi'
 import type { RollState } from '../types/rollState'
 import { queryClient } from '../query/queryClient'
-import { queryKeys } from '../query/queryKeys'
+import { applyRollStateSnapshot } from '../query/cacheEffects'
 import { clearAllPendingSelections } from '../services/rollPendingSelection'
 import {
   isNumber,
@@ -68,7 +68,7 @@ export function isAuthenticationMutationFailure(error: unknown): boolean {
 export function publishRollState(state: RollState): void {
   // Active Roll observers consume this cache-only snapshot immediately; the
   // event remains for non-React reconciliation listeners and focused tests.
-  queryClient.setQueryData(queryKeys.roll.state(), state)
+  applyRollStateSnapshot(queryClient, state)
   if (!isWindowDefined() || !isFunction(CustomEvent)) return
 
   window.dispatchEvent(new CustomEvent<RollState>(

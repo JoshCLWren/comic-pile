@@ -5,7 +5,7 @@ import { dismissReadingModeSuggestion } from '../services/readingMode'
 import { FEATURES } from '../config/features'
 import type { ReadingModeState } from '../types'
 import { useReadingMode } from '../hooks/useReadingMode'
-import { queryKeys } from '../query/queryKeys'
+import { applyReadingModeState } from '../query/cacheEffects'
 
 /**
  * Always-reachable entry point for the reading-mode quiz plus a non-blocking
@@ -19,20 +19,20 @@ export default function ReadingModeLauncher() {
   const [dismissing, setDismissing] = useState(false)
 
   const handleComplete = useCallback((state: ReadingModeState) => {
-    queryClient.setQueryData(queryKeys.readingMode.state(), state)
+    applyReadingModeState(queryClient, state)
   }, [queryClient])
 
   const handleDismiss = useCallback(async () => {
     setDismissing(true)
     try {
       const state = await dismissReadingModeSuggestion()
-      queryClient.setQueryData(queryKeys.readingMode.state(), state)
+      applyReadingModeState(queryClient, state)
     } catch {
       // Best-effort dismissal; ignore failures.
     } finally {
       setDismissing(false)
     }
-  }, [])
+  }, [queryClient])
 
   // Product-surface gate (issue #1945): the quiz persists its result and the
   // weighting machinery exists, but the production Roll path does not yet

@@ -5,7 +5,7 @@ import type { IssueListResponse } from '../services/api-issues'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
-import type { RateResponsePayload } from '../types'
+import type { RateResponsePayload, ReadingModeState } from '../types'
 import type { RollState } from '../types/rollState'
 import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 import { queryKeys } from './queryKeys'
@@ -33,6 +33,16 @@ import { notifyReadingPlansChanged } from './crossTabDataSync'
  */
 export function clearSessionCache(client: QueryClient): void {
   client.clear()
+}
+
+/** Publish an authoritative scoped Roll snapshot without another network read. */
+export function applyRollStateSnapshot(client: QueryClient, state: RollState): void {
+  client.setQueryData(queryKeys.roll.state(), state)
+}
+
+/** Publish a committed reading-mode quiz or suggestion-dismissal response. */
+export function applyReadingModeState(client: QueryClient, state: ReadingModeState): void {
+  client.setQueryData(queryKeys.readingMode.state(), state)
 }
 
 /** Remember the deployment-wide boundary authority for later route loads. */

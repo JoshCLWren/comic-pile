@@ -4,21 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
 import { ReadingModeControl } from '../pages/RollPage/components/ReadingModeControl'
-import type { RollState } from '../types/rollState'
 import {
   formatReadingMode,
   readingModeLabel,
   type ReadingModeDisplay,
 } from '../types/readingMode'
-
-const rollState: RollState = {
-  pending_thread_id: null,
-  last_rolled_result: null,
-  active_thread: null,
-  roll_pool: [],
-  snoozed_threads: [],
-  snoozed_count: 0,
-}
 
 const headerBaseProps = {
   currentDie: 6,
