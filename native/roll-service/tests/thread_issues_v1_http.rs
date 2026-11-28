@@ -433,7 +433,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(body["detail"], "Range start (5) cannot exceed end (3)");
+    assert_eq!(body["detail"], "Invalid issue range: 5-3");
     let (status, body) = send(
         &state,
         post(
@@ -470,12 +470,28 @@ async fn create_issues_validation_isolation_and_not_found() {
         register_extra_user(&state, "tiss-create-other").await;
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "Mine", 0, 1).await;
-    for body in [
-        json!({}),
-        json!({"issue_range": ""}),
-        json!({"issue_range": 5}),
-        json!({"issue_range": "1", "insert_after_issue_id": 0}),
-        json!({"issue_range": "1", "insert_after_issue_id": "x"}),
+    // v2 validates with typed serde extraction plus handler checks: malformed
+    // bodies get axum's 422 rejection (a plain-text body, so no JSON `detail`),
+    // an empty range is a 400 and an unknown anchor is a 404. Every case must
+    // be rejected without writing an issue (asserted at the end of this test).
+    for (body, expected_status, expected_detail) in [
+        (json!({}), StatusCode::UNPROCESSABLE_ENTITY, None),
+        (
+            json!({"issue_range": ""}),
+            StatusCode::BAD_REQUEST,
+            Some("Issue range cannot be empty"),
+        ),
+        (json!({"issue_range": 5}), StatusCode::UNPROCESSABLE_ENTITY, None),
+        (
+            json!({"issue_range": "1", "insert_after_issue_id": 0}),
+            StatusCode::NOT_FOUND,
+            Some("Issue 0 not found"),
+        ),
+        (
+            json!({"issue_range": "1", "insert_after_issue_id": "x"}),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            None,
+        ),
     ] {
         let (status, payload) = send(
             &state,
@@ -487,8 +503,11 @@ async fn create_issues_validation_isolation_and_not_found() {
             ),
         )
         .await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(payload["detail"], "Validation failed");
+        assert_eq!(status, expected_status, "{payload}");
+        match expected_detail {
+            Some(detail) => assert_eq!(payload["detail"], detail),
+            None => assert!(payload.is_null(), "unexpected JSON body {payload}"),
+        }
     }
     let (status, _) = send(
         &state,
@@ -538,6 +557,14 @@ async fn reorder_rewrites_positions_and_validates() {
     let thread = plain_thread(&conn, user_id, "Reorder", 3, 1).await;
     let ids = seed_issues(&conn, thread, &["1", "2", "3"], "unread").await;
     frontier(&conn, thread, ids[0]).await;
+    // v2 issue-order refreshes counts/frontier but leaves reading progress to
+    // the reading-session resource; the seeded value must survive the reorder.
+    conn.execute(
+        "UPDATE threads SET reading_progress = 'not_started' WHERE id = $1",
+        &[&thread],
+    )
+    .await
+    .unwrap();
     let path = format!("/api/v2/threads/{thread}/issue-order");
 
     let (status, _) = send(
@@ -585,14 +612,23 @@ async fn reorder_rewrites_positions_and_validates() {
             "issue_ids must contain every issue in the thread exactly once"
         );
     }
-    for bad in [
-        json!({"issue_ids": []}),
-        json!({}),
-        json!({"issue_ids": ["x"]}),
+    // v2 uses typed serde extraction: a well-formed but wrong id set is a
+    // handler-level 400; malformed bodies get axum's plain-text 422 rejection.
+    for (bad, expected_status, expected_detail) in [
+        (
+            json!({"issue_ids": []}),
+            StatusCode::BAD_REQUEST,
+            Some("issue_ids must contain every issue in the thread exactly once"),
+        ),
+        (json!({}), StatusCode::UNPROCESSABLE_ENTITY, None),
+        (json!({"issue_ids": ["x"]}), StatusCode::UNPROCESSABLE_ENTITY, None),
     ] {
         let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(bad))).await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(body["detail"], "Validation failed");
+        assert_eq!(status, expected_status, "{body}");
+        match expected_detail {
+            Some(detail) => assert_eq!(body["detail"], detail),
+            None => assert!(body.is_null(), "unexpected JSON body {body}"),
+        }
     }
     let (status, _) = send(
         &state,
@@ -1224,7 +1260,7 @@ async fn set_current_issue_marks_earlier_read_and_pins_session() {
         json!({"issue_number": "2", "extra": true}),
         json!({"issue_number": 2}),
     ] {
-        let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(bad))).await;
+        let (status, body) = send(&state, post(&path, &token, &csrf, Some(bad))).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(body["detail"], "Validation failed");
     }
