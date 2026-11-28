@@ -85,14 +85,17 @@ describe('collectAllPages', () => {
     expect(result.pageCount).toBe(2)
   })
 
-  it('throws on invalid maxPages', async () => {
-    await expect(collectAllPages({
-      fetchPage: async () => ({}),
-      selectItems: () => [],
-      selectNextToken: () => null,
-      maxPages: 0,
-    })).rejects.toThrow(RangeError)
-  })
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'throws on invalid maxPages %s',
+    async (maxPages) => {
+      await expect(collectAllPages({
+        fetchPage: async () => ({}),
+        selectItems: () => [],
+        selectNextToken: () => null,
+        maxPages,
+      })).rejects.toThrow(RangeError)
+    },
+  )
 })
 
 describe('useInfiniteCollection', () => {

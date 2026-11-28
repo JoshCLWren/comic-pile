@@ -6,11 +6,17 @@ import {
 } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api-threads'
 import { issuesApi, type IssueListParams } from '../services/api-issues'
-import type { Issue, ThreadListItem, ThreadListResponse } from '../types'
+import type { Issue, ThreadListItem } from '../types'
+import { COLLECT_ALL_DEFAULT_MAX_PAGES, collectAllPages } from '../pagination/collectAllPages'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterCrossoverMutation } from '../query/cacheEffects'
 
 type PositionedIssue = Issue & { position: number }
+
+const ISSUE_PAGE_SIZE = 100
+// native/roll-service/src/thread_issues.rs caps a thread at 10,000 issues.
+const MAX_ISSUE_COLLECTION_PAGES = 100
+const THREAD_PAGE_SIZE = 100
 
 /** Crossover group service surface the Crossovers page depends on. */
 export type CrossoverGroupsApi = Pick<
@@ -38,40 +44,48 @@ export interface CrossoverApiDeps {
 }
 
 async function fetchAllIssues(threadId: number, issueApi: CrossoverIssuesApi = issuesApi): Promise<PositionedIssue[]> {
-  const issues: PositionedIssue[] = []
-  const seenPageTokens = new Set<string>()
-  let nextPageToken: string | null = null
-
-  while (true) {
-    const params: IssueListParams = { page_size: 100 }
-    if (nextPageToken) {
-      params.page_token = nextPageToken
-    }
-    const data = await issueApi.list(threadId, params)
-    // SAFETY: the issues endpoint returns position-ordered issues; the integer-position check below enforces the contract.
-    const pageIssues = data.issues as PositionedIssue[]
-    if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
-      throw new Error('Comic issue order is unavailable for this series.')
-    }
-    issues.push(...pageIssues)
-    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return issues
-    seenPageTokens.add(data.next_page_token)
-    nextPageToken = data.next_page_token
+  const result = await collectAllPages({
+    fetchPage: (token) => {
+      const params: IssueListParams = { page_size: ISSUE_PAGE_SIZE }
+      if (token) params.page_token = token
+      return issueApi.list(threadId, params)
+    },
+    maxPages: MAX_ISSUE_COLLECTION_PAGES,
+    selectItems: (page) => {
+      // SAFETY: the issues endpoint returns position-ordered issues; the integer-position check below enforces the contract.
+      const issues = page.issues as PositionedIssue[]
+      if (issues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
+        throw new Error('Comic issue order is unavailable for this series.')
+      }
+      return issues
+    },
+    selectNextToken: (page) => page.next_page_token || null,
+  })
+  if (result.stopReason === 'max-pages') {
+    throw new Error('Unable to load the complete issue list for this series.')
   }
+  return result.items
 }
 
 async function fetchAllThreads(threadApi: CrossoverThreadsApi = threadsApi): Promise<ThreadListItem[]> {
-  const threads: ThreadListItem[] = []
-  const seenPageTokens = new Set<string>()
-  let nextPageToken: string | null = null
-
-  while (true) {
-    const data: ThreadListResponse = await threadApi.list({ page_size: 100 }, nextPageToken)
-    threads.push(...data.threads)
-    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return threads
-    seenPageTokens.add(data.next_page_token)
-    nextPageToken = data.next_page_token
+  const firstPage = await threadApi.list({ page_size: THREAD_PAGE_SIZE }, null)
+  const threadCount = firstPage.filtered_count ?? firstPage.active_count
+  const maxPages = Math.max(
+    COLLECT_ALL_DEFAULT_MAX_PAGES,
+    Math.ceil(threadCount / THREAD_PAGE_SIZE),
+  )
+  const result = await collectAllPages({
+    fetchPage: async (token) => token === null
+      ? firstPage
+      : threadApi.list({ page_size: THREAD_PAGE_SIZE }, token),
+    selectItems: (page) => page.threads,
+    selectNextToken: (page) => page.next_page_token || null,
+    maxPages,
+  })
+  if (result.stopReason === 'max-pages') {
+    throw new Error('Unable to load the complete comics list for selection.')
   }
+  return result.items
 }
 
 export function useCrossoverGroupsList(deps: CrossoverApiDeps = {}) {
