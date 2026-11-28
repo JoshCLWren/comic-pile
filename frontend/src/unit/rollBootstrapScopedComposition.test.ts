@@ -37,6 +37,8 @@ describe('scoped Roll composition service', () => {
     queryClient.clear()
     resetRollPendingSelectionMemory()
     localStorage.clear()
+    globalThis.document.cookie =
+      'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
   })
 
   it('reads the signed-in partition and the scoped last-read cache', async () => {
@@ -105,5 +107,77 @@ describe('scoped Roll composition service', () => {
       direct_blockers: [{ source_id: 9, satisfied: false }],
       readable_prerequisites: [{ node_id: 9 }],
     })
+  })
+
+  it('composes an empty pool without a card batch, snooze list or recovery read', async () => {
+    const client = createHttpClientStub()
+    client.get.mockImplementation(async (url: string) => {
+      if (url === '/v2/roll/eligible-issue-ids') {
+        return { issue_ids: [], thread_ids: [], pool_reason: 'no_eligible_issues' }
+      }
+      throw new Error(`Unexpected GET ${url}`)
+    })
+
+    const state = await createRollBootstrapApi(client).get(42)
+
+    expect(state.roll_pool).toEqual([])
+    expect(state.pool_reason).toBe('no_eligible_issues')
+    expect(state.roll_recovery).toBeNull()
+    expect(state.last_read).toBeNull()
+    expect(client.post).not.toHaveBeenCalled()
+  })
+
+  it('applies the browser snooze cookie to the scoped pool and snooze shelf', async () => {
+    globalThis.document.cookie = 'comicpile_roll_snoozes=%5B9%5D'
+    const client = createHttpClientStub()
+    client.get.mockImplementation(async (url: string) => {
+      if (url === '/v2/roll/eligible-issue-ids') {
+        return { issue_ids: [10], thread_ids: [3], pool_reason: 'ready' }
+      }
+      if (url === '/v2/threads') {
+        return {
+          threads: [
+            { id: 9, title: 'Snoozed Series', format: 'Comic' },
+            { id: 8, title: 'Unrelated Series', format: 'Comic' },
+          ],
+        }
+      }
+      throw new Error(`Unexpected GET ${url}`)
+    })
+    client.post.mockImplementation(async (url: string) => {
+      if (url === '/v2/issues/cards') return { items: [card(10, 3, 'unread')] }
+      throw new Error(`Unexpected POST ${url}`)
+    })
+
+    const state = await createRollBootstrapApi(client).get(42)
+
+    expect(state.snoozed_thread_ids).toEqual([9])
+    expect(state.snoozed_threads).toEqual([{
+      id: 9, title: 'Snoozed Series', format: 'Comic',
+    }])
+  })
+
+  it('does not request prerequisite cards when a blocked pending issue has no edges', async () => {
+    const client = createHttpClientStub()
+    client.get.mockImplementation(async (url: string) => {
+      if (url === '/v2/roll/eligible-issue-ids') {
+        return { issue_ids: [20], thread_ids: [4], pool_reason: 'ready' }
+      }
+      if (url === '/v2/issues/10/dependencies') {
+        return { issue_id: 10, incoming: [], outgoing: [] }
+      }
+      throw new Error(`Unexpected GET ${url}`)
+    })
+    client.post.mockImplementation(async (url: string) => {
+      if (url === '/v2/issues/cards') return { items: [card(20, 4, 'unread')] }
+      throw new Error(`Unexpected POST ${url}`)
+    })
+    writePendingSelection(42, { issue_id: 10, thread_id: 3, selected_at: 2 })
+
+    const state = await createRollBootstrapApi(client).get(42)
+
+    // The visible face batch is still issued; no second batch for prerequisites.
+    expect(client.post).toHaveBeenCalledTimes(1)
+    expect(state.roll_recovery).toBeNull()
   })
 })
