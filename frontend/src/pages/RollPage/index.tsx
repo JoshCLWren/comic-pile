@@ -41,9 +41,8 @@ import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
-import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterUndo, invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
@@ -141,7 +140,6 @@ export default function RollPage() {
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
   const { showToast } = useToast()
-  const undo = useUndo()
 
   // A committed snooze closes the rating view and the action sheet, so an
   // exhausted authoritative refresh can only be reported from the page. The
@@ -205,16 +203,10 @@ export default function RollPage() {
     clearPending: pendingSelection.clear,
   })
 
-  // Undoing a rating restores the snapshot the rating itself wrote, which is the
-  // newest one while nothing else has been rated since (#3194). The list stays
-  // disabled until a just-rated notice is on screen so Roll costs nothing at
-  // rest, and the click path re-reads it before acting so a second rating inside
-  // the snapshot query's stale window cannot undo two ratings at once.
-  const undoSessionId = rating.lastRated ? bootstrap?.session_id ?? null : null
-  const { data: undoSnapshots, refetch: refetchUndoSnapshots } = useSnapshots(undoSessionId)
-  const latestUndoSnapshot = undoSnapshots?.snapshots[0]
-  const canUndoLastRating =
-    latestUndoSnapshot != null && latestUndoSnapshot.description !== 'Session start'
+  // #4350 removes session initialization, so Roll has no session id to address
+  // the snapshot undo API. The undo affordance stays gated here rather than
+  // fabricating an id (which produced GET /undo/0/snapshots -> 404). Durable
+  // undo remains available on History -> session -> snapshots.
 
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
@@ -298,32 +290,6 @@ export default function RollPage() {
     } catch (error) {
       console.error('Set current issue failed:', error)
       throw error
-    }
-  }
-
-  const handleUndoRating = async () => {
-    const rated = rating.lastRated
-    const sessionId = bootstrap?.session_id
-    if (!rated || sessionId == null) return
-
-    try {
-      const freshSnapshots = await refetchUndoSnapshots()
-      const snapshot = freshSnapshots.data?.snapshots[0]
-      if (!snapshot || snapshot.description === 'Session start') {
-        showToast('No undo point is recorded for this rating.', 'error')
-        return
-      }
-
-      await undo.mutate({ sessionId, snapshotId: snapshot.id })
-      showToast(`Rating for "${rated.title} ${rated.issueNumber}" has been undone`, 'success')
-      // Drop the notice before the refresh lands: the restored state is the
-      // one the reader asked for, and keeping a "you just rated" prompt up
-      // over a state where the rating no longer exists is the stale read #3194.
-      rating.clearLastRated()
-      await invalidateAfterUndo(queryClient)
-    } catch (error) {
-      console.error('Undo failed:', error)
-      showToast('Failed to undo rating. Please try again.', 'error')
     }
   }
 
@@ -519,18 +485,12 @@ export default function RollPage() {
                     view={lastRead}
                     onDismiss={() => setDismissedLastReadKey(lastReadKey)}
                     onRollAgain={actions.handleRoll}
-                    onUndo={handleUndoRating}
-                    undoPending={undo.isPending}
-                    canUndo={canUndoLastRating}
                   />
                 ) : null
               ) : (
                 <PostRateCopyPrompt
                   reference={rating.lastRated}
                   onDismiss={rating.clearLastRated}
-                  onUndo={handleUndoRating}
-                  undoPending={undo.isPending}
-                  canUndo={canUndoLastRating}
                 />
               ))}
 

@@ -132,8 +132,13 @@ export function formatSessionMode(mode: SessionModeState | null | undefined): st
 
 /** Bounded bootstrap payload for the Roll initial render. */
 export interface RollBootstrapResponse {
-  session_id: number
-  user_id: number
+  /**
+   * Retired session identity (#4350). The browser owns pending selection, so a
+   * client view model must never synthesize one; kept optional only for legacy
+   * fixtures that still describe the retired server payload.
+   */
+  session_id?: number
+  user_id?: number
   pending_thread_id: number | null
   last_rolled_result: number | null
   session_mode: SessionMode
