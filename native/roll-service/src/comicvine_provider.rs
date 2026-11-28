@@ -1690,6 +1690,150 @@ mod tests {
         incomplete.as_object_mut().unwrap().remove("person_credits");
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
+
+    /// Malformed rosters and unidentifiable entries must fail as
+    /// `invalid_response`, never compact into a truthful-looking credit list.
+    #[test]
+    fn compact_creator_credits_rejects_malformed_rosters() {
+        assert_eq!(compact_creator_credits(&json!([])), Ok(json!([])));
+        let valid = json!([
+            {"id": 7},
+            {"name": "Writer"},
+            {"id": 8, "name": "Penciler", "role": "penciler"}
+        ]);
+        let compacted = compact_creator_credits(&valid).expect("identifiable credits");
+        assert_eq!(compacted.as_array().map(Vec::len), Some(3));
+        assert_eq!(compacted[2]["role"], json!("penciler"));
+
+        for malformed in [
+            json!(null),
+            json!({}),
+            json!("writer"),
+            json!([{}]),
+            json!([{"role": "writer"}]),
+            json!([{"id": 0, "name": "   "}]),
+            json!([{"id": -1}]),
+            json!(["writer"]),
+            json!([null]),
+            json!([{"id": 1}, {}]),
+        ] {
+            assert_eq!(
+                compact_creator_credits(&malformed),
+                Err(ProviderFailure::InvalidResponse),
+                "malformed roster must be invalid_response: {malformed}"
+            );
+        }
+    }
+
+    #[test]
+    fn normalized_metadata_rejects_broken_rosters_but_accepts_empty() {
+        let mut result = deep_provider_result(29319, "2026-11-01 17:33:53");
+        for malformed in [
+            json!(null),
+            json!([{}]),
+            json!([{"role": "writer"}]),
+            json!([{"name": "  "}]),
+        ] {
+            result["person_credits"] = malformed.clone();
+            assert_eq!(
+                normalized_metadata(&result, 29319).unwrap_err(),
+                ProviderFailure::InvalidResponse,
+                "{malformed}"
+            );
+        }
+        // A genuine empty roster is a valid "no credits" answer.
+        result["person_credits"] = json!([]);
+        let (patch, present, _, _) =
+            normalized_metadata(&result, 29319).expect("a genuine empty roster is valid");
+        assert!(!present);
+        assert_eq!(patch["creator_credits"], json!([]));
+        result["person_credits"] = json!([{"id": 1, "name": "Writer"}]);
+        let (patch, present, _, _) = normalized_metadata(&result, 29319).expect("valid roster");
+        assert!(present);
+        assert_eq!(patch["creator_credits"][0]["name"], "Writer");
+    }
+
+    /// A null/absent cover must be omitted so the jsonb merge cannot erase a
+    /// cover already stored for the identity.
+    #[test]
+    fn normalized_metadata_omits_cover_when_provider_has_none() {
+        let mut result = deep_provider_result(29319, "2026-11-01 17:33:53");
+        result["image"] = json!({});
+        let (patch, _, _, _) = normalized_metadata(&result, 29319).expect("empty image object");
+        assert!(patch.get("primary_image").is_none(), "{patch}");
+
+        let mut blank_urls = deep_provider_result(29319, "2026-11-01 17:33:53");
+        blank_urls["image"] = json!({"original_url": null, "medium_url": ""});
+        let (patch, _, _, _) = normalized_metadata(&blank_urls, 29319).expect("blank cover URLs");
+        assert!(patch.get("primary_image").is_none(), "{patch}");
+
+        let with_cover = deep_provider_result(29319, "2026-11-01 17:33:53");
+        let (patch, _, _, _) = normalized_metadata(&with_cover, 29319).expect("cover present");
+        assert_eq!(
+            patch["primary_image"],
+            json!("https://img.example/medium.jpg")
+        );
+    }
+
+    #[test]
+    fn roster_metadata_omits_null_cover_and_broken_credits() {
+        let mut row = deep_provider_result(29319, "2026-11-01 17:33:53");
+        row["image"] = json!({});
+        row["person_credits"] = json!([{}]);
+        let metadata = normalize_roster_issue_metadata(&row);
+        assert!(metadata.get("primary_image").is_none(), "{metadata}");
+        assert_eq!(metadata["creator_credits"], json!([]));
+        row["person_credits"] = json!([{"id": 3, "name": "Writer", "role": "writer"}]);
+        let metadata = normalize_roster_issue_metadata(&row);
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        assert!(metadata.get("primary_image").is_none());
+    }
+
+    #[test]
+    fn retained_credits_check_both_normalized_and_raw_sources() {
+        let normalized = json!({"creator_credits": [{"id": 1, "name": "One"}]});
+        assert_eq!(
+            retained_creator_credits(&normalized),
+            json!([{"id": 1, "name": "One"}])
+        );
+        let raw_only = json!({
+            "creator_credits": [],
+            "raw_provider_payload": {"person_credits": [{"id": 2, "name": "Two"}]}
+        });
+        assert!(cached_has_credits(&raw_only));
+        assert_eq!(
+            retained_creator_credits(&raw_only),
+            json!([{"id": 2, "name": "Two"}])
+        );
+        assert_eq!(
+            RetainedCredits::from_metadata(&raw_only),
+            RetainedCredits::Present
+        );
+        let empty = json!({
+            "creator_credits": [],
+            "raw_provider_payload": {"person_credits": []}
+        });
+        assert!(!cached_has_credits(&empty));
+        assert_eq!(RetainedCredits::from_metadata(&empty), RetainedCredits::Empty);
+
+        let mut patch = json!({"creator_credits": []});
+        let retained = preserve_cached_credits(&mut patch, Some(&raw_only));
+        assert_eq!(retained, json!([{"id": 2, "name": "Two"}]));
+        assert_eq!(patch["creator_credits"], retained);
+    }
+
+    /// A failed lookup is `persist_failed`; only an absent row means
+    /// `not_confirmed`.
+    #[test]
+    fn lookup_failure_is_distinct_from_no_matching_row() {
+        assert_eq!(classify_lookup::<(), &str>(Ok(None)), Ok(None));
+        assert_eq!(
+            classify_lookup::<(), &str>(Err("database disconnected")),
+            Err(ProviderFailure::PersistFailed)
+        );
+        assert_eq!(classify_lookup(Ok(Some(7_i32))), Ok(Some(7)));
+    }
+
     #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
         assert_eq!(
