@@ -330,11 +330,7 @@ async fn recommendation_explanation_aliases_are_retired() {
         "/api/v1/roll/events/1/recommendation-explanation",
         "/api/roll/events/1/recommendation-explanation",
     ] {
-        let (status, body) = send(
-            &state,
-            authed("GET", path, &token, &csrf, None),
-        )
-        .await;
+        let (status, body) = send(&state, authed("GET", path, &token, &csrf, None)).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {body:?}");
         assert_eq!(body["detail"], "Not Found");
     }

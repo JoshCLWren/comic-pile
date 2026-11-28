@@ -380,11 +380,9 @@ async fn every_lifecycle_route_requires_auth() {
 
 #[tokio::test]
 async fn mutations_require_a_csrf_token() {
-    // csrf_middleware skips all checks when TEST_ENVIRONMENT=true. Serialize
-    // with the backdate tests (which set that process-global flag) and pin it
-    // off for this test so a concurrent backdate case cannot flip it mid-flight.
-    let _env_guard = TEST_ENV_LOCK.lock().await;
-    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    // csrf_middleware skips all checks when TEST_ENVIRONMENT=true. #5958
+    // retired the backdate tests that set that process-global flag; pin it off
+    // so a stray environment value cannot turn this CSRF check into a no-op.
     std::env::remove_var("TEST_ENVIRONMENT");
     let ctx = setup("lccsrf").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Csrf", "active", 1, 3).await;
