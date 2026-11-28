@@ -81,6 +81,10 @@ export function useRollSnooze({
     if (!rerollMutation) return
     try {
       const response = await rerollMutation.mutate()
+      // Reroll is the same POST /v2/roll/offer as the primary roll. Without
+      // seeding, a reload would restore the snoozed issue instead of the new
+      // offer because the browser selection still names the old one (#4350).
+      seedPending?.(response)
       if (enterRatingView) {
         // Use the offer response directly so a failed background refresh cannot
         // leave the just-snoozed thread open in the rating view.
@@ -103,6 +107,18 @@ export function useRollSnooze({
     try {
       const expectedId = state.activeRatingThread?.id
       const outcome = await snoozeMutation.mutate(expectedId)
+      // Snooze commits a replacement offer. Restore the browser-owned pending
+      // selection from that exact response so a reload reopens the new read,
+      // not the issue that was just snoozed (#4350).
+      const replacement = outcome.response
+      if (replacement?.issue_id != null) {
+        seedPending?.({
+          thread_id: replacement.thread_id,
+          issue_id: replacement.issue_id,
+          issue_number: replacement.issue_number,
+          result: replacement.result,
+        })
+      }
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)

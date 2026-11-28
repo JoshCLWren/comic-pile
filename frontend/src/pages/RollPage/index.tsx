@@ -230,6 +230,7 @@ export default function RollPage() {
     unsnoozeMutation,
     enterRatingView: rating.enterRatingView,
     refetchBootstrap,
+    seedPending: pendingSelection.seedFromOffer,
     onRefreshFailed: reportSnoozeRefreshFailed,
   })
 
