@@ -48,6 +48,8 @@
     {"method":"POST","path":"/api/v2/issue-duplicate-reconciliation/undo","owning_issue":4653,"reason":"action-shaped-subpath,non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/issue-read-marker-removals","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/issue-read-markers","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
+    {"method":"GET","path":"/api/v2/issue-read-operations/{operation_id}","owning_issue":4456,"reason":"non-lowercamelcase-segment"},
+    {"method":"POST","path":"/api/v2/issue-read-operations/{operation_id}/undo","owning_issue":4456,"reason":"action-shaped-subpath,non-lowercamelcase-segment"},
     {"method":"PUT","path":"/api/v2/issues/{issue_id}/position","owning_issue":4335,"reason":"put-mutation"},
     {"method":"DELETE","path":"/api/v2/issues/{issue_id}/read-markers","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/issues/{issue_id}/read-markers","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
@@ -103,6 +105,8 @@
     {"method":"POST","path":"/api/v2/tags/{tag_id}/assignment-batches","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/tags/{tag_id}/unassignment-batches","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
     {"method":"PUT","path":"/api/v2/threads/{thread_id}/issue-order","owning_issue":4684,"reason":"non-lowercamelcase-segment,put-mutation"},
+    {"method":"POST","path":"/api/v2/threads/{thread_id}/issues/preview","owning_issue":4456,"reason":"action-shaped-subpath"},
+    {"method":"POST","path":"/api/v2/threads/{thread_id}/issues/structure-preview","owning_issue":4456,"reason":"non-lowercamelcase-segment"},
     {"method":"GET","path":"/api/v2/threads/{thread_id}/reading-order-group-memberships","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
     {"method":"GET","path":"/api/v2/undo/{session_id}/snapshots","owning_issue":4839,"reason":"action-shaped-subpath"},
     {"method":"POST","path":"/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore","owning_issue":4839,"reason":"action-shaped-subpath"}
