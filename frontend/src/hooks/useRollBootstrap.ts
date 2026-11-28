@@ -136,7 +136,6 @@ export function useRollBootstrap(): UseRollBootstrapResult {
         id: thread.id,
         title: thread.title,
         format: thread.format,
-        tags: thread.tags ?? [],
       }]
     })
 
