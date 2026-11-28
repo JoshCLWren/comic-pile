@@ -26,9 +26,9 @@ function retiredRequestCounts(
 
 test.describe('Issue #4350: browser-owned Roll pending', () => {
   test('Roll → reload → Rate → next Roll uses no retired request', async ({
-    authenticatedPage,
+    freshUserPage,
   }) => {
-    const page = authenticatedPage
+    const page = freshUserPage
     await createThread(page, {
       title: 'Browser Pending Series',
       format: 'Comic',
@@ -62,9 +62,9 @@ test.describe('Issue #4350: browser-owned Roll pending', () => {
   })
 
   test('cancel clears pending without a dismiss or bootstrap request', async ({
-    authenticatedPage,
+    freshUserPage,
   }) => {
-    const page = authenticatedPage
+    const page = freshUserPage
     await createThread(page, {
       title: 'Cancel Pending Series',
       format: 'Comic',
