@@ -39,6 +39,10 @@ export interface InfiniteCollectionSpec<TItem, TPage, TToken = PageToken> {
   placeholderData?: InfiniteData<TPage, TToken> | PlaceholderDataFunction<InfiniteData<TPage, TToken>, Error, InfiniteData<TPage, TToken>, readonly unknown[]> | typeof keepPreviousData
   /** Refetch on window focus policy (mirrors `useInfiniteQuery`). */
   refetchOnWindowFocus?: boolean | 'always'
+  /** Freshness window (mirrors `useInfiniteQuery`). */
+  staleTime?: number
+  /** Garbage-collection window (mirrors `useInfiniteQuery`). */
+  gcTime?: number
 }
 
 /** Semantic state exposed by the canonical paginator. */
@@ -115,7 +119,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     if (!lastPage) return undefined
     const next = spec.getNextPageParam(lastPage, allPages)
     if (next == null) return undefined
-    for (const used of usedParams.slice(0, -1)) {
+    for (const used of usedParams) {
       if (used != null && Object.is(used, next)) return undefined
     }
     return next
@@ -125,8 +129,8 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     queryKey: spec.queryKey,
     queryFn: spec.queryFn,
     initialPageParam: spec.initialPageParam,
-    getNextPageParam: (lastPage, _allPages, _lastPageParam, allPageParams) =>
-      resolveNextToken(lastPage, allPageParams),
+    getNextPageParam: (lastPage, allPages, _lastPageParam, allPageParams) =>
+      resolveNextToken(lastPage, allPages as TPage[], allPageParams),
     enabled: spec.enabled,
     retry: spec.retry,
     placeholderData: spec.placeholderData,
@@ -149,7 +153,9 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
   }
 
   const hasNextPage = !!query.hasNextPage
-  const nextPageToken: TToken | null = hasNextPage && lastPage ? (resolveNextToken(pages) ?? null) : null
+  const nextPageToken: TToken | null = hasNextPage && lastPage
+    ? (resolveNextToken(lastPage, pages, query.data?.pageParams ?? []) ?? null)
+    : null
 
   const fetchNextPage = useCallback(async (): Promise<void> => {
     if (!query.hasNextPage || query.isFetchingNextPage) {
