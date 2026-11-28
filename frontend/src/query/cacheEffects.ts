@@ -245,16 +245,6 @@ export async function invalidateAfterIssueEdit(
   ])
 }
 
-export async function invalidateCurrentSessionAfterSnooze(
-  _client: QueryClient,
-): Promise<void> {
-  // The legacy session.current read was retired under #4343; its last dead
-  // cache-key residue is removed here as Part of #4839. This PR does not
-  // close #4839: owner-gated authenticated production Rust evidence and
-  // #4343 retirement verification are still required before closure.
-  // Snooze callers refresh authoritative state via roll bootstrap reconciliation.
-}
-
 /**
  * Refresh the minimal auth-resume set after a bfcache/visibility resume
  * recovery (`ResumeRecovery`, #2582). Scoped to the retained resume

@@ -1,8 +1,6 @@
 import { useCallback, useContext, useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { AuthContext } from '../contexts/AuthContext'
 import type { CacheEffectsApi, ProtectedRollMutationApi, RollStateApi, RollMutationDeps } from '../services/apiTypes'
-import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import {
   fetchAndPublishRollState,
@@ -41,11 +39,9 @@ interface RefreshOutcome {
 const SNOOZE_REFRESH_ATTEMPTS = 2
 
 export function useSnooze(deps: RollMutationDeps = {}) {
-  const { protectedApi, stateApi, cacheEffects } = deps
+  const { protectedApi, stateApi } = deps
   const protectedRollApi = protectedApi ?? protectedRollMutationApi
   const rollState = stateApi
-  const invalidateSessionCache = cacheEffects?.invalidateCurrentSessionAfterSnooze ?? invalidateCurrentSessionAfterSnooze
-  const queryClient = useQueryClient()
   // Keep the recovery read in the signed-in reader's browser partition.
   const userId = useContext(AuthContext)?.user?.id ?? null
   const { seedFromOffer } = useRollPendingSelection()
@@ -125,7 +121,6 @@ export function useSnooze(deps: RollMutationDeps = {}) {
             )
             if (recovery.status === 'retried') {
               if (recovery.value) seedFromOffer(recovery.value)
-              await invalidateSessionCache(queryClient)
               const refresh = await refreshAuthoritativeState()
               return {
                 response: recovery.value,

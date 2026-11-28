@@ -38,7 +38,6 @@ export interface CacheEffectsApi {
     thread: RateResponsePayload,
     options?: { refetchRollState?: boolean },
   ) => Promise<void>
-  invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
 }
 
 /** Injectable dependencies for the Roll mutation hooks (snooze/rate). */
