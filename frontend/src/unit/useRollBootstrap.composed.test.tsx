@@ -50,10 +50,8 @@ const LAST_READ: RollLastReadPayload = {
   read_at: '2026-11-28T00:00:00.000Z',
 }
 
-function wrapper() {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  }
+function Wrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }
 
 describe('useRollBootstrap composed scoped view', () => {
@@ -83,7 +81,7 @@ describe('useRollBootstrap composed scoped view', () => {
       roll_reconciliation: { last_read: LAST_READ },
     })
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper })
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
     expect(result.current.data?.last_read).toEqual(LAST_READ)
@@ -108,7 +106,7 @@ describe('useRollBootstrap composed scoped view', () => {
       clearAll: vi.fn(),
     })
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper })
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
     expect(result.current.data?.pending_thread_id).toBe(3)
@@ -132,6 +130,7 @@ describe('useRollBootstrap composed scoped view', () => {
       clearAll: vi.fn(),
     })
     mockedResources.eligibleIssueIds.mockResolvedValue({
+      die: 6,
       issue_ids: [20],
       thread_ids: [4],
       pool_reason: 'ready',
@@ -151,7 +150,7 @@ describe('useRollBootstrap composed scoped view', () => {
       outgoing: [],
     })
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper })
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.data?.roll_recovery).not.toBeNull())
 
     expect(mockedDependencies).toHaveBeenCalledWith(10)
@@ -161,12 +160,13 @@ describe('useRollBootstrap composed scoped view', () => {
 
   it('stays empty while the scoped pool has no visible cards', async () => {
     mockedResources.eligibleIssueIds.mockResolvedValue({
+      die: 6,
       issue_ids: [],
       thread_ids: [],
       pool_reason: 'no_series',
     })
 
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper })
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
     expect(result.current.data?.roll_pool).toEqual([])
