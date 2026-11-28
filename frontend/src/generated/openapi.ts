@@ -1065,6 +1065,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}:migrateToIssues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Migrate Thread To Issues
+         * @description Migrate an old-style thread to issue tracking (#1..total_issues).
+         *
+         *     Marks #1 through ``last_issue_read`` as read and updates the thread's
+         *     issue-tracking fields.
+         *
+         *     Raises:
+         *         HTTPException: 404 if thread not found, 400 if validation fails.
+         */
+        post: operations["migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}:migrateToIssuesSimple": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Migrate Thread To Issues Simple
+         * @description Simplified migration inferred from the issue just rated.
+         *
+         *     Marks earlier issues read, keeps the rated issue unread so the rating
+         *     flow can mark it read, and points ``next_unread_issue_id`` at it.
+         *
+         *     Raises:
+         *         HTTPException: 404 if thread not found, 400 if validation fails.
+         */
+        post: operations["migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}:setCurrentIssue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Current Issue
+         * @description Atomically correct the current issue for an active thread.
+         *
+         *     Marks every earlier issue read, ensures the target is unread, updates
+         *     ``thread.next_unread_issue_id``, and pins ``session.pending_issue_id``.
+         *
+         *     Raises:
+         *         HTTPException: 404 if thread or issue not found, 400 for validation errors.
+         */
+        post: operations["set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads:getBlockingInfo": {
         parameters: {
             query?: never;
@@ -6535,6 +6613,33 @@ export interface components {
             issue_id: number;
             refreshed: boolean;
         };
+        /**
+         * MigrateToIssuesRequest
+         * @description Schema for migrating thread to issue tracking.
+         */
+        MigrateToIssuesRequest: {
+            /**
+             * Last Issue Read
+             * @description The issue number user just finished reading (e.g., 15)
+             */
+            last_issue_read: number;
+            /**
+             * Total Issues
+             * @description Total number of issues in the series (e.g., 25)
+             */
+            total_issues: number;
+        };
+        /**
+         * MigrateToIssuesSimpleRequest
+         * @description Schema for simplified migration (infers total_issues from current state).
+         */
+        MigrateToIssuesSimpleRequest: {
+            /**
+             * Issue Number
+             * @description The issue number user just read (e.g., '5', 'Annual 1')
+             */
+            issue_number: string;
+        };
         /** @description Minimal release data for reconciliation endpoints (no body). */
         MinimalReleaseResponse: {
             category: string;
@@ -8965,6 +9070,45 @@ export interface components {
             /** Format: int32 */
             id: number;
             title: string;
+        };
+        /**
+         * SetCurrentIssueRequest
+         * @description Schema for atomically correcting the current issue in an active thread.
+         */
+        SetCurrentIssueRequest: {
+            /**
+             * Issue Number
+             * @description Target issue number to set as current
+             */
+            issue_number: string;
+        };
+        /**
+         * SetCurrentIssueResponse
+         * @description Response after atomically correcting the current issue.
+         */
+        SetCurrentIssueResponse: {
+            /** Format */
+            format: string;
+            /** Issue Id */
+            issue_id?: number | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Issues Remaining */
+            issues_remaining: number;
+            /** Next Issue Id */
+            next_issue_id?: number | null;
+            /** Next Issue Number */
+            next_issue_number?: string | null;
+            /** Queue Position */
+            queue_position: number;
+            /** Reading Progress */
+            reading_progress?: string | null;
+            /** Thread Id */
+            thread_id: number;
+            /** Title */
+            title: string;
+            /** Total Issues */
+            total_issues?: number | null;
         };
         SourceSyncFailure: {
             error: string;
@@ -12172,189 +12316,108 @@ export interface operations {
             };
         };
     };
-    thread_issues_migrate: {
+    migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeMigrateToIssuesRequest"];
+                "application/json": components["schemas"]["MigrateToIssuesRequest"];
             };
         };
         responses: {
-            /** @description Migrated thread */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadResponse"];
+                    "application/json": components["schemas"]["ThreadResponse"];
                 };
             };
-            /** @description Already migrated or inconsistent range */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
-    thread_issues_migrate_simple: {
+    migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeMigrateToIssuesSimpleRequest"];
+                "application/json": components["schemas"]["MigrateToIssuesSimpleRequest"];
             };
         };
         responses: {
-            /** @description Migrated thread */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadResponse"];
+                    "application/json": components["schemas"]["ThreadResponse"];
                 };
             };
-            /** @description Already migrated or issue cannot be created */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
-    thread_issues_set_current: {
+    set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeSetCurrentIssueRequest"];
+                "application/json": components["schemas"]["SetCurrentIssueRequest"];
             };
         };
         responses: {
-            /** @description Corrected current issue */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSetCurrentIssueResponse"];
+                    "application/json": components["schemas"]["SetCurrentIssueResponse"];
                 };
             };
-            /** @description Thread inactive, untracked or issue unavailable */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread or issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
