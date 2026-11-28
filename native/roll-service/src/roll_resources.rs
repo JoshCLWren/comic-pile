@@ -636,7 +636,10 @@ pub async fn recovery(
         .iter()
         .any(|issue| issue.id == query.issue_id)
     {
-        return Err(ApiError::not_found(format!("Issue {} not found", query.issue_id)));
+        return Err(ApiError::with_status(
+            axum::http::StatusCode::NOT_FOUND,
+            format!("Issue {} not found", query.issue_id),
+        ));
     }
     let candidates = validated.eligible_frontiers().map_err(|e| {
         tracing::debug!(
@@ -1087,6 +1090,37 @@ mod tests {
 
         let (status, _) = fixture.get("/api/v2/roll/last-read", None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn recovery_uses_the_canonical_graph_for_an_exact_owned_issue() {
+        let Some(fixture) = Fixture::start().await else {
+            return;
+        };
+        let token = fixture.token("reader-two", "reader-two-jti", STORED_EPOCH);
+        let (status, body) = fixture
+            .get("/api/v2/roll/recovery?issue_id=1200", Some(&token))
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["original_thread_id"], 120);
+        assert_eq!(body["direct_blockers"][0]["source_id"], 1100);
+        assert_eq!(body["readable_prerequisites"][0]["node_id"], 1100);
+        assert_eq!(body["readable_prerequisites"][0]["is_readable"], true);
+
+        let (status, body) = fixture
+            .get("/api/v2/roll/recovery?issue_id=1100", Some(&token))
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.is_null());
+
+        let (status, _) = fixture
+            .get("/api/v2/roll/recovery?issue_id=999999", Some(&token))
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (status, _) = fixture
+            .get("/api/v2/roll/recovery?issue_id=0", Some(&token))
+            .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[tokio::test]

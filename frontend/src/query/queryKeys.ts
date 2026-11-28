@@ -189,6 +189,9 @@ export const queryKeys = {
     lastRead: () => ['roll', 'last-read'] as const,
     /** Sessionless durable last-read record from `GET /v2/roll/last-read`. */
     lastReadRecord: () => ['roll', 'last-read-record'] as const,
+    /** Canonical bounded recovery for one exact browser-owned issue. */
+    recovery: (issueId: number, snoozedThreadIds: readonly number[] = []) =>
+      ['roll', 'recovery', issueId, [...new Set(snoozedThreadIds)].sort((a, b) => a - b)] as const,
   },
   demo: {
     /**
