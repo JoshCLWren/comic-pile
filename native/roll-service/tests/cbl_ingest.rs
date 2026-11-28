@@ -509,14 +509,16 @@ async fn concurrent_first_applies_serialize_and_report_truthful_counts() {
     let second_transaction = second_conn.transaction().await.unwrap();
     let first_barrier = Arc::clone(&barrier);
     let second_barrier = Arc::clone(&barrier);
+    let parsed_ref = &parsed;
+    let protected_ref = &protected;
     let first = async move {
         first_barrier.wait().await;
         let result = sync_cbl_lists(
             &*first_transaction,
             "JoshCLWren/CBL-ReadingLists",
             "abc1234",
-            &parsed,
-            &protected,
+            parsed_ref,
+            protected_ref,
             &[],
             false,
             synced_at(),
@@ -531,8 +533,8 @@ async fn concurrent_first_applies_serialize_and_report_truthful_counts() {
             &*second_transaction,
             "JoshCLWren/CBL-ReadingLists",
             "abc1234",
-            &parsed,
-            &protected,
+            parsed_ref,
+            protected_ref,
             &[],
             false,
             synced_at(),
