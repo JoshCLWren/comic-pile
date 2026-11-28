@@ -51,6 +51,134 @@
       "status": "not-live",
       "disposition": "GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}]",
       "notes": "Collection CRUD and /detail are absent from the live Rust router; memberships, ranges and /order remain with #5711."
+    },
+    {
+      "issue": 4549,
+      "method": "GET",
+      "path": "/api/v1/auth/csrf",
+      "status": "not-live",
+      "disposition": "GET /api/v2/auth/csrf",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "status": "not-live",
+      "disposition": "GET /api/v2/auth/me",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/register",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/login",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/refresh",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/logout",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/forgot-password",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/forgot-password",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/reset-password",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/reset-password",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "GET",
+      "path": "/api/auth/csrf",
+      "status": "not-live",
+      "disposition": "GET /api/v2/auth/csrf",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "GET",
+      "path": "/api/auth/me",
+      "status": "not-live",
+      "disposition": "GET /api/v2/auth/me",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/register",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/register",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/login",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/refresh",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/logout",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/forgot-password",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/forgot-password",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/reset-password",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/reset-password",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
     }
   ],
   "families": [
@@ -250,19 +378,6 @@
       "replacement": "POST /api/v2/reading-plan-sync/runs",
       "rollout_status": "background-caller-migration",
       "notes": "Webhook/background task caller, not a browser caller."
-    },
-    {
-      "prefix": "/api/v1/auth",
-      "owner_issue": 4549,
-      "replacement": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "notes": "Rust-served legacy aliases; remove with the same-path handlers after v2 production proof (#4459/#4549)."
-    },
-    {
-      "prefix": "/api/auth",
-      "owner_issue": 4549,
-      "replacement": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open"
     },
     {
       "prefix": "/api/threads",
