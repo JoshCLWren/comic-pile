@@ -108,7 +108,7 @@ fn git(root: &Path, arguments: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-fn revision(byte: char) -> String {
+fn test_revision(byte: char) -> String {
     std::iter::repeat_n(byte, 40).collect()
 }
 
@@ -151,6 +151,17 @@ async fn apply(
     revision: &str,
     alias: Option<&str>,
 ) -> comicpile_roll_service::cbl_ingest::SyncSummary {
+    apply_at(state, parsed, failures, revision, alias, synced_at()).await
+}
+
+async fn apply_at(
+    state: &Arc<AppState>,
+    parsed: &[CBLList],
+    failures: &[CBLParseFailure],
+    revision: &str,
+    alias: Option<&str>,
+    timestamp: chrono::DateTime<Utc>,
+) -> comicpile_roll_service::cbl_ingest::SyncSummary {
     let mut conn = state.pool.get().await.unwrap();
     let transaction = conn.transaction().await.unwrap();
     let aliases = alias
@@ -164,7 +175,7 @@ async fn apply(
         &protected(failures),
         &aliases,
         false,
-        synced_at(),
+        timestamp,
     )
     .await
     .unwrap();
@@ -246,7 +257,7 @@ async fn dry_run_reports_counts_without_writing_any_rows() {
     let summary = sync_cbl_lists(
         &**conn,
         "JoshCLWren/CBL-ReadingLists",
-        "abc1234",
+        test_revision('a'),
         &parsed,
         &BTreeSet::new(),
         &[],
@@ -281,7 +292,7 @@ async fn applying_a_pinned_revision_is_idempotent_and_records_provenance() {
     let (parsed, failures) = fixture.parse();
     assert!(failures.is_empty());
 
-    let first = apply(&state, &parsed, &failures, "abc1234", None).await;
+    let first = apply(&state, &parsed, &failures, test_revision('a'), None).await;
     assert!(first.changed);
     assert_eq!(first.inserted_lists, 2);
     assert_eq!(first.entries_written, 2);
@@ -292,7 +303,7 @@ async fn applying_a_pinned_revision_is_idempotent_and_records_provenance() {
     let identities: i64 = scalar(&state, "SELECT COUNT(*) FROM external_identities").await;
     assert_eq!((sources, lists, entries, identities), (1, 2, 2, 4));
     let revision: String = scalar(&state, "SELECT revision_sha FROM cbl_sources").await;
-    assert_eq!(revision, "abc1234");
+    assert_eq!(revision, test_revision('a'));
     let stored: String = scalar(
         &state,
         "SELECT s.content_hash FROM cbl_source_lists s WHERE s.source_path = 'DC/Batman/Batman.cbl'",
@@ -309,7 +320,7 @@ async fn applying_a_pinned_revision_is_idempotent_and_records_provenance() {
     .await;
     assert_eq!(linked, 1);
 
-    let second = apply(&state, &parsed, &failures, "abc1234", None).await;
+    let second = apply(&state, &parsed, &failures, test_revision('a'), None).await;
     assert!(!second.changed);
     assert_eq!(second.inserted_lists, 0);
     assert_eq!(second.updated_lists, 0);
@@ -338,7 +349,7 @@ async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
         ),
     ]);
     let (parsed, failures) = original.parse();
-    apply(&state, &parsed, &failures, "aaa1111", None).await;
+    apply(&state, &parsed, &failures, test_revision('a'), None).await;
     let removed_id: i32 = scalar(
         &state,
         "SELECT id FROM cbl_source_lists WHERE source_path = 'DC/Batman/Robin.cbl'",
@@ -356,7 +367,7 @@ async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
         ),
     )]);
     let (next, failures) = changed.parse();
-    let summary = apply(&state, &next, &failures, "bbb2222", None).await;
+    let summary = apply(&state, &next, &failures, test_revision('b'), None).await;
     assert_eq!(summary.updated_lists, 1);
     assert_eq!(summary.deactivated_lists, 1);
     assert_eq!(summary.entries_written, 2);
@@ -372,7 +383,7 @@ async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
         .unwrap()
     };
     assert!(!row.get::<_, bool>(0));
-    assert_eq!(row.get::<_, String>(1), "bbb2222");
+    assert_eq!(row.get::<_, String>(1), test_revision('b'));
     let preserved: i64 = scalar_with(
         &state,
         "SELECT COUNT(*) FROM cbl_source_entries WHERE list_id = $1",
@@ -389,7 +400,7 @@ async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
     .await;
     assert_eq!(current, 2);
     let revision: String = scalar(&state, "SELECT revision_sha FROM cbl_sources").await;
-    assert_eq!(revision, "bbb2222");
+    assert_eq!(revision, test_revision('b'));
 }
 
 #[tokio::test]
@@ -400,7 +411,7 @@ async fn a_parse_failure_protects_the_last_known_good_list() {
         &cbl("Fantastic Four 001", &[("Fantastic Four", "1", None, None)]),
     )]);
     let (parsed, failures) = fixture.parse();
-    apply(&state, &parsed, &failures, "ccc3333", None).await;
+    apply(&state, &parsed, &failures, test_revision('c'), None).await;
 
     let broken = MirrorFixture::new(&[(
         "Marvel/Fantastic Four.cbl",
@@ -408,7 +419,7 @@ async fn a_parse_failure_protects_the_last_known_good_list() {
     )]);
     let (empty, failures) = broken.parse();
     assert_eq!(failures.len(), 1);
-    let summary = apply(&state, &empty, &failures, "ddd4444", None).await;
+    let summary = apply(&state, &empty, &failures, test_revision('d'), None).await;
     assert_eq!(summary.deactivated_lists, 0);
     let row = {
         let conn = state.pool.get().await.unwrap();
@@ -422,7 +433,7 @@ async fn a_parse_failure_protects_the_last_known_good_list() {
     };
     assert!(row.get::<_, bool>(0));
     assert_eq!(row.get::<_, String>(1), parsed[0].content_hash);
-    assert_eq!(row.get::<_, String>(2), "ccc3333");
+    assert_eq!(row.get::<_, String>(2), test_revision('c'));
 }
 
 #[tokio::test]
@@ -446,7 +457,7 @@ async fn repository_alias_is_reconciled_in_place() {
         &state,
         &parsed,
         &failures,
-        "eee5555",
+        test_revision('e'),
         Some("/mnt/bigdata/CBL-ReadingLists"),
     )
     .await;
