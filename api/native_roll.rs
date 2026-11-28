@@ -223,7 +223,8 @@ fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
         .route("/api/metrics", get(native_metrics))
-        .route("/api/v1/metrics", get(native_metrics))
+        // #5958: /api/v1/metrics was an unregistered legacy alias; the
+        // documented operational exemption is the bare /api/metrics only.
         .route("/api/v2/factory/github/start", get(native_dispatch))
         .route("/api/v2/factory/github/callback", get(native_dispatch))
         .route(
@@ -281,18 +282,8 @@ fn app() -> Router {
         // service. Without the matching route a deployed v2 preview falls
         // through to native_not_found instead of reaching the Rust handler.
         .route("/api/v2/seriesMappings:preview", post(native_dispatch))
-        .route(
-            "/api/v1/catalog/series-mappings/commit",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/catalog/series-mappings/preview",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-            post(native_dispatch),
-        )
+        // #5958: the v1 mapping preview/commit and plan-projection aliases are
+        // retired; only the AIP-136 v2 custom methods remain mounted.
         // #5715: the Vercel entry has its own route table. Without a matching
         // catch-all the canonical custom method falls through to
         // native_not_found; axum requires a capture to own its whole segment.
@@ -320,7 +311,8 @@ fn app() -> Router {
             "/api/v2/reading-orders/{reading_order_id}/items",
             post(native_dispatch),
         )
-        .route("/api/v1/cron/release-sync", get(native_dispatch))
+        // #5958: the real Vercel Cron now targets the canonical v2 path.
+        .route("/api/v2/cron/release-sync", get(native_dispatch))
         .route("/api/v2/reading-plan-sync/status", get(native_dispatch))
         .route("/api/v2/reading-plan-sync/runs", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
@@ -373,7 +365,8 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
-        .route("/api/v1/threads/{thread_id}", post(native_dispatch))
+        // #5958: the v1 thread action dispatcher (`{thread_id}:action`) is
+        // retired along with its closed-owner v2 slices.
         .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
         .route(
             "/api/v1/threads/{thread_id}/connected",
@@ -383,51 +376,24 @@ fn app() -> Router {
             "/api/v1/threads/{thread_id}/dependency-order-check",
             get(native_dispatch),
         )
-        .route(
-            "/api/v1/threads/{thread_id}/issues:validateOrder",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/reading-orders",
-            get(native_dispatch),
-        )
+        // #5958: closed-owner v1 issue/read/reorder/reading-order slices and
+        // the test-only backdate writer are retired. The v2 resources below
+        // are the only live surface for those behaviors.
         // #5715: canonical v2 spelling of the same owner-scoped read.
         .route(
             "/api/v2/threads/{thread_id}/readingOrders",
             get(native_dispatch),
         )
-        .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
-        .route("/api/v1/threads/{thread_id}/issues", post(native_dispatch))
-        .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues:reorder",
-            post(native_dispatch),
-        )
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
-        .route("/api/v1/threads/", post(native_dispatch))
-        .route("/api/v1/threads/check-duplicates", post(native_dispatch))
         .route("/api/v1/threads/excluded/threads", get(native_dispatch))
-        // #5711: the retired membership batch alias must not be swallowed by
-        // the generic `/api/v1/threads/{thread_id}` POST action route. A static
-        // segment wins in axum and terminates at the Rust JSON 404 fallback.
-        .route("/api/v1/threads/groups:batch", post(native_not_found))
         .route("/api/v1/threads/reactivate", post(native_dispatch))
         .route("/api/v1/threads/stale", get(native_dispatch))
-        .route("/api/v1/threads/{thread_id}", put(native_dispatch))
-        .route("/api/v1/threads/{thread_id}", delete(native_dispatch))
         .route("/api/v1/threads/{thread_id}/exclude", post(native_dispatch))
         .route("/api/v1/threads/{thread_id}/restore", post(native_dispatch))
         .route(
             "/api/v1/threads/{thread_id}/set-pending",
             post(native_dispatch),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/test-backdate",
-            put(native_dispatch),
         )
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
@@ -554,7 +520,8 @@ fn app() -> Router {
             "/api/v2/issues/{issue_id}/reader-context",
             get(native_dispatch),
         )
-        .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
+        // #5958: the v1 issue-comicvine alias is retired; the v2 scoped read
+        // is registered above.
         .route("/api/v1/issue-identity/cbl-sources", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
@@ -591,10 +558,8 @@ fn app() -> Router {
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
             post(native_dispatch),
         )
-        .route(
-            "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
-            get(native_dispatch),
-        )
+        // #5958: the v1 import-status alias is retired; the v2 route below is
+        // the only live import-status surface.
         // Canonical native v2 ComicVine read routes (#4835, split chunk A).
         .route("/api/v2/comicvine/search/series", get(native_dispatch))
         .route("/api/v2/comicvine/resolve", get(native_dispatch))
@@ -648,14 +613,8 @@ fn app() -> Router {
             "/api/v1/threads/{thread_id}/dependencies",
             get(native_dispatch),
         )
-        .route("/api/v1/continuity-rules/", get(native_dispatch))
-        .route("/api/v1/continuity-rules/", post(native_dispatch))
-        .route("/api/v1/continuity-rules/{rule_id}", get(native_dispatch))
-        .route("/api/v1/continuity-rules/{rule_id}", put(native_dispatch))
-        .route(
-            "/api/v1/continuity-rules/{rule_id}",
-            delete(native_dispatch),
-        )
+        // #5958: the legacy continuity-rule family has no v2 successor and is
+        // retired at both routers.
         .route(
             "/api/v2/continuity-plans/",
             get(native_dispatch).post(native_dispatch),
@@ -699,13 +658,8 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v2/releases", get(native_dispatch))
-        .route("/api/v1/releases/", put(native_dispatch))
-        .route("/api/v1/releases/source", get(native_dispatch))
-        .route("/api/v1/releases/{release_id}", get(native_dispatch))
-        .route(
-            "/api/v1/releases/{release_id}/retract",
-            post(native_dispatch),
-        )
+        // #5958: the release-writer v1 aliases are retired; release writing is
+        // owned by the release-writer workflow, not a public API alias.
         .route(
             "/api/v1/threads/{thread_id}/issue-dependencies",
             get(native_dispatch),
@@ -746,14 +700,8 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/dismiss-pending", post(native_dispatch))
-        .route(
-            "/api/v1/roll/events/{event_id}/recommendation-explanation",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/roll/events/{event_id}/recommendation-explanation",
-            get(native_dispatch),
-        )
+        // #5958: recommendation-explanation v1 and bare aliases are retired;
+        // the explanation belongs to the scoped v2 Roll resources.
         .route("/api/v2/roll/switch-prerequisite", post(native_dispatch))
         .route("/api/v2/users/me/preferences", get(native_dispatch))
         .route("/api/v2/users/me/preferences", patch(native_dispatch))
@@ -779,9 +727,8 @@ fn app() -> Router {
         .route("/api/v2/auth/reset-password", post(native_dispatch))
         // #4549: /api/v1/auth/* and /api/auth/* are retired. Do not register
         // them here: the Vercel fallback must answer 404 for those aliases.
-        .route("/api/v1/creators", get(native_dispatch))
-        .route("/api/v1/creators/", get(native_dispatch))
-        .route("/api/v1/creators/summaries", get(native_dispatch))
+        // #5958: the three v1 creator aliases are retired; the v2 creator
+        // resource family below is the only live surface.
         .route("/api/v2/creators", get(native_dispatch))
         .route("/api/v2/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators/compare", get(native_dispatch))
@@ -832,10 +779,8 @@ fn app() -> Router {
             "/api/v2/readingOrderGroups/{group_id}",
             delete(native_dispatch),
         )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/order",
-            put(native_dispatch),
-        )
+        // #5958: the v1 group-order writer is retired; v2 membership/range
+        // resources are the only live group-authority surface.
         // #5711: the v2 crossover-membership surface is the single authority.
         // The Vercel entry needs its own route registrations; without them the
         // native_not_found fallback returns a JSON 404 before dispatch.
