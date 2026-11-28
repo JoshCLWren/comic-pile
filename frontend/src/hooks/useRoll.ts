@@ -27,19 +27,6 @@ export function useRoll(api?: RollApi) {
   }
 }
 
-export function useDismissPending(api?: RollApi) {
-  const rollApiInstance = getRollApi(api)
-  const mutation = useMutation({
-    mutationFn: () => rollApiInstance.dismissPending(),
-  })
-
-  return {
-    mutate: mutation.mutateAsync,
-    isPending: mutation.isPending,
-    isError: mutation.isError,
-  }
-}
-
 export function useSetDie(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({

@@ -13,7 +13,6 @@ import {
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useResetDice,
-  useDismissPending,
   useRoll,
   useUnsnooze,
   useSetDie,
@@ -132,7 +131,6 @@ export default function RollPage() {
   const setDieMutation = useSetDie()
   const resetDiceMutation = useResetDice()
   const rollMutation = useRoll()
-  const dismissPendingMutation = useDismissPending()
   const snoozeMutation = useSnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
@@ -200,7 +198,6 @@ export default function RollPage() {
     state,
     bootstrap,
     rateMutation,
-    dismissPendingMutation,
     refetchRollState,
     clearPending: pendingSelection.clear,
   })
@@ -317,7 +314,6 @@ export default function RollPage() {
     rerollMutation: rollMutation,
     onReroll: snooze.handleReroll,
     onResetDice: () => state.setIsDieModalOpen(true),
-    dismissPendingMutation,
     ratingViewTopRef,
   })
 

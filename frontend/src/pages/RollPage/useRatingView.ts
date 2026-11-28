@@ -23,7 +23,7 @@ interface UseRatingViewParams {
   connectedThreadsError: Error | null
   rating: {
     updateRatingUI: (value: string) => void
-    handleSubmitRating: (finishSession: boolean) => Promise<void>
+    handleSubmitRating: () => Promise<void>
     handleCancelRating: () => Promise<void>
     handleRefreshThread: (options?: { forceRefresh?: boolean }) => Promise<void>
     enterRatingView: (threadId: number | null, result?: number | null, threadMetadata?: ThreadMetadata | null) => Promise<void>
@@ -34,7 +34,6 @@ interface UseRatingViewParams {
   rateMutation: { isPending: boolean }
   snoozeMutation: { isPending: boolean }
   rerollMutation?: { isPending: boolean }
-  dismissPendingMutation: { isPending: boolean }
   ratingViewTopRef: React.RefObject<HTMLDivElement | null> | null
 }
 
@@ -48,9 +47,8 @@ export interface RatingViewData {
   rateIsPending: boolean
   snoozeIsPending?: boolean
   rerollIsPending?: boolean
-  dismissIsPending: boolean
   onUpdateRating: (value: string) => void
-  onSubmitRating: (finishSession: boolean) => void
+  onSubmitRating: () => void
   onSnooze?: () => void
   onResetDice?: () => void
   onReroll?: () => Promise<void>
@@ -113,7 +111,6 @@ export function useRatingView({
   rateMutation,
   snoozeMutation,
   rerollMutation,
-  dismissPendingMutation,
   ratingViewTopRef,
 }: UseRatingViewParams): RatingViewData {
   const {
@@ -146,7 +143,6 @@ export function useRatingView({
     errorMessage,
     rateIsPending: rateMutation.isPending,
     snoozeIsPending: (rerollMutation ?? snoozeMutation).isPending,
-    dismissIsPending: dismissPendingMutation.isPending,
     onUpdateRating: rating.updateRatingUI,
     onSubmitRating: rating.handleSubmitRating,
     onSnooze: snooze.handleSnooze,

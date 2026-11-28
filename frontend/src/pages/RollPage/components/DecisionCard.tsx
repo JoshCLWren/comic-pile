@@ -18,9 +18,8 @@ interface DecisionCardProps {
   errorMessage: string
   rateIsPending: boolean
   rerollIsPending?: boolean
-  dismissIsPending: boolean
   onUpdateRating: (value: string) => void
-  onSubmitRating: (finishSession: boolean) => void
+  onSubmitRating: () => void
   onReroll?: () => Promise<void>
   onResetDice?: () => void
   onCancel: () => void
@@ -41,7 +40,6 @@ export function DecisionCard({
   predictedDie,
   errorMessage,
   rateIsPending,
-  dismissIsPending,
   onUpdateRating,
   onSubmitRating,
   onReroll,
@@ -169,7 +167,7 @@ export function DecisionCard({
       >
         <button
           type="button"
-          onClick={() => onSubmitRating(false)}
+          onClick={onSubmitRating}
           disabled={rateIsPending}
           data-testid="save-and-continue"
           className={rollPrimaryActionClass}
@@ -195,7 +193,6 @@ export function DecisionCard({
           <button
             type="button"
             onClick={onCancel}
-            disabled={dismissIsPending}
             data-testid="cancel-roll"
             className={rollSecondaryActionClass}
           >

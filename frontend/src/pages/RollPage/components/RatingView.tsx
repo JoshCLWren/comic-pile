@@ -20,7 +20,6 @@ export function RatingView({ data }: RatingViewProps) {
     predictedDie,
     errorMessage,
     rateIsPending,
-    dismissIsPending,
     onUpdateRating,
     onSubmitRating,
     onReroll,
@@ -62,7 +61,6 @@ export function RatingView({ data }: RatingViewProps) {
             predictedDie={predictedDie}
             errorMessage={errorMessage}
             rateIsPending={rateIsPending}
-            dismissIsPending={dismissIsPending}
             onUpdateRating={onUpdateRating}
             onSubmitRating={onSubmitRating}
             onReroll={onReroll}

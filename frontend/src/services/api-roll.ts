@@ -216,7 +216,6 @@ export function createRollApi(client: HttpClient) {
       writeRollSnoozes(readRollSnoozes().filter((id) => id !== threadId))
     },
     roll: offer,
-    dismissPending: () => client.post<void>('/v2/roll/dismiss-pending'),
     reroll: offer,
     unsnooze: async (threadId: number): Promise<RollUnsnoozeResponse> => {
       const response = await client.post<RollUnsnoozeResponse, { thread_id: number }>('/v2/roll/unsnooze', { thread_id: threadId })

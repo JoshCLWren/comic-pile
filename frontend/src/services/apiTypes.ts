@@ -10,7 +10,6 @@ export type RollUnsnoozeResponse = RollResponse & { restored: boolean }
 
 export interface RollApi {
   roll: () => Promise<RollResponse>
-  dismissPending: () => Promise<void>
   reroll: (expectedPendingThreadId?: number) => Promise<RollResponse>
   unsnooze: (threadId: number) => Promise<RollUnsnoozeResponse>
   setDie: (die: number) => Promise<void>

@@ -15,7 +15,6 @@ interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
   bootstrap?: RollState | null
   rateMutation: { mutate: (payload: RatePayload) => Promise<RateMutationOutcome>; isPending: boolean }
-  dismissPendingMutation: { mutate: () => Promise<void>; isPending: boolean }
   refetchRollState: () => Promise<RollState | undefined>
   /** Clear the browser-owned selection after a committed rate of that issue. */
   clearPending?: (issueId?: number) => void
@@ -31,11 +30,9 @@ export function useRollRating({
   state,
   bootstrap,
   rateMutation,
-  dismissPendingMutation,
   refetchRollState,
   clearPending,
 }: UseRollRatingParams) {
-  void dismissPendingMutation
   const {
     activeRatingThread,
     threadToMigrate,
@@ -253,7 +250,7 @@ export function useRollRating({
   // nor that flag, and no caller requests it, so the parameter stays to keep
   // the rating-view contract intact without pretending the rating can finish a
   // session.
-  async function handleSubmitRating(_finishSession = false) {
+  async function handleSubmitRating() {
     navigator.vibrate?.(20)
     if (rating >= RATING_THRESHOLD) createExplosion()
 
