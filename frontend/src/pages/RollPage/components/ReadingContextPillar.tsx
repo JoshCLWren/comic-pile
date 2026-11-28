@@ -316,9 +316,9 @@ export function ReadingContextPillar({
                               className="inline-flex min-h-6 items-center rounded-full px-2 font-bold transition focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
                               style={{
                                 ...readingContextType('chipLabel'),
-                                border: '1px solid color-mix(in srgb, var(--theme-comic-accent) 40%, transparent)',
-                                backgroundColor: 'color-mix(in srgb, var(--theme-comic-accent) 12%, transparent)',
-                                color: 'rgb(250, 204, 139)',
+                                border: '1px solid color-mix(in srgb, var(--theme-continuity-accent) 40%, transparent)',
+                                backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 12%, transparent)',
+                                color: 'var(--theme-continuity-accent)',
                               }}
                               onClick={() => openCrossover(membership.id)}
                               aria-label={`Open ${membership.name} crossover`}
@@ -334,7 +334,7 @@ export function ReadingContextPillar({
                           className="inline-flex min-h-6 items-center rounded-lg px-2 font-black transition focus:ring-2"
                           style={{
                             ...readingContextType('chipLabel'),
-                            border: '1px solid rgba(6,182,212,0.4)',
+                            border: '1px solid color-mix(in srgb, var(--theme-continuity-accent) 40%, transparent)',
                             backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 9%, transparent)',
                             color: 'var(--theme-continuity-accent)',
                           }}
@@ -360,7 +360,7 @@ export function ReadingContextPillar({
       ) : null}
 
       {readerContext && (dependencyEdges.length > 0 || continuityEdges.length > 0) && (
-        <section aria-labelledby="dependency-edges-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 9%, transparent)' }}>
+        <section aria-labelledby="dependency-edges-heading" className="rounded-2xl border border-[var(--theme-continuity-accent)]/30 bg-[var(--theme-continuity-accent)]/10 p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3
               id="dependency-edges-heading"
@@ -385,11 +385,11 @@ export function ReadingContextPillar({
                     key={`dependency-${edge.id}`}
                     className="flex items-start gap-3 rounded-lg px-3 py-2"
                     style={{
-                      borderLeft: '3px solid rgb(250, 204, 139)',
-                      backgroundColor: 'rgba(250, 204, 139, 0.05)'
+                      borderLeft: '3px solid var(--theme-comic-accent)',
+                      backgroundColor: 'color-mix(in srgb, var(--theme-comic-accent) 5%, transparent)'
                     }}
                   >
-                    <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }}></div>
+                    <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'var(--theme-comic-accent)' }}></div>
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <EdgeEndpoint
@@ -426,11 +426,11 @@ export function ReadingContextPillar({
                     key={`continuity-${edge.id}`}
                     className="flex items-start gap-3 rounded-lg px-3 py-2"
                     style={{
-                      borderLeft: '3px solid rgb(165, 243, 252)',
-                      backgroundColor: 'rgba(165, 243, 252, 0.05)'
+                      borderLeft: '3px solid var(--theme-continuity-accent)',
+                      backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 5%, transparent)'
                     }}
                   >
-                    <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(165, 243, 252)' }}></div>
+                    <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'var(--theme-continuity-accent)' }}></div>
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <EdgeEndpoint
@@ -474,7 +474,7 @@ export function ReadingContextPillar({
                 ? Math.round((order.completed_items / order.total_items) * 100)
                 : 0
               return (
-                <article key={order.id} className="rounded-xl p-3" style={{ border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                <article key={order.id} className="rounded-xl p-3" style={{ border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
                   <div className="flex items-center justify-between gap-3">
                     <h4
                       className="min-w-0 break-words font-black text-[var(--theme-text-primary)]"
@@ -486,7 +486,7 @@ export function ReadingContextPillar({
                       {order.completed_items}/{order.total_items}
                     </span>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }} aria-hidden="true">
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: 'var(--theme-border)' }} aria-hidden="true">
                     <div className="h-full rounded-full" style={{ backgroundColor: 'var(--theme-primary-action)', width: `${routeProgress}%` }} />
                   </div>
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -498,7 +498,7 @@ export function ReadingContextPillar({
                       style={{
                         ...readingContextType('actionLabel'),
                         border: '1px solid color-mix(in srgb, var(--theme-comic-accent) 40%, transparent)',
-                        backgroundColor: 'rgba(212, 137, 14, 0.09)',
+                        backgroundColor: 'color-mix(in srgb, var(--theme-comic-accent) 9%, transparent)',
                       }}
                       aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
                     >
@@ -528,7 +528,7 @@ export function ReadingContextPillar({
               className="min-h-11 rounded-lg px-3 font-black text-[var(--theme-text-primary)] transition hover:brightness-125"
               style={{
                 ...readingContextType('actionLabel'),
-                border: '1px solid rgba(6,182,212,0.4)',
+                border: '1px solid color-mix(in srgb, var(--theme-continuity-accent) 40%, transparent)',
                 backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 9%, transparent)',
               }}
             >
