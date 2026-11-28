@@ -315,7 +315,7 @@ test.describe('CBL replacement review', () => {
     await expect(ordered).toContainText(manualTitle)
     await expect(ordered).not.toContainText(removedTitle)
 
-    await builder.getByRole('button', { name: 'Undo last replacement' }).click()
+    await builder.getByRole('button', { name: 'Undo last save' }).click()
     await expect(ordered).toContainText(removedTitle)
     await expect(builder.getByRole('status')).toContainText('Read history and ratings were not changed')
   })
@@ -648,7 +648,7 @@ test.describe('CBL replacement review', () => {
       builder.getByRole('list', { name: 'Custom CBL ordered issues' }),
     ).not.toContainText(manualTitle)
 
-    await builder.getByRole('button', { name: 'Undo last replacement' }).click()
+    await builder.getByRole('button', { name: 'Undo last save' }).click()
     await expect(builder.getByRole('status')).toContainText('Read history and ratings were not changed')
     await expect(
       builder.getByRole('list', { name: 'Custom CBL ordered issues' }),
@@ -775,7 +775,7 @@ test.describe('CBL replacement review', () => {
 
     // Undoing a confirmed strict reorder re-changes the same stored waits, so
     // it must ask for the same explicit confirmation instead of failing.
-    await builder.getByRole('button', { name: 'Undo last replacement' }).click()
+    await builder.getByRole('button', { name: 'Undo last save' }).click()
     const undoDialog = page.getByRole('dialog', { name: 'Confirm undo waiting changes' })
     await expect(undoDialog).toBeVisible()
     await undoDialog.getByRole('button', { name: 'Confirm and restore' }).click()
