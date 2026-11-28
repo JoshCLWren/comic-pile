@@ -26,6 +26,8 @@ pin the classifier behavior.
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import subprocess
 from typing import Final
 
