@@ -399,7 +399,9 @@ SELECT p.id, p.type,
        to_char(r.timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
        r.die, r.die_after, r.rating, r.issue_id, r.issue_number, r.thread_id, rt.title,
        p.session_id, r.session_id,
-       ($7::text IS NULL OR p.type = $7 OR ($7 = 'rate' AND d.id IS NOT NULL)),
+       ($7::text IS NULL
+        OR (CASE WHEN d.id IS NOT NULL THEN 'rate' ELSE p.type END) = $7
+        OR ($7 = 'roll' AND r.id IS NOT NULL)),
        ($7::text IS NULL OR ($7 = 'roll' AND r.id IS NOT NULL))
   FROM primaries p
   LEFT JOIN threads pt ON pt.id = p.thread_id
@@ -1414,6 +1416,57 @@ mod tests {
             ids(&all_pages(&state, 1, 50).await),
             vec![1050511, 1050512, 1050513, 1050514, 1050515, 1050517]
         );
+    }
+
+    /// A no-op rating receipt is stored as `issue_command`, but the logical
+    /// action is reader-visible `rate`. Filtering by the durable row type must
+    /// not surface it as "Issue command" or spend a bounded page slot on it.
+    #[tokio::test]
+    async fn type_filter_uses_the_reader_visible_type_of_coalesced_ratings() {
+        let (state, _db) = seeded_state(
+            r#"
+            INSERT INTO users (id, username) VALUES (1, 'reader');
+            INSERT INTO threads
+                (id, user_id, title, format, issues_remaining, status,
+                 queue_position, total_issues, reading_progress)
+            VALUES (10, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%');
+            INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+            VALUES (100, 10, '1', 'read', now(), 1);
+            INSERT INTO events (id, type, timestamp, user_id, thread_id, issue_id, issue_number,
+                                rating, context)
+            VALUES (1, 'issue_command', '2026-11-08 16:02:00.000+00', 1, 10, 100, '1', NULL,
+                    '{"issue_command_key":"no-op-key","source":"roll"}');
+            INSERT INTO events (id, type, timestamp, user_id, die, die_after, thread_id, issue_id,
+                                rating, context)
+            VALUES (2, 'rate', '2026-11-08 16:02:00.050+00', 1, 10, 8, 10, 100, 4.5,
+                    '{"dice_command_key":"roll-rating-10-no-op-key"}');
+            "#,
+        )
+        .await;
+
+        for limit in [1, 10] {
+            let rate = ActivityFilters {
+                event_type: Some("rate".into()),
+                ..ActivityFilters::default()
+            };
+            assert_eq!(
+                ids(&all_pages_with_filters(&state, 1, limit, rate).await),
+                vec![1]
+            );
+            for raw_type in ["issue_command", "issue_unread"] {
+                let filter = ActivityFilters {
+                    event_type: Some(raw_type.into()),
+                    ..ActivityFilters::default()
+                };
+                assert!(
+                    all_pages_with_filters(&state, 1, limit, filter)
+                        .await
+                        .is_empty(),
+                    "{raw_type} must not return a reader-visible rating"
+                );
+            }
+        }
+        assert_eq!(ids(&all_pages(&state, 1, 10).await), vec![1]);
     }
 
     #[tokio::test]
