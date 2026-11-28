@@ -328,9 +328,9 @@ const clientCases: ClientCase[] = [
   },
   {
     name: 'patches user preferences',
-    invoke: (client) => client.patchUserPreferences({ body: { theme: 'ink-gold' } }),
+    invoke: (client) => client.patchUserPreferences({ body: {} }),
     method: 'patch',
-    expectedArgs: ['/v2/users/me/preferences', { theme: 'ink-gold' }],
+    expectedArgs: ['/v2/users/me/preferences', {}],
   },
   {
     name: 'imports one ComicVine issue on the canonical v2 route',
