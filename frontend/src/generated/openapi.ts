@@ -3863,7 +3863,6 @@ export interface components {
         };
         /** @description Currently pending thread shown by the Roll surface. */
         BootstrapActiveThread: {
-            format: string;
             /** Format: int32 */
             id: number;
             /** Format: int32 */
@@ -4051,7 +4050,6 @@ export interface components {
         };
         /** @description Owner-scoped thread summary shown by Roll snooze chips and rollable rows. */
         BootstrapThreadSummary: {
-            format: string;
             /** Format: int32 */
             id: number;
             last_activity_at?: string | null;
@@ -4515,7 +4513,6 @@ export interface components {
             comicvine_volume_id?: number | null;
             /** Format: int32 */
             exclude_thread_id?: number | null;
-            format: string;
             title: string;
         };
         /** @description Response of `POST /api/v1/threads/check-duplicates`. */
@@ -5530,7 +5527,6 @@ export interface components {
             /** Format: int32 */
             die_size: number;
             explanation?: string | null;
-            format: string;
             /** Format: int32 */
             issue_id?: number | null;
             issue_number?: string | null;
@@ -6752,7 +6748,6 @@ export interface components {
         NativePotentialDuplicateMatch: {
             /** Format: int64 */
             comicvine_volume_id?: number | null;
-            format: string;
             /** Format: int32 */
             issues_remaining: number;
             match_type: string;
@@ -6981,7 +6976,6 @@ export interface components {
         };
         /** @description Python `SetCurrentIssueResponse`. */
         NativeSetCurrentIssueResponse: {
-            format: string;
             /** Format: int32 */
             issue_id?: number | null;
             issue_number?: string | null;
@@ -7009,7 +7003,6 @@ export interface components {
         NativeThreadResponse: {
             blocking_reasons: string[];
             created_at: string;
-            format: string;
             /** Format: int32 */
             id: number;
             is_blocked: boolean;
@@ -8612,7 +8605,6 @@ export interface components {
             /** Format: int32 */
             die_size: number;
             explanation?: string | null;
-            format: string;
             /** Format: int32 */
             issue_id?: number | null;
             issue_number?: string | null;
@@ -8962,7 +8954,6 @@ export interface components {
         };
         /** @description Active thread projection. */
         SessionActiveThread: {
-            format: string;
             /** Format: int32 */
             id: number;
             /** Format: int32 */
@@ -9367,7 +9358,6 @@ export interface components {
         };
         /** @description Body of `POST /api/v1/threads/`. */
         ThreadCreateRequest: {
-            format: string;
             is_test?: boolean;
             /** Format: int32 */
             issues_remaining: number;
@@ -9415,7 +9405,6 @@ export interface components {
         ThreadDetailResponse: {
             blocking_reasons: string[];
             created_at: string;
-            format: string;
             /** Format: int32 */
             id: number;
             is_blocked: boolean;
@@ -9485,7 +9474,6 @@ export interface components {
             blocking_reasons: string[];
             comicvine_mapping?: components["schemas"]["NativeComicVineMappingHealth"] | null;
             created_at: string;
-            format: string;
             /** Format: int32 */
             id: number;
             is_blocked: boolean;
@@ -9525,8 +9513,6 @@ export interface components {
         };
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
-            /** @description Format observed by the client. */
-            format?: string | null;
             /** @description Manual creator credits observed by the client. */
             manual_creator_credits?: unknown[] | null;
             /** @description Notes observed by the client; `null` means it observed no notes. */
@@ -9544,8 +9530,6 @@ export interface components {
          */
         ThreadPatchRequest: {
             expected?: components["schemas"]["ThreadPatchPrecondition"] | null;
-            /** @description New format; normalized to the reader's canonical vocabulary. */
-            format?: string | null;
             /** @description Test-series flag. Omit to preserve it. */
             is_test?: boolean | null;
             /**
@@ -9740,7 +9724,6 @@ export interface components {
             /** Format: int32 */
             die_size: number;
             explanation?: string | null;
-            format: string;
             /** Format: int32 */
             issue_id?: number | null;
             issue_number?: string | null;
