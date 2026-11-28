@@ -2630,6 +2630,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/reading-lists/{list_id}/replacements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * `POST /api/v2/reading-lists/{list_id}/replacements`
+         * @description Commits one owner-scoped transaction. A stale list version, stale source
+         *     hash/revision, or an unapproved removal of a saved manual entry fails before
+         *     any row is touched. On success a list-only snapshot is retained for Undo.
+         */
+        post: operations["replacement_commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-lists/{list_id}/replacements:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * `POST /api/v2/reading-lists/{list_id}/replacements:preview`
+         * @description Read-only. Shows the exact owned list, the source-evaluated after state,
+         *     manual extras that would be dropped, and overlap choices. No rows are
+         *     written, so canceling the review cannot change the list.
+         */
+        post: operations["replacement_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-lists/{list_id}/replacements:undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * `POST /api/v2/reading-lists/{list_id}/replacements:undo`
+         * @description Restores only list membership, ordering, gating intents and overlap choices
+         *     from the retained snapshot. Read events, ratings, collections, other lists
+         *     and all physical Issues are untouched. A changed list version fails closed.
+         */
+        post: operations["replacement_undo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/reading-mode": {
         parameters: {
             query?: never;
@@ -8511,6 +8577,150 @@ export interface components {
             /** Format: int32 */
             comicvine_issue_id: number;
             reason?: string | null;
+        };
+        /**
+         * @description Transactional replacement commit. The target is the URL path list ID; this
+         *     body carries only source provenance and the reader's reviewed choices.
+         */
+        ReplacementCommitRequest: {
+            /**
+             * @description Reader-approved removal of saved manual entries. Without this, omitting
+             *     a saved manual entry is rejected so nothing is silently discarded.
+             */
+            confirm_manual_removals?: boolean;
+            content_hash: string;
+            entry_decisions?: {
+                [key: string]: boolean;
+            };
+            /**
+             * @description Per-entry gating intents. Retained entries keep their current intent when
+             *     an intent is not supplied.
+             */
+            entry_intents?: {
+                [key: string]: components["schemas"]["ReplacementEntryIntent"];
+            } | null;
+            /** @description Version token read from the preview; a changed list is a 409 with no writes. */
+            expected_updated_at: string;
+            /** @description Replaying an identical request returns its original snapshot. */
+            idempotency_key?: string | null;
+            /** @description Exact reviewed membership in the intended final order. */
+            issue_ids: number[];
+            overlap_decisions?: components["schemas"]["Value"] | null;
+            revision_sha: string;
+            series_decisions?: {
+                [key: string]: boolean;
+            };
+            /** Format: int32 */
+            source_list_id: number;
+        };
+        ReplacementCommitResponse: {
+            applied_issue_ids: number[];
+            preserved_manual_issue_ids: number[];
+            replayed?: boolean;
+            /**
+             * Format: int32
+             * @description Snapshot ID to pass to Undo (the latest un-undone snapshot is used when
+             *     no snapshot ID is supplied).
+             */
+            snapshot_id: number;
+            /** Format: int32 */
+            target_list_id: number;
+            updated_at: string;
+        };
+        ReplacementEntryIntent: {
+            checkpoint_target_issue_ids?: number[];
+            gate?: string;
+            is_checkpoint?: boolean;
+            skipped?: boolean;
+        };
+        /**
+         * @description One projected list entry. `gate`/`skipped`/checkpoint intents are carried so
+         *     an Undo restores the exact stored list rather than just issue membership.
+         */
+        ReplacementEntryView: {
+            checkpoint_target_issue_ids?: number[];
+            gate: string;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** @description True when the entry is a reader-added comic absent from the source CBL. */
+            manual?: boolean;
+            /** Format: int32 */
+            position: number;
+            /** @description True when the entry was on the list before the reviewed replacement. */
+            saved?: boolean;
+            series_name: string;
+            skipped: boolean;
+        };
+        /** @description Read-only, explicit-target preview request. */
+        ReplacementPreviewRequest: {
+            /** @description Per-occurrence include/exclude overrides keyed by `cbl_entry_id`. */
+            entry_decisions?: {
+                [key: string]: boolean;
+            };
+            /** @description Series-level include/exclude overrides keyed by series group ID. */
+            series_decisions?: {
+                [key: string]: boolean;
+            };
+            /**
+             * Format: int32
+             * @description Stable `cbl_source_lists` ID of the globally shared CBL.
+             */
+            source_list_id: number;
+        };
+        ReplacementPreviewResponse: {
+            /** @description Exact source/overlap choices projected from the canonical evaluator. */
+            adoption_entries: Record<string, never>;
+            after: components["schemas"]["ReplacementEntryView"][];
+            before: components["schemas"]["ReplacementEntryView"][];
+            content_hash: string;
+            /** @description Send this exact token back as `expected_updated_at` on commit. */
+            expected_updated_at: string;
+            /**
+             * @description Saved entries absent from the source that would be dropped unless the
+             *     reader explicitly approves their removal on commit.
+             */
+            omitted_manual_issue_ids: number[];
+            /** @description Overlap choices already saved for this list; restored on Undo. */
+            overlap_decisions: Record<string, never>;
+            revision_sha: string;
+            /** Format: int32 */
+            source_list_id: number;
+            /**
+             * Format: int32
+             * @description The exact owned list this preview targets (never inferred by name).
+             */
+            target_list_id: number;
+            target_list_name: string;
+            /**
+             * Format: int32
+             * @description Source rows that could not be resolved to a canonical owned Issue.
+             */
+            unresolved_count: number;
+        };
+        ReplacementUndoRequest: {
+            /**
+             * @description Version token from the replacement commit; a later edit makes Undo a
+             *     409 so a snapshot can never overwrite newer reader work.
+             */
+            expected_updated_at: string;
+            idempotency_key?: string | null;
+            /**
+             * Format: int32
+             * @description Optional exact snapshot; defaults to the latest un-undone snapshot.
+             */
+            snapshot_id?: number | null;
+        };
+        ReplacementUndoResponse: {
+            /** @description True when an exact retry returned the original Undo response. */
+            replayed?: boolean;
+            restored_issue_ids: number[];
+            /** Format: int32 */
+            snapshot_id: number;
+            /** Format: int32 */
+            target_list_id: number;
+            updated_at: string;
         };
         /**
          * @description Report kind, mirroring Python `ReportType = Literal["bug", "feature"]`.
@@ -16989,6 +17199,143 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replacement_commit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Explicit owned Reading List id */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacementCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Replacement committed with a reversible snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplacementCommitResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List or CBL source not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale source/list version or unapproved manual removal; nothing changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replacement_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Explicit owned Reading List id */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacementPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Read-only before/after replacement review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplacementPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List or CBL source not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replacement_undo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Explicit owned Reading List id */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacementUndoRequest"];
+            };
+        };
+        responses: {
+            /** @description List-only snapshot restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplacementUndoResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List or snapshot not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description List changed after replacement; nothing changed */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
