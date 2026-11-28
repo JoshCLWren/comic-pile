@@ -151,7 +151,7 @@ describe('scoped Roll recovery view model', () => {
 
     expect(recovery?.direct_blockers).toHaveLength(edges.length)
     expect(recovery?.readable_prerequisites).toHaveLength(20)
-    expect(recovery?.chains).toHaveLength(20)
+    expect(recovery?.chains ?? []).toHaveLength(20)
   })
 
   it('marks an unread prerequisite outside the eligible pool as not readable', () => {
@@ -163,7 +163,7 @@ describe('scoped Roll recovery view model', () => {
       graph: null,
     })
     expect(recovery?.readable_prerequisites[0]?.is_readable).toBe(false)
-    expect(recovery?.chains[0]?.[0]?.is_readable).toBe(false)
+    expect(recovery?.chains?.[0]?.[0]?.is_readable).toBe(false)
   })
 
   it('treats a prerequisite with no loaded card as an unmet blocker', () => {

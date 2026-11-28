@@ -159,7 +159,7 @@ describe('useRollPendingSelection', () => {
       thread_id: 7,
       issue_id: 43,
       issue_number: null,
-      result: 0,
+      result: null as unknown as number,
     }))
     expect(result.current.pending).toEqual({
       thread_id: 7,
