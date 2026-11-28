@@ -50,18 +50,26 @@ This prints one JSON object containing `mode`, `repository`, `revision_sha`,
   publisher, entry count, and Comic Vine ID counts;
 - every parse failure with its source path and message.
 
-The command exits `1` when any file fails to parse, but still emits the complete
-inventory. Repeating it against the same checked-out revision produces the same
-inventory. No database connection is opened.
+Every mode exits `1` when any file fails to parse, but still emits its complete
+JSON report. Inventory mode opens no database connection. Database modes retain
+last-known-good rows for malformed paths and may apply valid files, but the
+nonzero status prevents a trusted workflow from treating a partial refresh as a
+clean success. Repeating inventory against the same checked-out revision produces
+the same report.
 
 ## 2. Preview the reconciliation
 
 Use the same pinned SHA and local mirror for a database dry-run. The trusted
 workflow's credentials are read from `CBL_INGEST_DATABASE_URL`, falling back to
-`RUST_ROLL_DATABASE_URL` and then the deployment `DATABASE_URL`:
+`RUST_ROLL_DATABASE_URL` and then the deployment `DATABASE_URL`. In the existing
+trusted production operations runner, map its established `MIGRATE_DATABASE_URL`
+credential to `CBL_INGEST_DATABASE_URL` for this command; do not provision a new
+agent credential or connect an agent directly to production:
 
 ```bash
-cargo run --locked -p comicpile-roll-service --bin cbl_ingest -- \
+CBL_INGEST_DATABASE_URL="$MIGRATE_DATABASE_URL" \
+cargo run --locked --manifest-path "$COMIC_PILE_ROOT/Cargo.toml" \
+  -p comicpile-roll-service --bin cbl_ingest -- \
   "$MIRROR_ROOT" --revision-sha "$MIRROR_SHA" --dry-run
 ```
 
@@ -74,7 +82,8 @@ If production still uses a legacy machine-path source identity, pass it as an
 alias without editing the database by hand:
 
 ```bash
-cargo run --locked -p comicpile-roll-service --bin cbl_ingest -- \
+cargo run --locked --manifest-path "$COMIC_PILE_ROOT/Cargo.toml" \
+  -p comicpile-roll-service --bin cbl_ingest -- \
   "$MIRROR_ROOT" --revision-sha "$MIRROR_SHA" \
   --repository JoshCLWren/CBL-ReadingLists \
   --reconcile-repository /mnt/bigdata/CBL-ReadingLists \
@@ -93,7 +102,9 @@ Remove `--dry-run` after reviewing the counts, using the trusted workflow with
 its existing credentials:
 
 ```bash
-cargo run --locked -p comicpile-roll-service --bin cbl_ingest -- \
+CBL_INGEST_DATABASE_URL="$MIGRATE_DATABASE_URL" \
+cargo run --locked --manifest-path "$COMIC_PILE_ROOT/Cargo.toml" \
+  -p comicpile-roll-service --bin cbl_ingest -- \
   "$MIRROR_ROOT" --revision-sha "$MIRROR_SHA" \
   --repository JoshCLWren/CBL-ReadingLists \
   --reconcile-repository /mnt/bigdata/CBL-ReadingLists
@@ -102,7 +113,9 @@ cargo run --locked -p comicpile-roll-service --bin cbl_ingest -- \
 Refresh behavior:
 
 - A file whose content hash is unchanged stays untouched; replaying the same
-  revision and hashes performs no writes and does not restamp `synced_at`.
+  revision and hashes performs no writes and does not restamp `synced_at`. If a
+  previously removed file returns with the same hash, only its list metadata is
+  reactivated; existing entry IDs and reader decisions are preserved.
 - A changed file replaces only its own ordered entries and receives the new revision SHA.
 - A file missing from the new revision is retained and marked inactive; its rows are never
   hard-deleted, so existing reader references survive.
