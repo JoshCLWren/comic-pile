@@ -33,7 +33,6 @@ import { useQueueRestore } from './useQueueRestore'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
-
 /**
  * Route entry for the Queue page. The component composes the focused
  * retained feature modules (`QueueControls`, `QueueList`, `QueueModals`,

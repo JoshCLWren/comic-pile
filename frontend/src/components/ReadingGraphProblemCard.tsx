@@ -187,13 +187,13 @@ export function ReadingGraphProblemCard() {
         </div>
       ) : (
         <div className="mt-4 space-y-2">
-          {problem.repairs.length === 0 ? (
+          {(problem.repairs ?? []).length === 0 ? (
             <p className="text-xs text-[var(--theme-text-muted)]">
               No automatic repair was found. Edit the affected series order or remove its Reading
               List to resolve the conflict.
             </p>
           ) : (
-            problem.repairs.map((repair, index) => (
+            (problem.repairs ?? []).map((repair, index) => (
               <RepairButton
                 key={`${repair.action}-${repair.list_id ?? repair.prerequisite_id ?? repair.issue_id}-${index}`}
                 repair={repair}
