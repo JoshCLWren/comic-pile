@@ -129,7 +129,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     return next
   }
 
-  const query = useInfiniteQuery<TPage, Error, InfiniteData<TPage, TToken>, QueryKey, TToken>({
+  const query = useInfiniteQuery({
     queryKey: spec.queryKey,
     queryFn: spec.queryFn,
     initialPageParam: spec.initialPageParam,
