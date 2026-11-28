@@ -4,57 +4,19 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { DICE_LADDER } from '../components/diceLadder'
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
-import type { RollState, SessionMode } from '../types/rollState'
+import type { RollState } from '../types/rollState'
+import type { ReadingModeDisplay } from '../types/readingMode'
 
 const ACTIVE_FILL = 'bg-[var(--theme-primary-action)]'
+const balancedMode: ReadingModeDisplay = { bandwidth: 'balanced', intent: 'balanced' }
 
-function emptySessionMode(): SessionMode {
-  return {
-    active_bandwidth: null,
-    predicted_bandwidth: null,
-    bandwidth_confidence: null,
-    bandwidth_source: null,
-    bandwidth_version: null,
-    active_intent: null,
-    predicted_intent: null,
-    intent_confidence: null,
-    intent_source: null,
-    intent_version: null,
-    session_mode_correction_guidance: null,
-  }
-}
-
-function makeBootstrap(overrides: Partial<RollState> = {}): RollState {
-  return {
-    session_id: 1,
-    user_id: 1,
-    pending_thread_id: null,
-    last_rolled_result: null,
-    active_thread: null,
-    roll_pool: [],
-    snoozed_threads: [],
-    snoozed_count: 0,
-    skipped_thread_ids: [],
-    skipped_threads: [],
-    session_mode: emptySessionMode(),
-    ...overrides,
-  }
-}
-
-function balancedSessionMode(): SessionMode {
-  return {
-    active_bandwidth: 'balanced',
-    predicted_bandwidth: 'balanced',
-    bandwidth_confidence: null,
-    bandwidth_source: 'inferred',
-    bandwidth_version: null,
-    active_intent: 'balanced',
-    predicted_intent: null,
-    intent_confidence: null,
-    intent_source: null,
-    intent_version: null,
-    session_mode_correction_guidance: null,
-  }
+const rollState: RollState = {
+  pending_thread_id: null,
+  last_rolled_result: null,
+  active_thread: null,
+  roll_pool: [],
+  snoozed_threads: [],
+  snoozed_count: 0,
 }
 
 const headerBaseProps = {
@@ -70,32 +32,31 @@ const headerBaseProps = {
   onOpenDieModal: vi.fn(),
 }
 
-function renderHeader(bootstrap: RollState, currentDie = 6) {
+function renderHeader(currentDie = 6, readingMode: ReadingModeDisplay | null = null) {
   return render(
     <MemoryRouter>
-      <RollHeader bootstrap={bootstrap} {...headerBaseProps} currentDie={currentDie} />
+      <RollHeader
+        bootstrap={rollState}
+        readingMode={readingMode}
+        {...headerBaseProps}
+        currentDie={currentDie}
+      />
     </MemoryRouter>,
   )
 }
 
 describe('roll-mode control group (issue #2304): visual state grammar', () => {
   it('marks exactly one roll-mode control with the solid active treatment on the mobile row', () => {
-    renderHeader(makeBootstrap({ session_mode: balancedSessionMode() }), 4)
-
+    renderHeader(4, balancedMode)
     const dieControl = screen.getByRole('button', { name: /^current die d4$/i })
     expect(dieControl.className).toContain(ACTIVE_FILL)
     expect(dieControl.className).toContain('text-stone-900')
-
-    const pickManually = screen.getByRole('button', { name: /pick manually/i })
-    expect(pickManually.className).not.toContain(ACTIVE_FILL)
-
-    const chip = screen.getByTestId('reading-mode-control')
-    expect(chip.className).not.toContain(ACTIVE_FILL)
+    expect(screen.getByRole('button', { name: /pick manually/i }).className).not.toContain(ACTIVE_FILL)
+    expect(screen.getByTestId('reading-mode-control').className).not.toContain(ACTIVE_FILL)
   })
 
   it('renders Pick Manually as a non-solid outlined action, not a selected state', () => {
-    renderHeader(makeBootstrap({ session_mode: balancedSessionMode() }))
-
+    renderHeader()
     const pickManually = screen.getByRole('button', { name: /pick manually/i })
     expect(pickManually).toHaveAttribute('aria-haspopup', 'dialog')
     expect(pickManually.className).toContain('bg-[var(--theme-bg-panel)]')
@@ -103,9 +64,8 @@ describe('roll-mode control group (issue #2304): visual state grammar', () => {
     expect(pickManually.className).not.toContain(ACTIVE_FILL)
   })
 
-  it('keeps the balanced reading-mode chip on the quiet inactive convention', () => {
-    renderHeader(makeBootstrap({ session_mode: balancedSessionMode() }))
-
+  it('keeps the reading-mode chip on the quiet inactive convention', () => {
+    renderHeader(6, balancedMode)
     const chip = screen.getByTestId('reading-mode-control')
     expect(chip).toHaveTextContent('Balanced')
     expect(chip.className).toContain('bg-[var(--theme-bg-panel)]')
@@ -114,8 +74,7 @@ describe('roll-mode control group (issue #2304): visual state grammar', () => {
   })
 
   it('shares the compact control-family shape between the die control and the chip', () => {
-    renderHeader(makeBootstrap({ session_mode: balancedSessionMode() }))
-
+    renderHeader(6, balancedMode)
     const dieControl = screen.getByRole('button', { name: /^current die d6$/i })
     const chip = screen.getByTestId('reading-mode-control')
     expect(dieControl.className).toContain('min-h-11')
@@ -127,28 +86,15 @@ describe('roll-mode control group (issue #2304): visual state grammar', () => {
 
 describe('roll-mode control group (issue #2304): accessible active-mode state', () => {
   it('presses only the current die segment and renders no Auto segment (#4353)', () => {
-    renderHeader(makeBootstrap({}), 4)
-
+    renderHeader(4)
     expect(screen.queryByRole('button', { name: 'Auto' })).toBeNull()
-    const activeDie = screen.getByRole('button', { name: 'd4' })
-    expect(activeDie).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd4' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('presses the event-derived die after a manual choice, with no sticky mode (#4279)', () => {
-    render(
-      <MemoryRouter>
-        <RollHeader
-          bootstrap={makeBootstrap({})}
-          {...headerBaseProps}
-          currentDie={8}
-        />
-      </MemoryRouter>,
-    )
-
+    renderHeader(8)
     expect(screen.queryByRole('button', { name: 'Auto' })).toBeNull()
-    const pinned = screen.getByRole('button', { name: 'd8' })
-    expect(pinned).toHaveAttribute('aria-pressed', 'true')
-
+    expect(screen.getByRole('button', { name: 'd8' })).toHaveAttribute('aria-pressed', 'true')
     for (const die of DICE_LADDER) {
       if (die === 8) continue
       expect(screen.getByRole('button', { name: `d${die}` })).toHaveAttribute('aria-pressed', 'false')
@@ -156,7 +102,7 @@ describe('roll-mode control group (issue #2304): accessible active-mode state', 
   })
 
   it('names the mobile die control for the current die without a mode suffix', () => {
-    renderHeader(makeBootstrap({}), 4)
+    renderHeader(4)
     expect(screen.getByRole('button', { name: 'Current die d4' })).toBeInTheDocument()
   })
 })

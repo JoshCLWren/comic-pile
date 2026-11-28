@@ -4,55 +4,20 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
 import { ReadingModeControl } from '../pages/RollPage/components/ReadingModeControl'
-import type { RollState, SessionMode, SessionModeState } from '../types/rollState'
-import { formatSessionMode, readingModeLabel } from '../types/rollState'
+import type { RollState } from '../types/rollState'
+import {
+  formatReadingMode,
+  readingModeLabel,
+  type ReadingModeDisplay,
+} from '../types/readingMode'
 
-function toSessionMode(state: SessionModeState | null | undefined): SessionMode {
-  if (!state) {
-    return {
-      active_bandwidth: null,
-      predicted_bandwidth: null,
-      bandwidth_confidence: null,
-      bandwidth_source: null,
-      bandwidth_version: null,
-      active_intent: null,
-      predicted_intent: null,
-      intent_confidence: null,
-      intent_source: null,
-      intent_version: null,
-      session_mode_correction_guidance: null,
-    }
-  }
-  return {
-    active_bandwidth: state.bandwidth ?? null,
-    predicted_bandwidth: null,
-    bandwidth_confidence: state.confidence ?? null,
-    // SAFETY: SessionModeState.source in tests is a string literal constrained to manual/inferred; the cast narrows it to the API union without widening.
-    bandwidth_source: (state.source as 'manual' | 'inferred' | null) ?? null,
-    bandwidth_version: state.version != null ? String(state.version) : null,
-    active_intent: state.intent ?? null,
-    predicted_intent: null,
-    intent_confidence: null,
-    intent_source: null,
-    intent_version: null,
-    session_mode_correction_guidance: null,
-  }
-}
-
-function bootstrapWithMode(mode: SessionModeState | null | undefined): RollState {
-  return {
-    session_id: 1,
-    user_id: 1,
-    pending_thread_id: null,
-    last_rolled_result: null,
-    active_thread: null,
-    roll_pool: [],
-    snoozed_threads: [],
-    snoozed_count: 0,
-    skipped_thread_ids: [],
-    skipped_threads: [],
-    session_mode: toSessionMode(mode),
-  }
+const rollState: RollState = {
+  pending_thread_id: null,
+  last_rolled_result: null,
+  active_thread: null,
+  roll_pool: [],
+  snoozed_threads: [],
+  snoozed_count: 0,
 }
 
 const headerBaseProps = {
@@ -69,17 +34,6 @@ const headerBaseProps = {
 }
 
 describe('reading mode label helpers', () => {
-  it('keeps the Roll bootstrap and API-client session mode shapes aligned on one canonical type', () => {
-    // Type-level regression for #2632: the bootstrap payload and the API client
-    // must both stay on the same canonical SessionMode shape, so the values
-    // here flow through both surfaces without a separate duplicate type.
-    const apiMode: SessionMode = toSessionMode({ bandwidth: 'light', intent: 'momentum' })
-    const bootstrapMode: SessionMode = apiMode
-    expect(bootstrapMode.active_bandwidth).toBe('light')
-    expect(apiMode.active_intent).toBe('momentum')
-    expect(apiMode).toEqual(bootstrapMode)
-  })
-
   it('maps canonical bandwidth and intent values to human-readable labels', () => {
     expect(readingModeLabel('light')).toBe('Light')
     expect(readingModeLabel('BALANCED')).toBe('Balanced')
@@ -92,130 +46,69 @@ describe('reading mode label helpers', () => {
 
   it('falls back to the raw value and joins bandwidth with intent', () => {
     expect(readingModeLabel(null)).toBe('')
-    expect(formatSessionMode({ bandwidth: 'light', intent: 'momentum' })).toBe('Light · Momentum')
-    expect(
-      formatSessionMode({ bandwidth: 'surprisingly-long-bandwidth', intent: 'explore' }),
-    ).toBe('surprisingly-long-bandwidth · Explore')
-    expect(formatSessionMode({ bandwidth: null, intent: 'random' })).toBe('Random')
-    expect(formatSessionMode(null)).toBe('')
+    expect(formatReadingMode({ bandwidth: 'light', intent: 'momentum' })).toBe('Light · Momentum')
+    expect(formatReadingMode({
+      bandwidth: 'surprisingly-long-bandwidth',
+      intent: 'explore',
+    })).toBe('surprisingly-long-bandwidth · Explore')
+    expect(formatReadingMode({ bandwidth: null, intent: 'random' })).toBe('Random')
+    expect(formatReadingMode(null)).toBe('')
   })
 })
 
 describe('ReadingModeControl', () => {
-  // SAFETY: The cast narrows the plain-object fixture tuples to the [SessionModeState, string] shape vitest's each case typing requires; every entry is a valid literal mode pair.
   it.each([
     [{ bandwidth: 'light', intent: 'momentum' }, 'Light · Momentum'],
     [{ bandwidth: 'deep', intent: 'explore' }, 'Deep · Explore'],
     [{ bandwidth: 'balanced', intent: 'balanced' }, 'Balanced · Balanced'],
     [{ bandwidth: 'light', intent: 'random', source: 'manual', confidence: 0.92 }, 'Light · Random'],
-  ] as [SessionModeState, string][])(
+  ] satisfies [ReadingModeDisplay, string][])(
     'renders representative mode %j compactly as %s',
     (mode, expected) => {
       render(<ReadingModeControl mode={mode} />)
-
       const control = screen.getByTestId('reading-mode-control')
       expect(control).toHaveTextContent(expected)
-      // Compact header-scale control: raw confidence must never be displayed.
       expect(control.textContent).not.toContain('0.92')
       expect(control.textContent).not.toMatch(/confidence/i)
     },
   )
 
-  it('renders nothing for legacy bootstrap responses without session mode state', () => {
-    const { container } = render(<ReadingModeControl mode={null} />)
-    const empty = render(<ReadingModeControl mode={undefined} />)
-    const noLabels = render(<ReadingModeControl mode={{ bandwidth: null, intent: null }} />)
-
+  it('renders nothing when the scoped mode has no labels', () => {
+    const { container } = render(<ReadingModeControl mode={{ bandwidth: null, intent: null }} />)
     expect(container).toBeEmptyDOMElement()
-    expect(empty.container).toBeEmptyDOMElement()
-    expect(noLabels.container).toBeEmptyDOMElement()
   })
 
-  it('renders a read-only status chip with no mode selector trigger', () => {
-    // Regression for #4354: the session-mode write route is retired, so the
-    // Roll header must not offer a toggle that no longer has a server to
-    // write to. The mode stays visible as status only.
-    render(
-      <ReadingModeControl
-        mode={{ bandwidth: 'light', intent: 'momentum', source: 'inferred', confidence: 0.4 }}
-      />,
-    )
-
+  it('is a read-only status chip, not a retired mode selector', () => {
+    render(<ReadingModeControl mode={{ bandwidth: 'light', intent: 'momentum' }} />)
     const control = screen.getByTestId('reading-mode-control')
     expect(control.tagName).toBe('SPAN')
-    expect(control).toHaveTextContent('Light · Momentum')
-    expect(control.getAttribute('title')).toBe('Reading mode: Light · Momentum')
+    expect(control).toHaveAttribute('title', 'Reading mode: Light · Momentum')
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
-  })
-
-  it('degrades to a static status chip when the session has no mode state', () => {
-    render(<ReadingModeControl mode={{ bandwidth: 'deep', intent: 'familiar' }} />)
-
-    expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Deep · Familiar')
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-  })
-
-  it('truncates long labels instead of crowding the die controls', () => {
-    render(
-      <ReadingModeControl
-        mode={{
-          bandwidth: 'extraordinarily-specific-inferred-light-bandwidth',
-          intent: 'exploratory-momentum-adjacent',
-        }}
-      />,
-    )
-
-    const control = screen.getByTestId('reading-mode-control')
-    expect(control.className).toContain('max-w-[11rem]')
-    expect(control.querySelector('span')?.className).toContain('truncate')
-    expect(control.getAttribute('title')).toBe(
-      'Reading mode: extraordinarily-specific-inferred-light-bandwidth · exploratory-momentum-adjacent',
-    )
   })
 })
 
-describe('RollHeader reading-mode control integration', () => {
-  it('shows the bootstrap session mode without dominating the header', () => {
+describe('RollHeader scoped reading-mode integration', () => {
+  it('shows the canonical mode without putting session state in RollState', () => {
     render(
       <MemoryRouter>
         <RollHeader
-          bootstrap={bootstrapWithMode({ bandwidth: 'light', intent: 'momentum', source: 'manual' })}
+          bootstrap={rollState}
+          readingMode={{ bandwidth: 'light', intent: 'momentum', source: 'manual' }}
           {...headerBaseProps}
         />
       </MemoryRouter>,
     )
 
     expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Light · Momentum')
-    expect(screen.getAllByRole('button', { name: /d6/i }).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Pick manually' })).toBeInTheDocument()
   })
 
-  it('stays synchronized when the bootstrap payload reports a manual mode change', () => {
-    const { rerender } = render(
-      <MemoryRouter>
-        <RollHeader bootstrap={bootstrapWithMode({ bandwidth: 'light', intent: 'momentum' })} {...headerBaseProps} />
-      </MemoryRouter>,
-    )
-    expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Light · Momentum')
-
-    rerender(
-      <MemoryRouter>
-        <RollHeader
-          bootstrap={bootstrapWithMode({ bandwidth: 'deep', intent: 'random', source: 'manual' })}
-          {...headerBaseProps}
-        />
-      </MemoryRouter>,
-    )
-    expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Deep · Random')
-  })
-
-  it('omits the control entirely for legacy bootstrap payloads without mode state', () => {
+  it('omits the chip when scoped reading mode is unavailable', () => {
     render(
       <MemoryRouter>
-        <RollHeader bootstrap={bootstrapWithMode(undefined)} {...headerBaseProps} />
+        <RollHeader bootstrap={rollState} {...headerBaseProps} />
       </MemoryRouter>,
     )
-
     expect(screen.queryByTestId('reading-mode-control')).not.toBeInTheDocument()
   })
 })
