@@ -1624,6 +1624,19 @@ mod tests {
             DEFAULT_REPOSITORY.to_string(),
         ];
         assert!(parse_options(&arguments).is_err());
+        let options = parse_options(&[
+            "/mirror".to_string(),
+            "--revision-sha".to_string(),
+            "abc1234".to_string(),
+            "--dry-run".to_string(),
+        ])
+        .expect("options");
+        assert!(options.dry_run);
+        assert_eq!(options.repository, DEFAULT_REPOSITORY);
+    }
+
+    #[test]
+    fn value_options_reject_flag_tokens_instead_of_changing_mode() {
         for arguments in [
             vec![
                 "/mirror".to_string(),
@@ -1643,14 +1656,5 @@ mod tests {
             let error = parse_options(&arguments).expect_err("missing option value");
             assert!(error.to_string().contains("requires a value"), "{error}");
         }
-        let options = parse_options(&[
-            "/mirror".to_string(),
-            "--revision-sha".to_string(),
-            "abc1234".to_string(),
-            "--dry-run".to_string(),
-        ])
-        .expect("options");
-        assert!(options.dry_run);
-        assert_eq!(options.repository, DEFAULT_REPOSITORY);
     }
 }
