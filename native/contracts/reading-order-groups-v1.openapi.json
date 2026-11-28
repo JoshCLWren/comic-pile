@@ -450,7 +450,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -468,9 +467,6 @@
             }
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {

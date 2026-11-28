@@ -394,13 +394,9 @@
         "description": "Body of `POST /api/v1/threads/`.",
         "required": [
           "title",
-          "format",
           "issues_remaining"
         ],
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "is_test": {
             "type": "boolean"
           },
@@ -436,7 +432,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -464,9 +459,6 @@
             ]
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {
@@ -590,13 +582,6 @@
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",
         "properties": {
-          "format": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Format observed by the client."
-          },
           "manual_creator_credits": {
             "type": [
               "array",
@@ -635,13 +620,6 @@
                 "type": "null"
               }
             ]
-          },
-          "format": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "New format; normalized to the reader's canonical vocabulary."
           },
           "is_test": {
             "type": [
@@ -698,7 +676,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -716,9 +693,6 @@
             }
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {
