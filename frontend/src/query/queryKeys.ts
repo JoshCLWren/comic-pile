@@ -165,6 +165,8 @@ export const queryKeys = {
      * every snoozed-value variant rather than one exact key.
      */
     eligibleIssueIdsAll: () => ['roll', 'eligible-issue-ids'] as const,
+    /** One bounded page of series summaries for the browser snooze shelf. */
+    snoozedSummaries: () => ['roll', 'snoozed-summaries'] as const,
     /** Representative series covers for the bounded Roll snooze shelf. */
     snoozedSeriesCovers: (threadIds: readonly number[]) =>
       ['roll', 'snoozed-series-covers', [...new Set(threadIds)].sort((a, b) => a - b)] as const,
@@ -272,6 +274,8 @@ export const queryKeys = {
     blockingBatchAll: () => ['dependencies', 'blocking-batch'] as const,
     list: () => ['dependencies', 'list'] as const,
     forThread: (threadId: number) => ['dependencies', 'thread', threadId] as const,
+    /** Owner-scoped issue-edge batch for one selected Roll issue (#4350). */
+    issueEdges: (issueId: number) => ['dependencies', 'issue-edges', issueId] as const,
     blocking: (threadId: number) => ['dependencies', 'blocking', threadId] as const,
     blockingBatch: (threadIds: number[]) =>
       ['dependencies', 'blocking-batch', [...threadIds].sort((a, b) => a - b)] as const,

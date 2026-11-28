@@ -16,6 +16,11 @@ import {
 } from '../hooks/useThread'
 import QueuePage from '../pages/QueuePage'
 import { rollApi } from '../services/api-roll'
+import {
+  clearAllPendingSelections,
+  resetRollPendingSelectionMemory,
+  writePendingSelection,
+} from '../services/rollPendingSelection'
 
 vi.mock('../hooks/useCompletedThreads', () => ({
   useCompletedThreads: vi.fn(() => ({
@@ -88,6 +93,8 @@ const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 
 beforeEach(() => {
+  clearAllPendingSelections(null)
+  resetRollPendingSelectionMemory()
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
@@ -144,14 +151,7 @@ it('does not refresh session or threads when native reroll snooze fails', async 
     isLoading: false,
     refetch: refetchThreads,
   })
-  mockedUseRollBootstrap.mockReturnValue({
-    data: { pending_thread_id: 1, snoozed_threads: [] },
-    refetch: refetchSession,
-  })
-  mockedUseRollBootstrap.mockReturnValue({
-    data: { pending_thread_id: 1, snoozed_threads: [] },
-    refetch: refetchSession,
-  })
+  writePendingSelection(null, { thread_id: 1, issue_id: 1, selected_at: Date.now() })
 
   const user = userEvent.setup()
   renderQueue()

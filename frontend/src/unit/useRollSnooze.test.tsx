@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { useRollSnooze } from '../pages/RollPage/useRollSnooze'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
+import type { RollOfferSeed } from '../hooks/useRollPendingSelection'
 import type { RatingThread } from '../pages/RollPage/types'
 import type { RollResponse } from '../types'
 
@@ -23,7 +24,7 @@ function ratingThread(id: number): RatingThread {
   }
 }
 
-function nextOffer(): RollResponse {
+function nextOffer(issueId: number | null = null): RollResponse {
   return {
     thread_id: 9,
     title: 'Next Series',
@@ -34,8 +35,8 @@ function nextOffer(): RollResponse {
     result: 1,
     offset: 0,
     snoozed_count: 1,
-    issue_id: null,
-    issue_number: null,
+    issue_id: issueId,
+    issue_number: issueId === null ? null : `Issue ${issueId}`,
     next_issue_id: null,
     next_issue_number: null,
     total_issues: 6,
@@ -43,11 +44,13 @@ function nextOffer(): RollResponse {
   }
 }
 
-function committedOutcome(): SnoozeMutationOutcome {
+function committedOutcome(issueId: number | null = null): SnoozeMutationOutcome {
+  const offer = nextOffer(issueId)
   return {
     response: {
-      current_die: 12,
-      pending_thread_id: null,
+      ...offer,
+      current_die: offer.die_size,
+      pending_thread_id: issueId === null ? null : offer.thread_id,
       reading_mode_suggested: false,
       correction: null,
     },
@@ -58,9 +61,13 @@ function committedOutcome(): SnoozeMutationOutcome {
 
 function renderRollSnooze(
   mutate: (expectedPendingThreadId?: number) => Promise<SnoozeMutationOutcome>,
-  options: { threadId?: number; onRefreshFailed?: (refreshError: unknown) => void } = {},
+  options: {
+    threadId?: number
+    onRefreshFailed?: (refreshError: unknown) => void
+    seedPending?: (offer: RollOfferSeed) => void
+  } = {},
 ) {
-  const { threadId = 7, onRefreshFailed } = options
+  const { threadId = 7, onRefreshFailed, seedPending } = options
   const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
 
   const { result } = renderHook(() => {
@@ -71,6 +78,7 @@ function renderRollSnooze(
       snoozeMutation: { mutate },
       unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}) },
       refetchBootstrap,
+      seedPending,
       onRefreshFailed,
     })
 
@@ -101,6 +109,23 @@ describe('useRollSnooze', () => {
     expect(result.current.state.isRolling).toBe(false)
     expect(result.current.state.isRatingView).toBe(false)
     expect(result.current.state.activeRatingThread).toBeNull()
+  })
+
+  it('seeds browser-owned pending with the replacement offer after snooze', async () => {
+    const seedPending = vi.fn()
+    const mutate = vi.fn().mockResolvedValue(committedOutcome(101))
+    const { result } = renderRollSnooze(mutate, { seedPending })
+
+    await act(async () => {
+      await result.current.snooze.handleSnooze()
+    })
+
+    expect(seedPending).toHaveBeenCalledWith({
+      thread_id: 9,
+      issue_id: 101,
+      issue_number: 'Issue 101',
+      result: 1,
+    })
   })
 
   it('clears the rating view only after the mutation resolves', async () => {
@@ -135,6 +160,7 @@ describe('useRollSnooze', () => {
     const refreshFailure = new Error('bootstrap unavailable')
     const mutate = vi.fn().mockResolvedValue({
       response: {
+        ...nextOffer(),
         current_die: 12,
         pending_thread_id: null,
         reading_mode_suggested: false,
@@ -206,9 +232,10 @@ describe('useRollSnooze', () => {
   })
 
   it('enters the next offer from the response instead of refetching', async () => {
-    const response = nextOffer()
+    const response = nextOffer(102)
     const reroll = vi.fn().mockResolvedValue(response)
     const enterRatingView = vi.fn().mockResolvedValue(undefined)
+    const seedPending = vi.fn()
     const refetchBootstrap = vi.fn()
     const { result } = renderHook(() => {
       const state = useRollPageState()
@@ -219,6 +246,7 @@ describe('useRollSnooze', () => {
         rerollMutation: { mutate: reroll },
         enterRatingView,
         refetchBootstrap,
+        seedPending,
       })
       return { state, snooze }
     })
@@ -238,6 +266,7 @@ describe('useRollSnooze', () => {
       response.result,
       response,
     )
+    expect(seedPending).toHaveBeenCalledWith(response)
     expect(refetchBootstrap).not.toHaveBeenCalled()
   })
 

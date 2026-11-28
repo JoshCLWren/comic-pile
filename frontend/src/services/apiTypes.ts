@@ -18,14 +18,17 @@ export interface RollApi {
   reset: () => Promise<{ die: number; replayed: boolean }>
 }
 
+/** Partition key for browser-owned pending; the signed-in reader when known. */
+export type RollPendingUserId = number | string | null | undefined
+
 export interface ProtectedRollMutationApi {
   rate: (data: RatePayload) => Promise<RateResponsePayload>
-  snooze: () => Promise<SnoozeSessionResponse>
-  bootstrap: () => Promise<RollBootstrapResponse>
+  snooze: () => Promise<SnoozeSessionResponse & RollResponse>
+  bootstrap: (userId?: RollPendingUserId) => Promise<RollBootstrapResponse>
 }
 
 export interface RollBootstrapApi {
-  get: (timezone?: string) => Promise<RollBootstrapResponse>
+  get: (userId?: RollPendingUserId) => Promise<RollBootstrapResponse>
   switchPrerequisite: (request: import('../types/rollBootstrap').RollPrerequisiteSwitchRequest) => Promise<import('../types/rollBootstrap').RollPrerequisiteSwitchResponse>
 }
 

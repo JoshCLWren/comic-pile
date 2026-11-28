@@ -12,8 +12,14 @@ export interface QueueRollState {
   snoozed_thread_ids: number[]
 }
 
+/** Only the browser-owned fields the Queue actually needs. */
+type QueueRollSource = Pick<
+  RollBootstrapResponse,
+  'pending_thread_id' | 'snoozed_thread_ids' | 'snoozed_threads'
+>
+
 interface UseRollPendingSyncParams {
-  rollBootstrap: RollBootstrapResponse | null | undefined
+  rollBootstrap: QueueRollSource | null | undefined
   refetchQueue: () => Promise<void>
 }
 

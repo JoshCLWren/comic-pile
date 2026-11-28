@@ -316,7 +316,7 @@ describe('RollPage post-rate copy prompt', () => {
     expect(screen.getByText(/Copy failed/)).toBeInTheDocument()
   })
 
-  it('undoes the rating straight from the notice and confirms it', async () => {
+  it('gates session undo after session initialization is removed (#4350)', async () => {
     const user = userEvent.setup()
 
     render(<RollPage />)
@@ -324,20 +324,11 @@ describe('RollPage post-rate copy prompt', () => {
 
     await user.click(screen.getByTestId('save-and-continue'))
     await waitFor(() => expect(screen.getByTestId('post-rate-copy-prompt')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: 'Undo this rating' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Undo this rating' }))
-
-    await waitFor(() => {
-      expect(undoSpies.refetchSnapshots).toHaveBeenCalled()
-      expect(undoSpies.undo).toHaveBeenCalledWith({ sessionId: 1, snapshotId: 4 })
-    })
-    expect(undoSpies.showToast).toHaveBeenCalledWith(
-      'Rating for "Saga 5" has been undone',
-      'success',
-    )
-    await waitFor(() =>
-      expect(screen.queryByTestId('post-rate-copy-prompt')).not.toBeInTheDocument(),
-    )
+    // No session id exists in the composed scoped view model, so Roll must not
+    // fabricate one or call the snapshot undo API with id 0.
+    expect(screen.queryByRole('button', { name: 'Undo this rating' })).not.toBeInTheDocument()
+    expect(undoSpies.refetchSnapshots).not.toHaveBeenCalled()
+    expect(undoSpies.undo).not.toHaveBeenCalled()
   })
 })

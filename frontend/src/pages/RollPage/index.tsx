@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
 import ImageWithLoading from '../../components/ImageWithLoading'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollPendingSelection } from '../../hooks/useRollPendingSelection'
 import {
   useRollDieState,
   useRollEligibleIssueIds,
@@ -40,9 +41,8 @@ import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
-import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterUndo, invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { isFunction, isWindowDefined } from '../../utils/runtimeChecks'
 import { ThreadPool } from './components/ThreadPool'
@@ -95,6 +95,10 @@ export default function RollPage() {
     error: bootstrapError,
     isRetrying: isBootstrapRetrying,
   } = useRollBootstrap()
+  // The pending roll is an exact browser-owned issue selection, not server
+  // session state. It survives reload and tabs and is cleared only on a
+  // committed read/rate of that same issue or an explicit Reset (#4350).
+  const pendingSelection = useRollPendingSelection()
 
   // Die-header surface migration (#4719): the scoped die resource is
   // authoritative for the selected die, ladder readout, die size and 3D
@@ -132,12 +136,9 @@ export default function RollPage() {
   const showLastRead = lastRead != null && lastReadKey !== dismissedLastReadKey
 
   const handleBackToQueue = useCallback(() => {
-    // Leaving for the queue is navigation, not resolution (issue #3761): the
-    // pending read stays server-side, so the unresolved selection is still
-    // there when the reader comes back. Mark the bootstrap cache stale so the
-    // next active use (returning to Roll) refetches instead of replaying a
-    // snapshot captured before the roll. This avoids an eager HTTP request on
-    // navigation while preserving the no-stale-pending guarantee.
+    // Leaving for the queue is navigation, not resolution: the browser-owned
+    // selection is restored on return. Marking the local view stale forces the
+    // scoped inputs to refresh on re-entry without an eager request now.
     void invalidateRollBootstrapOnNavigation(queryClient)
     navigate('/queue')
   }, [navigate, queryClient])
@@ -155,7 +156,6 @@ export default function RollPage() {
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const tasteDiscoveries = useTasteDiscoveries()
   const { showToast } = useToast()
-  const undo = useUndo()
 
   // A committed snooze closes the rating view and the action sheet, so an
   // exhausted authoritative refresh can only be reported from the page. The
@@ -187,6 +187,7 @@ export default function RollPage() {
     setResetDiceError('')
     try {
       await resetDiceMutation.mutate()
+      pendingSelection.clearAll()
       state.setIsRolling(false)
       state.setIsRatingView(false)
       state.setRolledResult(null)
@@ -198,11 +199,16 @@ export default function RollPage() {
       setResetDiceError(getApiErrorDetail(error))
       return false
     }
-  }, [resetDiceMutation, state])
+  }, [resetDiceMutation, pendingSelection, state])
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
 
-  useRollPendingSession({ state, bootstrap, rollPool })
+  useRollPendingSession({
+    state,
+    bootstrap,
+    rollPool,
+    pending: pendingSelection.pending,
+  })
 
   const rating = useRollRating({
     state,
@@ -210,18 +216,13 @@ export default function RollPage() {
     rateMutation,
     dismissPendingMutation,
     refetchBootstrap,
+    clearPending: pendingSelection.clear,
   })
 
-  // Undoing a rating restores the snapshot the rating itself wrote, which is the
-  // newest one while nothing else has been rated since (#3194). The list stays
-  // disabled until a just-rated notice is on screen so Roll costs nothing at
-  // rest, and the click path re-reads it before acting so a second rating inside
-  // the snapshot query's stale window cannot undo two ratings at once.
-  const undoSessionId = rating.lastRated ? bootstrap?.session_id ?? null : null
-  const { data: undoSnapshots, refetch: refetchUndoSnapshots } = useSnapshots(undoSessionId)
-  const latestUndoSnapshot = undoSnapshots?.snapshots[0]
-  const canUndoLastRating =
-    latestUndoSnapshot != null && latestUndoSnapshot.description !== 'Session start'
+  // #4350 removes session initialization, so Roll has no session id to address
+  // the snapshot undo API. The undo affordance stays gated here rather than
+  // fabricating an id (which produced GET /undo/0/snapshots -> 404). Durable
+  // undo remains available on History -> session -> snapshots.
 
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
@@ -283,6 +284,7 @@ export default function RollPage() {
     unsnoozeMutation,
     enterRatingView: rating.enterRatingView,
     refetchBootstrap,
+    seedPending: pendingSelection.seedFromOffer,
     onRefreshFailed: reportSnoozeRefreshFailed,
   })
 
@@ -303,6 +305,8 @@ export default function RollPage() {
     refetchBootstrap,
     enterRatingView: enterRatingViewFromRoll,
     onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
+    pendingThreadId: pendingSelection.pending?.thread_id ?? null,
+    seedPending: pendingSelection.seedFromOffer,
   })
 
   const modals = useRollModals({
@@ -341,32 +345,6 @@ export default function RollPage() {
     } catch (error) {
       console.error('Set current issue failed:', error)
       throw error
-    }
-  }
-
-  const handleUndoRating = async () => {
-    const rated = rating.lastRated
-    const sessionId = bootstrap?.session_id
-    if (!rated || sessionId == null) return
-
-    try {
-      const freshSnapshots = await refetchUndoSnapshots()
-      const snapshot = freshSnapshots.data?.snapshots[0]
-      if (!snapshot || snapshot.description === 'Session start') {
-        showToast('No undo point is recorded for this rating.', 'error')
-        return
-      }
-
-      await undo.mutate({ sessionId, snapshotId: snapshot.id })
-      showToast(`Rating for "${rated.title} ${rated.issueNumber}" has been undone`, 'success')
-      // Drop the notice before the refresh lands: the restored state is the
-      // one the reader asked for, and keeping a "you just rated" prompt up
-      // over a state where the rating no longer exists is the stale read #3194.
-      rating.clearLastRated()
-      await invalidateAfterUndo(queryClient)
-    } catch (error) {
-      console.error('Undo failed:', error)
-      showToast('Failed to undo rating. Please try again.', 'error')
     }
   }
 
@@ -433,7 +411,7 @@ export default function RollPage() {
   // nulls `rolledResult`, so the die falls back to its idle state.
   const hasRolled = state.rolledResult != null
  
-  if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
+  if (isBootstrapLoading && !isBootstrapError) {
     // A timed-out bootstrap stays pending through the shared retry policy
     // (issue #3429). Once an attempt has failed, say so and offer recovery
     // instead of holding a bare spinner until retries exhaust. isBootstrapRetrying
@@ -561,18 +539,12 @@ export default function RollPage() {
                     view={lastRead}
                     onDismiss={() => setDismissedLastReadKey(lastReadKey)}
                     onRollAgain={actions.handleRoll}
-                    onUndo={handleUndoRating}
-                    undoPending={undo.isPending}
-                    canUndo={canUndoLastRating}
                   />
                 ) : null
               ) : (
                 <PostRateCopyPrompt
                   reference={rating.lastRated}
                   onDismiss={rating.clearLastRated}
-                  onUndo={handleUndoRating}
-                  undoPending={undo.isPending}
-                  canUndo={canUndoLastRating}
                 />
               ))}
 
@@ -715,7 +687,7 @@ export default function RollPage() {
             state.setShowMigrationDialog(true)
           }}
           selectedThread={state.selectedThread}
-          pendingThreadId={bootstrap.pending_thread_id}
+          pendingThreadId={pendingSelection.pending?.thread_id ?? null}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
           onAction={actions.handleAction}
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}

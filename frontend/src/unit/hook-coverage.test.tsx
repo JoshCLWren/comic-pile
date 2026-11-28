@@ -31,7 +31,11 @@ const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
 vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
 vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
-vi.mock('../services/api-roll', () => ({ rollApi: api.rollApi }))
+vi.mock('../services/api-roll', () => ({
+  rollApi: api.rollApi,
+  readRollSnoozes: () => [],
+  writeRollSnoozes: () => undefined,
+}))
 vi.mock('../services/api-queue', () => ({ queueApi: api.queueApi }))
 vi.mock('../services/api-undo', () => ({ undoApi: api.undoApi }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: api.sessionApi }))
@@ -45,7 +49,6 @@ import { useRate } from '../hooks/useRate'
 import { useDismissPending, useReroll, useRoll, useSetDie, useUnsnooze } from '../hooks/useRoll'
 import { useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useStaleThreads } from '../hooks/useThread'
 
 beforeEach(() => {
@@ -188,51 +191,6 @@ describe('data hooks', () => {
     await act(async () => resolveSnapshots({ snapshots: [{ id: 44 }] }))
   })
 
-  it('covers roll bootstrap success, error, and refetch paths', async () => {
-    const initialData = {
-      session_id: 1,
-      user_id: 1,
-      current_die: 6,
-      manual_die: null,
-      pending_thread_id: null,
-      last_rolled_result: null,
-      active_thread: null,
-      roll_pool: [],
-      snoozed_threads: [],
-      snoozed_count: 0,
-    }
-    bootstrapApi.get.mockResolvedValue(initialData)
-    const hook = renderHook(() => useRollBootstrap(), { wrapper: createWrapper() })
-    expect(hook.result.current.isPending).toBe(true)
-    await waitFor(() => {
-      expect(hook.result.current.isPending).toBe(false)
-      expect(hook.result.current.data).toEqual(initialData)
-    })
-
-    const refetchData = { ...initialData, current_die: 8, roll_pool: [{ id: 1, title: 'Test', format: 'Comic' }] }
-    bootstrapApi.get.mockResolvedValueOnce(refetchData)
-    let refetchResult: unknown
-    await act(async () => { refetchResult = await hook.result.current.refetch() })
-    expect(refetchResult).toEqual(refetchData)
-    await waitFor(() => {
-      expect(hook.result.current.data).toEqual(refetchData)
-    })
-
-    bootstrapApi.get.mockRejectedValueOnce(new Error('bootstrap failed'))
-    const failedHook = renderHook(() => useRollBootstrap(), { wrapper: createWrapper() })
-    await waitFor(() => {
-      expect(failedHook.result.current.isError).toBe(true)
-      expect(failedHook.result.current.error).toBeInstanceOf(Error)
-      expect(failedHook.result.current.error?.message).toBe('bootstrap failed')
-    })
-
-    bootstrapApi.get.mockRejectedValueOnce('string error')
-    const stringHook = renderHook(() => useRollBootstrap(), { wrapper: createWrapper() })
-    await waitFor(() => {
-      expect(stringHook.result.current.isError).toBe(true)
-      expect(stringHook.result.current.error?.message).toBe('Failed to fetch roll bootstrap')
-    })
-  })
 
   it('covers stale thread error path', async () => {
     api.threadsApi.listStale.mockRejectedValueOnce(new Error('stale fetch failed'))

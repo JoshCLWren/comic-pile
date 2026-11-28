@@ -1,8 +1,18 @@
-import type { ProtectedRollMutationApi, RollBootstrapApi } from '../services/apiTypes'
+import type {
+  ProtectedRollMutationApi,
+  RollBootstrapApi,
+  RollPendingUserId,
+} from '../services/apiTypes'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
-import { isWindowDefined, isFunction, isNonNullObject } from '../utils/runtimeChecks'
+import {
+  isNumber,
+  isObject,
+  isWindowDefined,
+  isFunction,
+  isNonNullObject,
+} from '../utils/runtimeChecks'
 
 export const ROLL_BOOTSTRAP_RECONCILED_EVENT = 'comic-pile:roll-bootstrap-reconciled'
 
@@ -33,6 +43,13 @@ export function isAmbiguousNetworkFailure(error: unknown): boolean {
     || candidate.message === 'Network Error'
 }
 
+function isRetryableRollRecoveryFailure(error: unknown): boolean {
+  if (isAuthenticationMutationFailure(error)) return true
+  if (!error || !isNonNullObject(error)) return false
+  const response = error.response
+  return isObject(response) && isNumber(response.status) && response.status === 503
+}
+
 export function isAuthenticationMutationFailure(error: unknown): boolean {
   if (!error || !isNonNullObject(error)) return false
 
@@ -56,8 +73,9 @@ export function publishRollBootstrap(state: RollBootstrapResponse): void {
 
 export async function fetchAndPublishRollBootstrap(
   bootstrapApi: RollBootstrapApi = rollBootstrapApi,
+  userId?: RollPendingUserId,
 ): Promise<RollBootstrapResponse> {
-  const state = await bootstrapApi.get()
+  const state = await bootstrapApi.get(userId)
   publishRollBootstrap(state)
   return state
 }
@@ -71,8 +89,9 @@ export interface AmbiguousRollMutationReconciliation {
 export async function reconcileAmbiguousRollMutation(
   expectedPendingThreadId?: number,
   bootstrapApi: RollBootstrapApi = rollBootstrapApi,
+  userId?: RollPendingUserId,
 ): Promise<AmbiguousRollMutationReconciliation> {
-  const state = await fetchAndPublishRollBootstrap(bootstrapApi)
+  const state = await fetchAndPublishRollBootstrap(bootstrapApi, userId)
   const pendingThreadId = normalizePendingThreadId(state.pending_thread_id)
 
   const committed = expectedPendingThreadId === undefined
@@ -93,6 +112,7 @@ export async function recoverProtectedRollMutation<T>(
   retryMutation: () => Promise<T>,
   wait: (ms: number) => Promise<void> = delay,
   mutationApi: ProtectedRollMutationApi = protectedRollMutationApi,
+  userId?: RollPendingUserId,
 ): Promise<ProtectedRollMutationRecovery<T>> {
   for (let attempt = 0; attempt <= AUTH_RECOVERY_DELAYS_MS.length; attempt += 1) {
     if (attempt > 0) {
@@ -101,9 +121,9 @@ export async function recoverProtectedRollMutation<T>(
 
     let state: RollBootstrapResponse
     try {
-      state = await mutationApi.bootstrap()
+      state = await mutationApi.bootstrap(userId)
     } catch (error: unknown) {
-      if (isAuthenticationMutationFailure(error) && attempt < AUTH_RECOVERY_DELAYS_MS.length) {
+      if (isRetryableRollRecoveryFailure(error) && attempt < AUTH_RECOVERY_DELAYS_MS.length) {
         continue
       }
       throw error
