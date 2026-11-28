@@ -62,7 +62,7 @@ pub struct UserPreferencesResponse {
 /// The request is intentionally empty. Serde ignores legacy unknown fields, so
 /// an older client that still sends `theme` cannot restore or persist a retired
 /// appearance preference.
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct UserPreferencesPatchRequest {}
 
 /// Canonical representation of one persisted Taste Bank signal.
