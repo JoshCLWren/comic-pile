@@ -76,10 +76,6 @@ vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: () => <d
 // the rating view with the default 3.0 rating on first paint, before the slider
 // is touched (issue #2533 repro).
 const pendingBootstrap = {
-  session_id: 1,
-  user_id: 1,
-  current_die: 8,
-  manual_die: null,
   pending_thread_id: 1,
   last_rolled_result: null,
   active_thread: {
@@ -99,8 +95,6 @@ const pendingBootstrap = {
   roll_pool: [],
   snoozed_threads: [],
   snoozed_count: 0,
-  skipped_thread_ids: [],
-  skipped_threads: [],
 }
 
 // SAFETY: The mocked useRollState return value is read by the page hooks;

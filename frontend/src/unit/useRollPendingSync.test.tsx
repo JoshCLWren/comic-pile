@@ -5,18 +5,13 @@ import type { RollState } from '../types/rollState'
 
 function bootstrap(overrides: Partial<RollState> = {}): RollState {
   return {
-    session_id: 1,
-    user_id: 1,
     pending_thread_id: 99,
     last_rolled_result: 3,
     // SAFETY: the mode payload is not read by the pending sync
-    session_mode: 'manual' as never,
     active_thread: null,
     roll_pool: [],
     snoozed_threads: [],
     snoozed_count: 0,
-    skipped_thread_ids: [],
-    skipped_threads: [],
     ...overrides,
   }
 }

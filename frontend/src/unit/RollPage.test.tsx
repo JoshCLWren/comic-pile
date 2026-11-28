@@ -102,10 +102,6 @@ const mockedUseRollDieState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollDi
 const mockedUseBugReportRestore = cast<ReturnType<typeof vi.fn>>(vi.mocked(useBugReportRestore))
 
 const bootstrap = {
-  session_id: 1,
-  user_id: 1,
-  current_die: 6,
-  manual_die: null,
   pending_thread_id: null,
   last_rolled_result: null,
   active_thread: null,
@@ -115,8 +111,6 @@ const bootstrap = {
   ],
   snoozed_threads: [],
   snoozed_count: 0,
-  skipped_thread_ids: [],
-  skipped_threads: [],
 }
 
 function renderRollPage() {
@@ -195,7 +189,6 @@ it('drives the pool cutoff and 3D die from scoped die-state when present (#4719)
   mockedUseRollState.mockReturnValue({
     data: {
       ...bootstrap,
-      current_die: 20,
       roll_pool: [
         { id: 1, title: 'Saga', format: 'Comic' },
         { id: 2, title: 'X-Men', format: 'Comic' },
@@ -488,7 +481,6 @@ async function setupRealResetHarness(emptyPool: boolean) {
   mockedUseRollState.mockReturnValue({
     data: {
       ...bootstrap,
-      current_die: 20,
       roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }],
       snoozed_threads: [],
       snoozed_count: 0,

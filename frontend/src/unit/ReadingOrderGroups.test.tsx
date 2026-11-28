@@ -57,32 +57,13 @@ const recovery = {
 }
 
 const bootstrapWithRecovery = {
-  session_id: 1,
-  user_id: 1,
-  current_die: 8,
-  manual_die: null,
   pending_thread_id: 17,
   last_rolled_result: 4,
-  session_mode: {
-    active_bandwidth: null,
-    predicted_bandwidth: null,
-    bandwidth_confidence: null,
-    bandwidth_source: null,
-    bandwidth_version: null,
-    active_intent: null,
-    predicted_intent: null,
-    intent_confidence: null,
-    intent_source: null,
-    intent_version: null,
-    session_mode_correction_guidance: null,
-  },
   active_thread: null,
   roll_recovery: recovery,
   roll_pool: [],
   snoozed_threads: [],
   snoozed_count: 0,
-  skipped_thread_ids: [],
-  skipped_threads: [],
 }
 
 function renderGroups(threadId: number | null) {

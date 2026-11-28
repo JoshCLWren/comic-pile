@@ -60,11 +60,6 @@ const relatedApi = vi.hoisted(() => ({
 }))
 
 const bootstrapData: any = {
-  session_id: 1,
-  user_id: 1,
-  current_die: 6,
-  manual_die: null,
-  session_mode: null,
   snoozed_threads: [],
   roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }],
   last_rolled_result: 4,
@@ -83,8 +78,6 @@ const bootstrapData: any = {
     next_issue_number: '5',
   },
   snoozed_count: 0,
-  skipped_thread_ids: [],
-  skipped_threads: [],
 }
 
 const rateResponse = {

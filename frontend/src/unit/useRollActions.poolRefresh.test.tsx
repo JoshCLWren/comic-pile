@@ -40,19 +40,12 @@ const realInvalidation = (client: typeof queryClient) => invalidateAfterQueueMov
 function bootstrapWith(overrides: Partial<RollState> = {}): RollState {
   // SAFETY: the literal supplies every required bootstrap field; the spread only narrows them
   return {
-    session_id: 1,
-    user_id: 1,
-    current_die: 6,
-    manual_die: null,
     pending_thread_id: null,
     last_rolled_result: null,
-    session_mode: null,
     active_thread: null,
     roll_pool: [],
     snoozed_threads: [],
     snoozed_count: 0,
-    skipped_thread_ids: [],
-    skipped_threads: [],
     ...overrides,
   } as RollState
 }

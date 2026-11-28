@@ -377,8 +377,6 @@ describe('Visible action Snooze/Unsnooze', () => {
     mockedUseRollState.mockReturnValue({
       data: {
         snoozed_threads: [],
-        skipped_thread_ids: [],
-        skipped_threads: [],
         pending_thread_id: 2,
       },
       refetch: vi.fn(),

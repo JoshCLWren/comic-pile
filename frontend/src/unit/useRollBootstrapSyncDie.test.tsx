@@ -20,29 +20,12 @@ function bootstrapWith(
   overrides: Partial<RollState> = {},
 ): RollState {
   return {
-    session_id: 1,
-    user_id: 1,
     pending_thread_id: null,
     last_rolled_result: null,
-    session_mode: {
-      active_bandwidth: null,
-      predicted_bandwidth: null,
-      bandwidth_confidence: null,
-      bandwidth_source: null,
-      bandwidth_version: null,
-      active_intent: null,
-      predicted_intent: null,
-      intent_confidence: null,
-      intent_source: null,
-      intent_version: null,
-      session_mode_correction_guidance: null,
-    },
     active_thread: null,
     roll_pool: [],
     snoozed_threads: [],
     snoozed_count: 0,
-    skipped_thread_ids: [],
-    skipped_threads: [],
     ...overrides,
   }
 }

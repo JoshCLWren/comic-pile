@@ -82,9 +82,7 @@ const mockedUseRate = vi.mocked(useRate) as any
 
 beforeEach(() => {
   const mockBootstrapData = {
-    current_die: 6,
     last_rolled_result: null,
-    manual_die: null,
     pending_thread_id: null,
     active_thread: null,
     snoozed_threads: [
@@ -191,9 +189,7 @@ it('renders tooltip for die indicator', async () => {
 it('does not render snoozed indicators when no snoozed threads', async () => {
   mockedUseRollState.mockReturnValue({
     data: {
-      current_die: 6,
       last_rolled_result: null,
-      manual_die: null,
       pending_thread_id: null,
       active_thread: null,
       snoozed_threads: [],

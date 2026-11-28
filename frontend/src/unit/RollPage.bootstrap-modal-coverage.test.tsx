@@ -17,16 +17,12 @@ vi.mock('../contexts/useBugReportRestore', () => ({
 vi.mock('../hooks/useRollState', () => ({
   useRollState: () => ({
     data: {
-      current_die: 6,
-      manual_die: state.manualDie,
       last_rolled_result: null,
       pending_thread_id: null,
       active_thread: null,
       roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }],
       snoozed_threads: [{ id: 2, title: 'Watchmen', format: 'Comic' }],
       snoozed_count: 1,
-      skipped_thread_ids: [],
-      skipped_threads: [],
     },
     refetch: spies.refetch,
     isPending: false,

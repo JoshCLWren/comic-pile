@@ -129,10 +129,6 @@ const mockedUseBugReportRestore = cast<ReturnType<typeof vi.fn>>(vi.mocked(useBu
 // with values that disagree with the scoped die: the retired bootstrap die
 // projection must never reach the page (#4820), so these values are inert.
 const bootstrap = {
-  session_id: 1,
-  user_id: 1,
-  current_die: 8,
-  manual_die: 20,
   pending_thread_id: null,
   last_rolled_result: null,
   active_thread: null,
@@ -142,8 +138,6 @@ const bootstrap = {
   ],
   snoozed_threads: [],
   snoozed_count: 0,
-  skipped_thread_ids: [],
-  skipped_threads: [],
 }
 
 const SCOPED_DIE_20 = {

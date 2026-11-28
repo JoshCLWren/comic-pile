@@ -42,31 +42,14 @@ const bootstrapState = (
   pendingThreadId: number | null,
   sessionId = 1,
 ): RollState => ({
-  session_id: sessionId,
-  user_id: 1,
   pending_thread_id: pendingThreadId,
   last_rolled_result: pendingThreadId === null ? null : 1,
-  session_mode: {
-    active_bandwidth: null,
-    predicted_bandwidth: null,
-    bandwidth_confidence: null,
-    bandwidth_source: null,
-    bandwidth_version: null,
-    active_intent: null,
-    predicted_intent: null,
-    intent_confidence: null,
-    intent_source: null,
-    intent_version: null,
-    session_mode_correction_guidance: null,
-  },
   active_thread: null,
   roll_pool: [],
   snoozed_threads: pendingThreadId === null
     ? [{ id: 7, title: 'Doom Patrol', format: 'series' }]
     : [],
   snoozed_count: pendingThreadId === null ? 1 : 0,
-  skipped_thread_ids: [],
-  skipped_threads: [],
 })
 
 describe('snooze hooks', () => {

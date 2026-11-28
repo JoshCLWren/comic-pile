@@ -36,7 +36,6 @@ vi.mock('../components/GlossaryLink', () => ({
 
 // SAFETY: test fixture supplies only the fields the header component reads for session state
 const BOOTSTRAP = cast<RollState>({
-  session_mode: null,
 })
 
 function headerProps(overrides: Partial<React.ComponentProps<typeof RollHeader>> = {}) {
