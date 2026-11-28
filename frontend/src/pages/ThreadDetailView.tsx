@@ -9,7 +9,6 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
-import { FormatSelect } from '../pages/QueuePage/FormatSelect'
 import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import { useThread, useUpdateThread } from '../hooks/useThread'
 import { useConnectedThreads } from '../hooks/useReaderContext'
@@ -367,7 +366,6 @@ export default function ThreadDetailView() {
     editAutoOpenRef.current = true
     setEditForm({
       title: thread.title,
-      format: thread.format,
       issuesRemaining: thread.issues_remaining,
       notes: thread.notes || '',
       issues: '',

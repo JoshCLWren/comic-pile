@@ -1,6 +1,5 @@
 export { default } from './QueuePage'
 export { IssueToggleList } from './IssueToggleList'
-export { FormatSelect } from './FormatSelect'
 export { DEFAULT_CREATE_STATE } from './types'
 export type { QueueFormState, IssueMutation, QueuedIssueMutation } from './types'
 export { default as QueueThreadCard } from './QueueThreadCard'
