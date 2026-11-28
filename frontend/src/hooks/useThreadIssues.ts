@@ -6,6 +6,7 @@ import type { IssueListParams, IssueListResponse } from '../services/api-issues'
 import type { Issue, IssueDependenciesResponse } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
+import { collectAllPages, MAX_ISSUE_COLLECTION_PAGES } from '../pagination/collectAllPages'
 import { invalidateAfterIssueEdit, optimisticallyUpdateIssueStatus, optimisticallyDeleteIssue, optimisticallyReorderIssues } from '../query/cacheEffects'
 
 export const THREAD_ISSUES_PAGE_SIZE = 100
@@ -101,25 +102,22 @@ export function useThreadAllIssues(threadId: number) {
   return useQuery<Issue[]>({
     queryKey: queryKeys.thread.issuePagesAll(threadId),
     queryFn: async () => {
-      const allIssues: Issue[] = []
-      const seenPageTokens = new Set<string>()
-      let nextPageToken: string | null = null
-
-      while (true) {
-        const params: IssueListParams = { page_size: 100 }
-        if (nextPageToken) {
-          params.page_token = nextPageToken
-        }
-        const data = await issuesApi.list(threadId, params)
-        allIssues.push(...data.issues)
-
-        if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
-          return allIssues
-        }
-
-        seenPageTokens.add(data.next_page_token)
-        nextPageToken = data.next_page_token
+      const result = await collectAllPages({
+        fetchPage: (token) => {
+          const params: IssueListParams = { page_size: THREAD_ISSUES_PAGE_SIZE }
+          if (token) {
+            params.page_token = token
+          }
+          return issuesApi.list(threadId, params)
+        },
+        selectItems: (page) => page.issues,
+        selectNextToken: (page) => page.next_page_token || null,
+        maxPages: MAX_ISSUE_COLLECTION_PAGES,
+      })
+      if (result.stopReason === 'max-pages') {
+        throw new Error('Unable to load the complete issue list for this series.')
       }
+      return result.items
     },
   })
 }

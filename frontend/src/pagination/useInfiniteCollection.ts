@@ -95,11 +95,27 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
 export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
   spec: InfiniteCollectionSpec<TItem, TPage, TToken>,
 ): InfiniteCollectionState<TItem, TPage, TToken> {
+  // Repeated or stale tokens are a shared-paginator concern: a consumer must
+  // never re-request a cursor that an earlier page already handed it. Resolve
+  // the next cursor from the whole loaded chain so the same guard drives both
+  // TanStack's page advancement and the token exposed to load-more triggers.
+  const resolveNextToken = (loadedPages: TPage[]): TToken | undefined => {
+    const lastPage = loadedPages[loadedPages.length - 1]
+    if (!lastPage) return undefined
+    const next = spec.getNextPageParam(lastPage)
+    if (next == null) return undefined
+    for (const earlier of loadedPages.slice(0, -1)) {
+      const earlierNext = spec.getNextPageParam(earlier)
+      if (earlierNext != null && Object.is(earlierNext, next)) return undefined
+    }
+    return next
+  }
+
   const query = useInfiniteQuery({
     queryKey: spec.queryKey,
     queryFn: spec.queryFn,
     initialPageParam: spec.initialPageParam,
-    getNextPageParam: spec.getNextPageParam,
+    getNextPageParam: (_lastPage, allPages) => resolveNextToken(allPages as TPage[]),
     enabled: spec.enabled,
     retry: spec.retry,
     placeholderData: spec.placeholderData,
@@ -122,8 +138,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
   }
 
   const hasNextPage = !!query.hasNextPage
-  const nextPageToken: TToken | null =
-    hasNextPage && lastPage ? (spec.getNextPageParam(lastPage) ?? null) : null
+  const nextPageToken: TToken | null = hasNextPage && lastPage ? (resolveNextToken(pages) ?? null) : null
 
   const fetchNextPage = useCallback(async (): Promise<void> => {
     if (!query.hasNextPage || query.isFetchingNextPage) {
