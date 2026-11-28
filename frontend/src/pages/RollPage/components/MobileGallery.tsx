@@ -9,6 +9,7 @@ import {
 } from 'react'
 import type { IssueCard } from '../../../services/issueCardsApi'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
+import { isFunction, isWindowDefined } from '../../../utils/runtimeChecks'
 import {
   GALLERY_SWIPE_THRESHOLD,
   carouselOffset,
