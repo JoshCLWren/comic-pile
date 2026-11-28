@@ -235,7 +235,7 @@ pub(crate) fn query_error_for(operation: &'static str, error: tokio_postgres::Er
             ApiError::database_unavailable()
         }
         _ => {
-            eprintln!("DEBUG query_error operation={operation} sqlstate={:?} error={error}", sqlstate);
+            eprintln!("DEBUG query_error operation={operation} sqlstate={:?} error={error} detail={:?} constraint={:?} table={:?}", sqlstate, error.as_db_error().map(|e| e.detail()), error.as_db_error().and_then(|e| e.constraint()), error.as_db_error().map(|e| e.table()));
             tracing::error!(
                 operation,
                 sqlstate = sqlstate.unwrap_or("none"),
