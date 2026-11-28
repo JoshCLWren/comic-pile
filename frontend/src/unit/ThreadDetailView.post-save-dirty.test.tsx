@@ -172,7 +172,10 @@ describe('Thread detail Edit Series saved-draft dirty check (#5952)', () => {
     // count while the draft still holds the count captured on open.
     serverThread = SAVED_THREAD
     await user.click(screen.getByTestId('mock-toggle-issue'))
-    await waitFor(() => expect(screen.getByText('6 of 10 read')).toBeInTheDocument())
+    await waitFor(() => {
+      expect(screen.getByText((_content, element) =>
+        element?.tagName === 'P' && element.textContent === '6 of 10 issues read')).toBeInTheDocument()
+    })
 
     await user.click(screen.getByRole('button', { name: 'Save Changes' }))
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1))
