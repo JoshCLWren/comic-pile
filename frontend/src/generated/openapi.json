@@ -9647,6 +9647,147 @@
         ],
         "type": "object"
       },
+      "NativeIssueCard": {
+        "properties": {
+          "comicvine_issue_id": {
+            "description": "Confirmed provider issue identifier, never a provisional candidate.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_image_url": {
+            "description": "Exact provider-supplied CDN URL. Null when unmapped; never image bytes.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_issue_number": {
+            "description": "Display number combining authored and alias when present.",
+            "type": "string"
+          },
+          "has_confirmed_identity": {
+            "description": "Whether a confirmed ComicVine issue mapping exists.",
+            "type": "boolean"
+          },
+          "issue_id": {
+            "description": "Owned issue identifier.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Authored issue number within the run (reader's label).",
+            "type": "string"
+          },
+          "issue_number_alias": {
+            "description": "Alternate overall/story-arc number when the physical comic has dual numbering.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mapping_state": {
+            "description": "Stored mapping state (``confirmed``, ``candidate``, ...).",
+            "type": "string"
+          },
+          "overflow_routes_count": {
+            "description": "Connected labels beyond the three rendered on the face.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "provider_issue_number": {
+            "description": "Provider's own issue number from confirmed identity metadata, when known.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "description": "Effective per-issue saved rating.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "read_at": {
+            "description": "UTC read timestamp, when read.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "route_labels": {
+            "description": "Connected reading-order group labels; the face renders at most three.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "Stored read state (``read`` or ``unread``).",
+            "type": "string"
+          },
+          "tags": {
+            "description": "Owner-visible direct thread tags, in canonical display order.",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapTag"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "thread_format": {
+            "description": "Thread display format used by the compact Roll face.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "description": "Owning thread identifier.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "description": "Display series/run title.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "has_confirmed_identity",
+          "mapping_state"
+        ],
+        "type": "object"
+      },
+      "NativeIssueCardsResponse": {
+        "properties": {
+          "items": {
+            "description": "Owned cards in first-request order; foreign or missing IDs are omitted.",
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueCard"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "NativeIssueCreatorsEntry": {
         "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
         "properties": {
@@ -9664,6 +9805,48 @@
         "required": [
           "issue_id",
           "creators"
+        ],
+        "type": "object"
+      },
+      "NativeIssueReadRateResponse": {
+        "properties": {
+          "die_after": {
+            "description": "Die after this rating, when source is \"roll_offer\". Null for \"direct\" source.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "final_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue": {
+            "$ref": "#/components/schemas/NativeIssueCard"
+          },
+          "rating_event_created": {
+            "type": "boolean"
+          },
+          "read_event_created": {
+            "type": "boolean"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/ThreadProgress"
+          }
+        },
+        "required": [
+          "issue",
+          "thread",
+          "read_event_created",
+          "rating_event_created",
+          "replayed"
         ],
         "type": "object"
       },
@@ -15542,6 +15725,50 @@
         ],
         "type": "object"
       },
+      "RollLastRead": {
+        "description": "Latest durable rated issue for the reader, independent of reading sessions.",
+        "properties": {
+          "cover_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "RollLastRoll": {
         "description": "The most recent Roll recorded for this reader.",
         "properties": {
@@ -15792,6 +16019,187 @@
           "target_issue_id",
           "target_issue_number",
           "changed"
+        ],
+        "type": "object"
+      },
+      "RollRecovery": {
+        "properties": {
+          "chains": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/RollRecoveryChainNode"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/RollRecoveryDiagnostic"
+            },
+            "type": "array"
+          },
+          "direct_blockers": {
+            "items": {
+              "$ref": "#/components/schemas/RollRecoveryBlocker"
+            },
+            "type": "array"
+          },
+          "original_thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "original_thread_title": {
+            "type": "string"
+          },
+          "readable_prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/RollRecoveryPrerequisite"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "original_thread_id",
+          "original_thread_title",
+          "direct_blockers",
+          "readable_prerequisites",
+          "chains",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "RollRecoveryBlocker": {
+        "properties": {
+          "causing_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "causing_member_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rule_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_label": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_type",
+          "source_id",
+          "source_label",
+          "satisfaction_type",
+          "satisfied",
+          "causing_issue_ids",
+          "causing_member_issue_ids"
+        ],
+        "type": "object"
+      },
+      "RollRecoveryChainNode": {
+        "properties": {
+          "is_readable": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "node_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "node_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label",
+          "is_readable"
+        ],
+        "type": "object"
+      },
+      "RollRecoveryDiagnostic": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "limit": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "node_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "node_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "node_type",
+          "node_id"
+        ],
+        "type": "object"
+      },
+      "RollRecoveryPrerequisite": {
+        "properties": {
+          "is_readable": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "node_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "node_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id",
+          "label"
         ],
         "type": "object"
       },
@@ -26562,7 +26970,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IssueCardsResponse"
+                  "$ref": "#/components/schemas/NativeIssueCardsResponse"
                 }
               }
             },
@@ -26701,7 +27109,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IssueReadRateResponse"
+                  "$ref": "#/components/schemas/NativeIssueReadRateResponse"
                 }
               }
             },
@@ -29361,6 +29769,48 @@
         ]
       }
     },
+    "/api/v2/roll/last-read": {
+      "get": {
+        "description": "The reader's latest durable rated issue and exact confirmed provider cover URL, independent of reading sessions.",
+        "operationId": "last_read_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RollLastRead"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Latest durable rating, or null"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "roll"
+        ]
+      }
+    },
     "/api/v2/roll/offer": {
       "post": {
         "operationId": "offer_documentation",
@@ -29410,6 +29860,75 @@
           }
         ],
         "summary": "Documentation-only operation for the mounted v2 Roll offer command.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/recovery": {
+      "get": {
+        "description": "Bounded canonical Option E recovery for one exact browser-owned pending issue; no session or whole-library payload.",
+        "operationId": "recovery_documentation",
+        "parameters": [
+          {
+            "description": "Exact owned pending issue id",
+            "in": "query",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Comma-separated browser-owned temporary snoozed thread identifiers",
+            "in": "query",
+            "name": "snoozed",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RollRecovery"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Canonical blocked-selection recovery, or null"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Invalid issue id or snooze identifiers"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "tags": [
           "roll"
         ]
@@ -30242,6 +30761,15 @@
             "description": "Opaque continuation cursor",
             "in": "query",
             "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated exact thread ids (1-200) for bounded display summaries",
+            "in": "query",
+            "name": "ids",
             "required": false,
             "schema": {
               "type": "string"

@@ -3194,6 +3194,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/roll/last-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The reader's latest durable rated issue and exact confirmed provider cover URL, independent of reading sessions. */
+        get: operations["last_read_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/roll/offer": {
         parameters: {
             query?: never;
@@ -3205,6 +3222,23 @@ export interface paths {
         put?: never;
         /** Documentation-only operation for the mounted v2 Roll offer command. */
         post: operations["offer_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Bounded canonical Option E recovery for one exact browser-owned pending issue; no session or whole-library payload. */
+        get: operations["recovery_documentation"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6847,11 +6881,79 @@ export interface components {
             id: number;
             name: string;
         };
+        NativeIssueCard: {
+            /** @description Confirmed provider issue identifier, never a provisional candidate. */
+            comicvine_issue_id?: string | null;
+            /** @description Exact provider-supplied CDN URL. Null when unmapped; never image bytes. */
+            cover_image_url?: string | null;
+            /** @description Display number combining authored and alias when present. */
+            display_issue_number?: string;
+            /** @description Whether a confirmed ComicVine issue mapping exists. */
+            has_confirmed_identity: boolean;
+            /**
+             * Format: int32
+             * @description Owned issue identifier.
+             */
+            issue_id: number;
+            /** @description Authored issue number within the run (reader's label). */
+            issue_number: string;
+            /** @description Alternate overall/story-arc number when the physical comic has dual numbering. */
+            issue_number_alias?: string | null;
+            /** @description Stored mapping state (``confirmed``, ``candidate``, ...). */
+            mapping_state: string;
+            /**
+             * Format: int32
+             * @description Connected labels beyond the three rendered on the face.
+             */
+            overflow_routes_count?: number | null;
+            /** @description Provider's own issue number from confirmed identity metadata, when known. */
+            provider_issue_number?: string | null;
+            /**
+             * Format: double
+             * @description Effective per-issue saved rating.
+             */
+            rating?: number | null;
+            /** @description UTC read timestamp, when read. */
+            read_at?: string | null;
+            /** @description Connected reading-order group labels; the face renders at most three. */
+            route_labels?: string[] | null;
+            /** @description Stored read state (``read`` or ``unread``). */
+            status: string;
+            /** @description Owner-visible direct thread tags, in canonical display order. */
+            tags?: components["schemas"]["BootstrapTag"][] | null;
+            /** @description Thread display format used by the compact Roll face. */
+            thread_format?: string | null;
+            /**
+             * Format: int32
+             * @description Owning thread identifier.
+             */
+            thread_id: number;
+            /** @description Display series/run title. */
+            thread_title: string;
+        };
+        NativeIssueCardsResponse: {
+            /** @description Owned cards in first-request order; foreign or missing IDs are omitted. */
+            items: components["schemas"]["NativeIssueCard"][];
+        };
         /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
         NativeIssueCreatorsEntry: {
             creators: components["schemas"]["CreatorCredit"][];
             /** Format: int32 */
             issue_id: number;
+        };
+        NativeIssueReadRateResponse: {
+            /**
+             * Format: int32
+             * @description Die after this rating, when source is "roll_offer". Null for "direct" source.
+             */
+            die_after?: number | null;
+            /** Format: double */
+            final_rating?: number | null;
+            issue: components["schemas"]["NativeIssueCard"];
+            rating_event_created: boolean;
+            read_event_created: boolean;
+            replayed: boolean;
+            thread: components["schemas"]["ThreadProgress"];
         };
         /** @description One issue row (Python `IssueResponse`). */
         NativeIssueResponse: {
@@ -8697,6 +8799,17 @@ export interface components {
             /** @description The owning thread identifiers, parallel to `issue_ids`. */
             thread_ids: number[];
         };
+        /** @description Latest durable rated issue for the reader, independent of reading sessions. */
+        RollLastRead: {
+            cover_url?: string | null;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            read_at?: string | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+            thread_title?: string | null;
+        };
         /** @description The most recent Roll recorded for this reader. */
         RollLastRoll: {
             /**
@@ -8793,6 +8906,49 @@ export interface components {
             /** Format: int32 */
             target_thread_id: number;
             target_thread_title: string;
+        };
+        RollRecovery: {
+            chains: components["schemas"]["RollRecoveryChainNode"][][];
+            diagnostics: components["schemas"]["RollRecoveryDiagnostic"][];
+            direct_blockers: components["schemas"]["RollRecoveryBlocker"][];
+            /** Format: int32 */
+            original_thread_id: number;
+            original_thread_title: string;
+            readable_prerequisites: components["schemas"]["RollRecoveryPrerequisite"][];
+        };
+        RollRecoveryBlocker: {
+            causing_issue_ids: number[];
+            causing_member_issue_ids: number[];
+            note?: string | null;
+            /** Format: int32 */
+            rule_id?: number | null;
+            satisfaction_type: string;
+            satisfied: boolean;
+            /** Format: int32 */
+            source_id: number;
+            source_label: string;
+            source_type: string;
+        };
+        RollRecoveryChainNode: {
+            is_readable: boolean;
+            label: string;
+            /** Format: int32 */
+            node_id: number;
+            node_type: string;
+        };
+        RollRecoveryDiagnostic: {
+            code: string;
+            limit?: number | null;
+            /** Format: int32 */
+            node_id: number;
+            node_type: string;
+        };
+        RollRecoveryPrerequisite: {
+            is_readable?: boolean | null;
+            label: string;
+            /** Format: int32 */
+            node_id: number;
+            node_type: string;
         };
         /**
          * RollResponse
@@ -16031,7 +16187,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueCardsResponse"];
+                    "application/json": components["schemas"]["NativeIssueCardsResponse"];
                 };
             };
             /** @description Invalid or unbounded issue id list */
@@ -16158,7 +16314,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueReadRateResponse"];
+                    "application/json": components["schemas"]["NativeIssueReadRateResponse"];
                 };
             };
             /** @description Issue not found for this reader */
@@ -18726,6 +18882,47 @@ export interface operations {
             };
         };
     };
+    last_read_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest durable rating, or null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollLastRead"] | null;
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     offer_documentation: {
         parameters: {
             query?: never;
@@ -18777,6 +18974,66 @@ export interface operations {
                 content?: never;
             };
             /** @description Roll offer projection unavailable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    recovery_documentation: {
+        parameters: {
+            query: {
+                /** @description Exact owned pending issue id */
+                issue_id: number;
+                /** @description Comma-separated browser-owned temporary snoozed thread identifiers */
+                snoozed?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical blocked-selection recovery, or null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollRecovery"] | null;
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid issue id or snooze identifiers */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -19389,6 +19646,8 @@ export interface operations {
                 page_size?: number;
                 /** @description Opaque continuation cursor */
                 page_token?: string;
+                /** @description Comma-separated exact thread ids (1-200) for bounded display summaries */
+                ids?: string;
             };
             header?: never;
             path?: never;

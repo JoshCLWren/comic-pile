@@ -621,7 +621,7 @@ export interface IssueCardsRequest {
   body: components['schemas']['IssueCardsRequest']
 }
 
-export type IssueCardsResponse = components['schemas']['IssueCardsResponse']
+export type IssueCardsResponse = components['schemas']['NativeIssueCardsResponse']
 
 export interface IssueIntelligenceDocsRequest {
   path: {
@@ -663,7 +663,7 @@ export interface IssueReadRateRequest {
   body: components['schemas']['IssueReadRateRequest']
 }
 
-export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
+export type IssueReadRateResponse = components['schemas']['NativeIssueReadRateResponse']
 
 export interface IssueReadStateBulkMarkReadRequest {
   body: components['schemas']['IssueBulkRequest']
@@ -709,6 +709,8 @@ export interface IssueReadStateReaderContextRequest {
 }
 
 export type IssueReadStateReaderContextResponse = components['schemas']['ReaderContextResponse']
+
+export type LastReadResponse = components['schemas']['RollLastRead'] | null
 
 export interface ListRequest {
   query?: {
@@ -799,6 +801,7 @@ export interface ListThreadsRequest {
     sort?: string
     page_size?: number
     page_token?: string
+    ids?: string
   }
 }
 
@@ -996,6 +999,15 @@ export interface ReadingPlanSyncRequest {
 export type ReadingPlanSyncResponse = components['schemas']['SyncResponse']
 
 export type ReadingPlanSyncStatusResponse = components['schemas']['SyncStatusResponse']
+
+export interface RecoveryRequest {
+  query: {
+    issue_id: number
+    snoozed?: string
+  }
+}
+
+export type RecoveryResponse = components['schemas']['RollRecovery'] | null
 
 export interface RefreshRequest {
   body?: components['schemas']['RefreshTokenRequest'] | null
@@ -1476,6 +1488,7 @@ export interface NativeV2Client {
   issueReadStateMarkUnread(args: IssueReadStateMarkUnreadRequest): Promise<IssueReadStateMarkUnreadResponse>
   issueReadStateMove(args: IssueReadStateMoveRequest): Promise<IssueReadStateMoveResponse>
   issueReadStateReaderContext(args: IssueReadStateReaderContextRequest): Promise<IssueReadStateReaderContextResponse>
+  lastRead(): Promise<LastReadResponse>
   list(args?: ListRequest): Promise<ListResponse>
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
@@ -1517,6 +1530,7 @@ export interface NativeV2Client {
   readingOrdersList(): Promise<ReadingOrdersListResponse>
   readingPlanSync(args: ReadingPlanSyncRequest): Promise<ReadingPlanSyncResponse>
   readingPlanSyncStatus(): Promise<ReadingPlanSyncStatusResponse>
+  recovery(args: RecoveryRequest): Promise<RecoveryResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   refreshMetadata(args: RefreshMetadataRequest): Promise<RefreshMetadataResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
@@ -2050,6 +2064,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/reader-context`,
       )
     },
+    lastRead() {
+      return client.get<LastReadResponse>("/v2/roll/last-read")
+    },
     list(args: ListRequest = {}) {
       return client.get<ListResponse>(
         "/v2/identity-inbox",
@@ -2256,6 +2273,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     readingPlanSyncStatus() {
       return client.get<ReadingPlanSyncStatusResponse>("/v2/reading-plan-sync/status")
+    },
+    recovery(args: RecoveryRequest) {
+      return client.get<RecoveryResponse>(
+        "/v2/roll/recovery",
+        { params: compactQuery(args.query) },
+      )
     },
     refresh(args: RefreshRequest = {}) {
       return client.post<RefreshResponse, RefreshRequest['body']>(

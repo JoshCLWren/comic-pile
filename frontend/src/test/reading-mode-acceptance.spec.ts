@@ -83,13 +83,14 @@ async function mockScopedRollReadApi(page: Page): Promise<void> {
   })
 }
 
+function isModeLabelKey(value: string): value is keyof typeof MODE_LABELS {
+  return Object.hasOwn(MODE_LABELS, value)
+}
+
 function modeLabel(value: string | null): string {
   if (!value) return ''
   const normalized = value.trim().toLowerCase()
-  return Object.hasOwn(MODE_LABELS, normalized)
-    // SAFETY: Object.hasOwn above proves the normalized key exists in MODE_LABELS.
-    ? MODE_LABELS[normalized as keyof typeof MODE_LABELS]
-    : value.trim()
+  return isModeLabelKey(normalized) ? MODE_LABELS[normalized] : value.trim()
 }
 
 async function expectModeChip(page: Page, mode: ReadingMode): Promise<void> {
