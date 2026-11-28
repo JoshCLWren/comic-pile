@@ -249,8 +249,8 @@ export function ReadingContextPillar({
                   >
                     <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{
                       backgroundColor: isCurrent ? 'var(--theme-continuity-accent)' :
-                                  isPrevious ? 'rgba(6,182,212,0.3)' :
-                                  'rgba(6,182,212,0.1)'
+                                  isPrevious ? 'color-mix(in srgb, var(--theme-continuity-accent) 30%, transparent)' :
+                                  'color-mix(in srgb, var(--theme-continuity-accent) 10%, transparent)'
                     }}></div>
 
                     <div className="min-w-0 flex-1">
@@ -294,7 +294,7 @@ export function ReadingContextPillar({
                     <div
                       id={detailId}
                       className="mt-1 mb-1 ml-4 space-y-1.5 rounded-xl p-2.5"
-                      style={{ border: '1px solid rgba(6,182,212,0.25)', backgroundColor: 'rgba(6, 182, 212, 0.07)' }}
+                      style={{ border: '1px solid color-mix(in srgb, var(--theme-continuity-accent) 25%, transparent)', backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 7%, transparent)' }}
                       aria-label={`Context for ${seriesName} issue ${issue.issue_number}`}
                     >
                       <p
@@ -316,8 +316,8 @@ export function ReadingContextPillar({
                               className="inline-flex min-h-6 items-center rounded-full px-2 font-bold transition focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
                               style={{
                                 ...readingContextType('chipLabel'),
-                                border: '1px solid rgba(212,137,14,0.4)',
-                                backgroundColor: 'rgba(212, 137, 14, 0.12)',
+                                border: '1px solid color-mix(in srgb, var(--theme-comic-accent) 40%, transparent)',
+                                backgroundColor: 'color-mix(in srgb, var(--theme-comic-accent) 12%, transparent)',
                                 color: 'rgb(250, 204, 139)',
                               }}
                               onClick={() => openCrossover(membership.id)}
@@ -335,7 +335,7 @@ export function ReadingContextPillar({
                           style={{
                             ...readingContextType('chipLabel'),
                             border: '1px solid rgba(6,182,212,0.4)',
-                            backgroundColor: 'rgba(6, 182, 212, 0.09)',
+                            backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 9%, transparent)',
                             color: 'var(--theme-continuity-accent)',
                           }}
                           onClick={openCurrentThread}
@@ -360,7 +360,7 @@ export function ReadingContextPillar({
       ) : null}
 
       {readerContext && (dependencyEdges.length > 0 || continuityEdges.length > 0) && (
-        <section aria-labelledby="dependency-edges-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+        <section aria-labelledby="dependency-edges-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 9%, transparent)' }}>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3
               id="dependency-edges-heading"
@@ -497,7 +497,7 @@ export function ReadingContextPillar({
                       className="min-h-11 rounded-lg px-3 font-black text-[var(--theme-comic-accent)] transition focus:ring-2 hover:brightness-125"
                       style={{
                         ...readingContextType('actionLabel'),
-                        border: '1px solid rgba(212,137,14,0.4)',
+                        border: '1px solid color-mix(in srgb, var(--theme-comic-accent) 40%, transparent)',
                         backgroundColor: 'rgba(212, 137, 14, 0.09)',
                       }}
                       aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
@@ -529,7 +529,7 @@ export function ReadingContextPillar({
               style={{
                 ...readingContextType('actionLabel'),
                 border: '1px solid rgba(6,182,212,0.4)',
-                backgroundColor: 'rgba(6, 182, 212, 0.09)',
+                backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 9%, transparent)',
               }}
             >
               Correct continuity
