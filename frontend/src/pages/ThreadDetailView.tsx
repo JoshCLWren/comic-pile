@@ -138,6 +138,7 @@ export default function ThreadDetailView() {
 
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  const [editError, setEditError] = useState<string | null>(null)
   // MQA-QUEUE-008 / #4356: closing a dirty Edit Series draft via the dialog
   // close control (×, Escape, backdrop) asks whether to discard, mirroring the
   // queue page's Edit Series dialog. Queued deferred issue edits count as
@@ -390,6 +391,7 @@ export default function ThreadDetailView() {
   const handleEditSubmit = async (event: FormEvent) => {
     event.preventDefault()
     const currentThread = thread!
+    setEditError(null)
 
     try {
       // First, flush any pending issue mutations (add, delete, reorder)
@@ -437,14 +439,14 @@ export default function ThreadDetailView() {
       }
     } catch (error) {
       console.error('Failed to update thread or flush issues:', error)
-      // The error is already handled by the mutation's error boundary,
-      // but we keep the console error for debugging
+      setEditError(`Failed to save series: ${getApiErrorDetail(error)}`)
     }
   }
 
   const openEditModal = () => {
     const currentThread = thread!
 
+    setEditError(null)
     setEditForm({
       title: currentThread.title,
       format: currentThread.format,
@@ -460,21 +462,13 @@ export default function ThreadDetailView() {
   // Dirty check mirrors the queue page's Edit Series dialog (QueueModals):
   // any edited draft field or queued deferred issue edit must prompt before
   // the close control discards it.
-  //
-  // #5952: for a migrated thread (`total_issues !== null`) the issue count is
-  // server-derived from the issue rows, not an editable draft field. A
-  // completed toggle changes `thread.issues_remaining` on refetch while the
-  // draft still holds the value captured when the dialog opened, so comparing
-  // it would leave an already-saved, clean draft looking dirty. Only compare
-  // the field when it is actually rendered (unmigrated threads); queued issue
-  // edits are tracked separately by `hasPendingIssueEdits`.
   const initialCredits = thread ? getManualCreatorCreditList(thread) : []
   const editFormIsDirty =
     thread != null &&
     (editForm.title !== thread.title ||
       editForm.format !== thread.format ||
       editForm.notes !== (thread.notes ?? '') ||
-      (thread.total_issues === null && editForm.issuesRemaining !== thread.issues_remaining) ||
+      editForm.issuesRemaining !== thread.issues_remaining ||
       JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
   const editHasUnsavedChanges = editFormIsDirty || hasPendingIssueEdits
 
@@ -490,6 +484,7 @@ export default function ThreadDetailView() {
     if (!isEditOpen) {
       setHasPendingIssueEdits(false)
       setShowDiscardPrompt(false)
+      setEditError(null)
     }
   }, [isEditOpen])
 
@@ -1053,6 +1048,16 @@ export default function ThreadDetailView() {
               deferred={true}
               onPendingMutationsChange={setHasPendingIssueEdits}
             />
+          )}
+
+          {editError && (
+            <p
+              role="alert"
+              data-testid="thread-edit-error"
+              className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-danger)]"
+            >
+              {editError}
+            </p>
           )}
 
           <button
