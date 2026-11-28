@@ -379,7 +379,7 @@ export default function RollPage() {
   // nulls `rolledResult`, so the die and CTA fall back to idle/"Begin".
   const hasRolled = state.rolledResult != null
  
-  if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
+  if (isBootstrapLoading && !isBootstrapError) {
     // A timed-out bootstrap stays pending through the shared retry policy
     // (issue #3429). Once an attempt has failed, say so and offer recovery
     // instead of holding a bare spinner until retries exhaust. isBootstrapRetrying
