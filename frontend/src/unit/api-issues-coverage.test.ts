@@ -49,6 +49,8 @@ describe('issuesApi', () => {
 
     expect(serviceSource).not.toContain('/v1/threads/${threadId}/issues')
     expect(serviceSource).not.toContain('/v1/threads/${threadId}/issues/creators')
+    expect(serviceSource).not.toContain(':migrateToIssues')
+    expect(serviceSource).not.toContain(':setCurrentIssue')
   })
 
   it('previews creates with every positioning and strategy option', async () => {
@@ -78,6 +80,6 @@ describe('issuesApi', () => {
     expect(client.put).toHaveBeenCalledWith('/v2/issues/2/position', { after_issue_id: null })
     expect(client.put).toHaveBeenCalledWith('/v2/threads/3/issue-order', { issue_ids: [1, 2] })
     expect(client.delete).toHaveBeenCalledWith('/v2/issues/4')
-    expect(client.post).toHaveBeenCalledWith('/v1/threads/5:migrateToIssues', { last_issue_read: 2, total_issues: 10 })
+    expect(client.post).toHaveBeenCalledWith('/v2/threads/5/issues', { issue_range: '1-10' })
   })
 })

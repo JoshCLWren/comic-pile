@@ -61,8 +61,8 @@ const BULK_READ_MARKER_CHUNK_SIZE = 100
 /**
  * Convert an untracked thread into individual v2 issue resources (#5707).
  *
- * The retired `POST /v1/threads/{id}:migrateToIssues` bundled issue creation and
- * reading progress in one server-authoritative action. The v2 contract composes
+ * The retired one-shot v1 migration action bundled issue creation and
+ * reading progress in one server-authoritative call. The v2 contract composes
  * the same result from scoped resources: create `1-N`, mark the first
  * `lastIssueRead` issues read (the server re-derives queue and reading state),
  * then read the updated thread. No client-side next-unread pointer is stored.
@@ -92,7 +92,7 @@ export async function migrateThreadToIssues(
     `/v2/threads/${threadId}/issues`,
     { issue_range: `1-${totalIssues}` },
   )
-  const readIds = created.issues.slice(0, lastIssueRead).map((issue) => issue.id)
+  const readIds = (created.issues ?? []).slice(0, lastIssueRead).map((issue) => issue.id)
   for (let offset = 0; offset < readIds.length; offset += BULK_READ_MARKER_CHUNK_SIZE) {
     await client.post('/v2/issue-read-markers', {
       issue_ids: readIds.slice(offset, offset + BULK_READ_MARKER_CHUNK_SIZE),
