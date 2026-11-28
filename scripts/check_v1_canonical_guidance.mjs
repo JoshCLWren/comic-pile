@@ -115,7 +115,7 @@ export function checkRepository(root = ROOT) {
   } else if (Number(declared[1]) !== operations.length) {
     failures.push(
       `${CANONICAL_DOC_PATH}: declares ${declared[1]} retained v1 operations but `
-      + `${INVENTORY_PATH} records ${operations.length}`,
+      + `${CENSUS_PATH} records ${operations.length}`,
     );
   }
 
