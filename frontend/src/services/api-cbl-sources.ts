@@ -313,7 +313,7 @@ export function createCblSourcesApi(client: HttpClient) {
         include ? 'include' : 'exclude',
       ]),
     )
-    const payload: {
+    type CommitSourcePayload = {
       entry_decisions: Record<string, string>
       series_decisions: never[]
       series_overrides: Array<{ cbl_position: number; decision: 'include' | 'exclude' }>
@@ -322,7 +322,8 @@ export function createCblSourcesApi(client: HttpClient) {
       revision_sha: string
       list_version?: number | null
       idempotency_key?: string | null
-    } = {
+    }
+    const payload: CommitSourcePayload = {
       entry_decisions: entryDecisions,
       series_decisions: [],
       series_overrides: seriesOverrides,
