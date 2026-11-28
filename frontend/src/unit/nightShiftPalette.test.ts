@@ -153,7 +153,7 @@ describe('Night Shift single-palette contract (#5980)', () => {
     )
   })
 
-  it('renders text and status colors at WCAG AA contrast on page and panel', () => {
+  it('renders text and status colors at WCAG AA contrast on every shared surface', () => {
     const surfaces = [
       resolveToken(tokens, '--theme-bg-page'),
       resolveToken(tokens, '--theme-bg-panel'),
