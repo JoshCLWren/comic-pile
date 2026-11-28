@@ -88,7 +88,7 @@ export function queueThreadsQueryOptions(
       }
       return threadsList.list(params, pageParam ?? undefined)
     },
-    // SAFETY: null is the intentional first pageParam; the canonical paginator types it as string after the first page.
+    // SAFETY: null is the intentional first pageParam; useInfiniteQuery types it as string after the first page.
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ThreadListResponse) => lastPage.next_page_token ?? undefined,
     /**
@@ -132,11 +132,6 @@ export function useQueueThreads(
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: 'always',
     selectPage: (page) => page.threads,
-    // A cursor page can replay a row when membership changes between fetches
-    // (including a focus/same-route refetch of cached cursors). Deduplicate by
-    // the stable thread id so a read-only revisit never renders the same series
-    // twice; distinct threads are never reordered or hidden (#3604).
-    selectId: (thread) => thread.id,
   })
 
   // Trigger a refetch when navigating back to the queue route to update stale

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { releasesApi, type Release, type ReleaseListResponse } from '../services/api-releases'
 import { queryKeys } from '../query/queryKeys'
 
@@ -76,15 +76,13 @@ export function useReleases(
   limit: number = RELEASES_PAGE_SIZE,
   listApi: ReleasesListApi = releasesApi,
 ): ReleasesState {
-  const options = releasesQueryOptions(limit, listApi)
-  const query = useInfiniteCollection<Release, ReleaseListResponse, number>({
-    ...options,
-    selectPage: (page) => page.releases,
+  const query = useInfiniteQuery({
+    ...releasesQueryOptions(limit, listApi),
     retry: false,
   })
 
-  const pages = query.pages
-  const releases = query.items
+  const pages = query.data?.pages ?? []
+  const releases = pages.flatMap(page => page.releases)
   const total = pages[0]?.total ?? 0
 
   // `loadMore` depends on the stable members of the query result instead of
@@ -92,33 +90,33 @@ export function useReleases(
   // A stable identity keeps the callback usable as an effect dependency, so
   // an auto-paging effect re-runs when the paging state actually changes
   // rather than after every unrelated render.
-  const { hasNextPage, isNextPageLoading, fetchNextPage, refetch: refetchPages } = query
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query
   const loadMore = useCallback((): Promise<void> => {
-    if (!hasNextPage || isNextPageLoading) {
+    if (!hasNextPage || isFetchingNextPage) {
       return Promise.resolve()
     }
-    return fetchNextPage()
-  }, [hasNextPage, isNextPageLoading, fetchNextPage])
+    return fetchNextPage().then(() => undefined)
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   const retry = useCallback((): Promise<void> => {
     if (pages.length === 0) {
-      return refetchPages()
+      return query.refetch().then(() => undefined)
     }
-    return fetchNextPage()
-  }, [pages.length, refetchPages, fetchNextPage])
+    return query.fetchNextPage().then(() => undefined)
+  }, [query, pages.length])
 
   return {
     releases,
     total,
-    isPending: query.isInitialLoading,
-    isFetchingMore: query.isNextPageLoading,
+    isPending: query.isPending,
+    isFetchingMore: query.isFetchingNextPage,
     isError: query.isError,
     error: normalizeReleasesError(query.error),
-    hasMore: query.hasNextPage || releases.length < total,
+    hasMore: query.hasNextPage ?? releases.length < total,
     loadMore,
     retry,
     refetch: () => {
-      void refetchPages()
+      void query.refetch()
     },
   }
 }

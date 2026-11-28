@@ -98,9 +98,29 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
             crate::issue_duplicate_reconciliation::IssueDuplicateReconciliationApi::openapi(),
         );
 
-    // #4549: /api/v1/auth/* and /api/auth/* are retired at the router, the
-    // Vercel ingress and here. Only /api/v2/auth/* is published to clients; do
-    // not reintroduce alias paths into this generated contract.
+    // Each alias is mounted to the identical handler in the native router.
+    // Copying that handler's generated contract avoids a second DTO definition.
+    for operation in [
+        "register",
+        "login",
+        "refresh",
+        "logout",
+        "csrf",
+        "me",
+        "forgot-password",
+        "reset-password",
+    ] {
+        let source = format!("/api/v2/auth/{operation}");
+        if let Some(item) = document.paths.paths.get(&source).cloned() {
+            for prefix in ["/api/v1/auth", "/api/auth"] {
+                let alias = format!("{prefix}/{operation}");
+                document
+                    .paths
+                    .paths
+                    .insert(alias.clone(), alias_item(item.clone(), &alias));
+            }
+        }
+    }
     for (source, alias) in [
         (
             "/api/v2/issues/{issue_id}/comicvine",
@@ -155,36 +175,6 @@ mod tests {
             .to_pretty_json()
             .expect("serializable contract");
         assert_eq!(expected.trim_end(), generated.trim_end());
-    }
-
-    /// #4549: retired auth aliases must not be published in any generated
-    /// contract, while every canonical v2 auth operation stays documented.
-    #[test]
-    fn auth_aliases_are_absent_from_the_published_contract() {
-        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
-        let paths = document["paths"].as_object().expect("paths");
-        for operation in [
-            "register",
-            "login",
-            "refresh",
-            "logout",
-            "csrf",
-            "me",
-            "forgot-password",
-            "reset-password",
-        ] {
-            assert!(
-                paths.contains_key(&format!("/api/v2/auth/{operation}")),
-                "canonical /api/v2/auth/{operation} must stay published"
-            );
-            for prefix in ["/api/v1/auth", "/api/auth"] {
-                let alias = format!("{prefix}/{operation}");
-                assert!(
-                    !paths.contains_key(&alias),
-                    "retired alias {alias} must not be published"
-                );
-            }
-        }
     }
 
     /// The thread dependency operations moved to native Rust but their browser

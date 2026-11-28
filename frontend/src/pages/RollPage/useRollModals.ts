@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { threadsApi } from '../../services/api-threads'
-import {
-  COLLECT_ALL_DEFAULT_MAX_PAGES,
-  collectAllPages,
-} from '../../pagination/collectAllPages'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { ThreadListItem } from '../../types'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
@@ -56,28 +52,18 @@ export function useRollModals({
 
     let cancelled = false
     async function loadAllOverrideThreads() {
-      const firstPage = await threadsApi.list({ page_size: 200 }, undefined)
-      const total = firstPage.filtered_count ?? firstPage.active_count
-      const maxPages = Math.max(
-        COLLECT_ALL_DEFAULT_MAX_PAGES,
-        Math.ceil((total ?? 0) / 200),
-      )
-      const collected = await collectAllPages({
-        fetchPage: async (token) => token === null
-          ? firstPage
-          : threadsApi.list({ page_size: 200 }, token),
-        selectItems: (page) => page.threads,
-        selectNextToken: (page) => page.next_page_token || null,
-        maxPages,
-      })
-      if (collected.stopReason === 'max-pages') {
-        throw new Error('Unable to load the complete override thread list.')
-      }
+      const collected: ThreadListItem[] = []
+      let pageToken: string | null = null
+      do {
+        const result = await threadsApi.list({ page_size: 200 }, pageToken ?? undefined)
+        collected.push(...result.threads)
+        pageToken = result.next_page_token ?? null
+      } while (pageToken)
 
       if (!cancelled) {
         // Keep the full thread projection: RollModal filters choices, and
         // snoozed options also need the canonical series cover from this batch.
-        setOverrideThreads(collected.items)
+        setOverrideThreads(collected)
       }
     }
 

@@ -188,27 +188,6 @@ entire library across all screens. The guard test
 `frontend/src/unit/boundedThreadQuery.guard.test.tsx` fails if a universal
 `useThreads` export is reintroduced or if the queue query auto-traverses pages.
 
-### Pagination convergence (#2569 / #2570)
-
-`frontend/src/pagination/` is the only place that owns TanStack infinite-query
-mechanics. Interactive collections consume `useInfiniteCollection`; surfaces
-that genuinely need a complete list consume `collectAllPages`. Both own
-repeated-token protection and bounded traversal, so a caller never keeps its
-own `seenPageTokens`/`nextPageToken` state machine. The shared
-`PaginationSentinel` provides the intersection trigger; a Load More button
-calls the same `fetchNextPage`.
-
-`frontend/src/pagination/bespokePagers.baseline.json` records the migrated
-surfaces and every remaining non-opaque backend cursor contract (creator
-detail, releases, CBL source detail, ComicVine provider search and identity
-inbox offset paging). Those exceptions keep their cursor in `pageParam` and
-must not reintroduce client-side token loops. The two ComicVine provider-search
-dialogs (`ComicVineSearchDialog.tsx` and `AddSeriesFromComicVineDialog.tsx`)
-keep `nextOffset`/`hasMore` in local state because their guarded, debounced
-provider requests span dialog steps; they are explicitly listed as documented
-exceptions rather than migrated surfaces. The conformance test
-`frontend/src/unit/paginationConformance.test.ts` enforces both rules.
-
 ## Routing, Code Splitting, and Route Prefetch
 
 - `frontend/src/routes/routeModules.ts` is the single source of truth for the

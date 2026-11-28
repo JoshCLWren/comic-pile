@@ -9,7 +9,6 @@ import { issuesApi } from '../services/api-issues'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { useBulkReadOperations } from '../hooks/useBulkReadOperations'
-import { collectAllPages, MAX_ISSUE_COLLECTION_PAGES } from '../pagination/collectAllPages'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
@@ -150,18 +149,13 @@ export default function HistoryPage() {
     setRestoringThreadId(threadId)
     setRestoreMessage(null)
     try {
-      const collected = await collectAllPages({
-        fetchPage: (token) => issuesApi.list(threadId, {
-          status: 'read', page_size: 100, page_token: token ?? undefined,
-        }),
-        selectItems: (page) => page.issues.map((issue) => issue.id),
-        selectNextToken: (page) => page.next_page_token || null,
-        maxPages: MAX_ISSUE_COLLECTION_PAGES,
-      })
-      if (collected.stopReason === 'max-pages') {
-        throw new Error('Unable to load every read issue for this series.')
-      }
-      const ids = collected.items
+      const ids: number[] = []
+      let pageToken: string | undefined
+      do {
+        const page = await issuesApi.list(threadId, { status: 'read', page_size: 100, page_token: pageToken })
+        ids.push(...page.issues.map((i) => i.id))
+        pageToken = page.next_page_token ?? undefined
+      } while (pageToken)
       if (ids.length === 0) {
         setRestoreMessage('No read issues to restore.')
         return

@@ -39,7 +39,7 @@ async fn setup() -> (
         &state,
         Request::builder()
             .method("POST")
-            .uri("/api/v2/auth/register")
+            .uri("/api/v1/auth/register")
             .header(
                 "x-forwarded-for",
                 format!(

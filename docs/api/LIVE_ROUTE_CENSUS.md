@@ -13,22 +13,38 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 237 (v1 57, v2 176, unversioned 4).
-- v1 routes with a named retirement owner: 57.
+- Live API routes: 252 (v1 64, v2 176, unversioned 12).
+- v1 routes with a named retirement owner: 64.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 918.
+- Scanned first-party call sites: 917.
 - Stale AIP baseline entries (no live route): 4.
-- Allowlist entries: 159 (owner 159, baseline debt 0, nonconforming v2 98).
+- Allowlist entries: 174 (owner 174, baseline debt 0, nonconforming v2 98).
 
 ## Ownership matrix
 
 | Method | Canonical path | Rust handler | Version | Actual consumers | Production ingress | Owner | Proposed v2 replacement / disposition | Rollout status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| GET | `/api/auth/csrf` | `auth::handlers::csrf` | unversioned | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/auth/forgot-password` | `auth::handlers::forgot_password` | unversioned | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/auth/login` | `auth::handlers::login` | unversioned | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/auth/logout` | `auth::handlers::logout` | unversioned | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| GET | `/api/auth/me` | `auth::handlers::me` | unversioned | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/auth/refresh` | `auth::handlers::refresh` | unversioned | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/auth/register` | `auth::handlers::register` | unversioned | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/auth/reset-password` | `auth::handlers::reset_password` | unversioned | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
 | POST | `/api/bug-reports/` | `bug_reports::create` | unversioned | none | /api/native_roll.rs | #5718 | POST /api/v2/bugReports | compatibility-alias-debt |
 | GET | `/api/metrics` | `metrics::get_metrics` | unversioned | none | /api/native_roll.rs | #4335 | retain-infrastructure | active-infrastructure |
 | GET | `/api/roll/events/{event_id}/recommendation-explanation` | `recommendation_explanation::get_recommendation_explanation` | unversioned | none | /api/native_roll.rs | #4595 | retire-without-replacement | legacy-family-debt |
 | GET | `/api/threads/{thread_id}` | `threads::get_thread_detail` | unversioned | none | /api/native_roll.rs | #5701 | GET /api/v2/threads/{thread_id} | compatibility-alias-debt |
+| GET | `/api/v1/auth/csrf` | `auth::handlers::csrf` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/v1/auth/forgot-password` | `auth::handlers::forgot_password` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/v1/auth/login` | `auth::handlers::login` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/v1/auth/logout` | `auth::handlers::logout` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| GET | `/api/v1/auth/me` | `auth::handlers::me` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/v1/auth/refresh` | `auth::handlers::refresh` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/v1/auth/register` | `auth::handlers::register` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
+| POST | `/api/v1/auth/reset-password` | `auth::handlers::reset_password` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
 | POST | `/api/v1/bug-reports/` | `bug_reports::create` | v1 | frontend/src/services/api-bug-reports.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5718 | POST /api/v2/bugReports | slice-open |
 | POST | `/api/v1/catalog/series-mappings/preview` | `catalog_series_mapping_preview::preview_series_mapping_handler` | v1 | frontend/src/services/api-series-mapping.ts | /api/native_roll.rs | #5716 | POST /api/v2/seriesMappings:preview | slice-open |
 | GET | `/api/v1/comicvine/series/{comicvine_volume_id}/import-status` | `comicvine_resolution::series_import_status` | v1 | none | /api/native_roll.rs | #4835 | GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status | slice-open |
@@ -217,7 +233,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | PATCH | `/api/v2/readingOrderGroups/{group_id}` | `dependency_groups::update_group_v2` | v2 | frontend/src/services/api-dependency-groups.ts, frontend/src/unit/api-dependency-groups.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | DELETE | `/api/v2/readingOrderGroups/{group_id}` | `dependency_groups::delete_group_v2` | v2 | frontend/src/services/api-dependency-groups.ts, frontend/src/unit/api-dependency-groups.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions` | `session_list::list_reading_sessions` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
-| POST | `/api/v2/readingSessions` | `bootstrap::initialize_session` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
+| POST | `/api/v2/readingSessions` | `bootstrap::initialize_session` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}` | `session_list::get_reading_session` | v2 | frontend/src/unit/api.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}/details` | `session_details::get_session_details` | v2 | frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}/snapshots` | `session_history::list_session_snapshots` | v2 | frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
@@ -227,7 +243,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/roll/die-state` | `roll_resources::die_state` | v2 | frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/rollResourcesApi.test.ts | /api/native_roll.rs | #4595 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/dismiss-pending` | `dismiss_pending::dismiss_pending` | v2 | frontend/src/services/api-roll.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | GET | `/api/v2/roll/eligible-issue-ids` | `roll_resources::eligible_issue_ids` | v2 | frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/rollResourcesApi.test.ts | /api/native_roll.rs | #4595 | canonical-v2 | live-target |
-| POST | `/api/v2/roll/offer` | `roll_offer::offer` | v2 | frontend/src/services/api-roll.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
+| POST | `/api/v2/roll/offer` | `roll_offer::offer` | v2 | frontend/src/services/api-roll.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/reset` | `roll_reset::reset` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/RollPage.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/switch-prerequisite` | `roll_switch_prerequisite::switch_prerequisite` | v2 | frontend/src/services/rollBootstrapApi.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/unsnooze` | `roll_offer::unsnooze` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
@@ -247,7 +263,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | DELETE | `/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}` | `tags::unassign_tag` | v2 | frontend/src/services/api-tags.ts, frontend/src/unit/api-tags.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/tags/{tag_id}/unassignment-batches` | `tags::bulk_unassign_tag` | v2 | frontend/src/services/api-tags.ts, frontend/src/unit/api-tags.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | GET | `/api/v2/tags/{tag_id}/usage` | `tags::get_tag_usage` | v2 | frontend/src/services/api-tags.ts, frontend/src/unit/api-tags.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
-| GET | `/api/v2/threads` | `threads::list_threads` | v2 | frontend/src/services/api-threads.ts, frontend/src/test/fixtures.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-2725-queue-virtualization-blank-region.spec.ts, frontend/src/test/issue-4503-request-budget.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api-threads.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4342 | canonical-v2 | live-target |
+| GET | `/api/v2/threads` | `threads::list_threads` | v2 | frontend/src/services/api-threads.ts, frontend/src/test/fixtures.ts, frontend/src/test/issue-2725-queue-virtualization-blank-region.spec.ts, frontend/src/test/issue-4503-request-budget.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api-threads.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4342 | canonical-v2 | live-target |
 | PATCH | `/api/v2/threads/{thread_id}` | `thread_lifecycle::patch_thread` | v2 | frontend/src/services/api-threads.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api-threads.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/threads/{thread_id}/creatorCredits` | `thread_issues::list_thread_creator_credits` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | PUT | `/api/v2/threads/{thread_id}/issue-order` | `issue_mutation::reorder_issues` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
@@ -264,7 +280,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Owner issue cross-reference
 
-Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5713, #5714, #5715, #5716, #5717, #5718.
+Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4443, #4459, #4549, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5713, #5714, #5715, #5716, #5717, #5718.
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:
@@ -283,22 +299,6 @@ Non-browser / helper / infrastructure surface included in the census:
 - #5707: `POST /api/v1/threads/{thread_id}:setCurrentIssue` — not-live; POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
 - #5710: `GET /api/v1/reading-order-groups/` — not-live; GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}].
-- #4549: `GET /api/v1/auth/csrf` — not-live; GET /api/v2/auth/csrf.
-- #4549: `GET /api/v1/auth/me` — not-live; GET /api/v2/auth/me.
-- #4549: `POST /api/v1/auth/register` — not-live; POST /api/v2/auth/register.
-- #4549: `POST /api/v1/auth/login` — not-live; POST /api/v2/auth/login.
-- #4549: `POST /api/v1/auth/refresh` — not-live; POST /api/v2/auth/refresh.
-- #4549: `POST /api/v1/auth/logout` — not-live; POST /api/v2/auth/logout.
-- #4549: `POST /api/v1/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
-- #4549: `POST /api/v1/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
-- #4549: `GET /api/auth/csrf` — not-live; GET /api/v2/auth/csrf.
-- #4549: `GET /api/auth/me` — not-live; GET /api/v2/auth/me.
-- #4549: `POST /api/auth/register` — not-live; POST /api/v2/auth/register.
-- #4549: `POST /api/auth/login` — not-live; POST /api/v2/auth/login.
-- #4549: `POST /api/auth/refresh` — not-live; POST /api/v2/auth/refresh.
-- #4549: `POST /api/auth/logout` — not-live; POST /api/v2/auth/logout.
-- #4549: `POST /api/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
-- #4549: `POST /api/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
 
 ## Baseline debt requiring an owner issue
 

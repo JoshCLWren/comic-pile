@@ -7,7 +7,6 @@ import { issuesApi } from '../../services/api-issues'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { useCompletedThreads } from '../../hooks/useCompletedThreads'
 import { useExcludedThreads } from '../../hooks/useQueue'
-import { collectAllPages, MAX_ISSUE_COLLECTION_PAGES } from '../../pagination/collectAllPages'
 
 export interface CompletedSeriesMatch {
   id: number
@@ -61,18 +60,13 @@ export function useQueueCompletedSearch(
 
   const handleRestoreCompletedSeries = useCallback(async (threadId: number) => {
     try {
-      const collected = await collectAllPages({
-        fetchPage: (token) => issuesApi.list(threadId, {
-          status: 'read', page_size: 100, page_token: token ?? undefined,
-        }),
-        selectItems: (page) => page.issues.map((issue) => issue.id),
-        selectNextToken: (page) => page.next_page_token || null,
-        maxPages: MAX_ISSUE_COLLECTION_PAGES,
-      })
-      if (collected.stopReason === 'max-pages') {
-        throw new Error('Unable to load every read issue for this series.')
-      }
-      const allIssues = collected.items
+      const allIssues: number[] = []
+      let pageToken: string | undefined
+      do {
+        const page = await issuesApi.list(threadId, { status: 'read', page_size: 100, page_token: pageToken })
+        allIssues.push(...page.issues.map((i) => i.id))
+        pageToken = page.next_page_token ?? undefined
+      } while (pageToken)
       if (allIssues.length === 0) {
         showToast('No read issues to restore', 'info')
         return

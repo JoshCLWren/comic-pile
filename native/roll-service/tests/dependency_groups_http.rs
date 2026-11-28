@@ -44,7 +44,7 @@ async fn setup_user(
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v2/auth/register")
+                .uri("/api/v1/auth/register")
                 .header(
                     "x-forwarded-for",
                     format!(
@@ -436,7 +436,7 @@ async fn setup_user_pool8(
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v2/auth/register")
+                .uri("/api/v1/auth/register")
                 .header(
                     "x-forwarded-for",
                     format!(

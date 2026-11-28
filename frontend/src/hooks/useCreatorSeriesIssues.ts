@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
-import type { InfiniteData, FetchStatus } from '@tanstack/react-query'
-import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
+import { useInfiniteQuery, type InfiniteData, type FetchStatus } from '@tanstack/react-query'
 import { creatorsApi } from '../services/api-creators'
 import type { CreatorIssueRow, CreatorSeriesIssueListResponse } from '../services/api-creators'
 import { queryKeys } from '../query/queryKeys'
@@ -10,7 +9,7 @@ type CreatorSeriesIssuesApi = Pick<typeof creatorsApi, 'getSeriesIssues'>
 export const CREATOR_SERIES_ISSUES_PAGE_SIZE = 50
 
 export interface CreatorSeriesIssuesState {
-  data: InfiniteData<CreatorSeriesIssueListResponse, number> | undefined
+  data: InfiniteData<CreatorSeriesIssueListResponse> | undefined
   fetchStatus: FetchStatus
   issues: CreatorIssueRow[]
   total: number
@@ -47,30 +46,30 @@ export function useCreatorSeriesIssues(
     seriesIssuesApi = creatorsApi,
   }: { enabled?: boolean; seriesIssuesApi?: CreatorSeriesIssuesApi } = {},
 ): CreatorSeriesIssuesState {
-  const query = useInfiniteCollection<CreatorIssueRow, CreatorSeriesIssueListResponse, number>({
+  const query = useInfiniteQuery({
     queryKey: queryKeys.creators.seriesIssues(creatorKey ?? '', seriesKey ?? ''),
-    queryFn: ({ pageParam }) => {
+    queryFn: ({ pageParam }: { pageParam: number }) => {
       const offset = pageParam
       return seriesIssuesApi.getSeriesIssues(creatorKey!, seriesKey!, { offset })
     },
     initialPageParam: 0,
-    getNextPageParam: (lastPage) =>
+    getNextPageParam: (lastPage: CreatorSeriesIssueListResponse) =>
       lastPage.next_cursor != null && /^\d+$/.test(lastPage.next_cursor)
         ? Number(lastPage.next_cursor)
         : undefined,
-    selectPage: (page) => page.issues,
     enabled: enabled && !!creatorKey && !!seriesKey,
     retry: false,
   })
 
-  const pages = query.pages
+  const pages = query.data?.pages ?? []
   const firstPage = pages[0] ?? null
+  const issues = pages.flatMap((page) => page.issues)
 
   const loadMore = useCallback((): Promise<void> => {
-    if (!query.hasNextPage || query.isNextPageLoading) {
+    if (!query.hasNextPage || query.isFetchingNextPage) {
       return Promise.resolve()
     }
-    return query.fetchNextPage()
+    return query.fetchNextPage().then(() => undefined)
   }, [query])
 
   // isError should only be true for the initial request, not for subsequent page failures
@@ -79,13 +78,13 @@ export function useCreatorSeriesIssues(
   return {
     data: query.data,
     fetchStatus: query.fetchStatus,
-    issues: query.items,
+    issues,
     total: firstPage?.total ?? 0,
-    isPending: query.isInitialLoading,
-    isFetchingMore: query.isNextPageLoading,
+    isPending: query.isPending,
+    isFetchingMore: query.isFetchingNextPage,
     isError: isInitialError,
     error: query.error,
-    hasMore: query.hasNextPage,
+    hasMore: query.hasNextPage ?? false,
     loadMore,
     refetch: () => {
       void query.refetch()

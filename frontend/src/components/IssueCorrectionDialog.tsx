@@ -14,7 +14,6 @@ import {
 } from '../hooks/useBulkReadOperations'
 import { invalidateAfterIssueEdit } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { collectAllPages, MAX_ISSUE_COLLECTION_PAGES } from '../pagination/collectAllPages'
 import type { Issue, IssueListResponse } from '../types'
 
 export interface IssueCorrectionIssuesApi {
@@ -173,25 +172,33 @@ export default function IssueCorrectionDialog({
   const matchingIssues = allIssues.filter((issue) => issue.issue_number === selectedIssueNumber.trim())
   const selectedOwnedIssue = matchingIssues.length === 1 ? matchingIssues[0] : null
 
-  const loadAllIssues = useCallback(async (): Promise<Issue[]> => {
-    const collected = await collectAllPages({
-      fetchPage: (token) => {
-        const params: IssueListParams = { page_size: 100 }
-        if (token) {
-          params.page_token = token
-        }
-        return issuesService.list(threadId, params)
-      },
-      // An empty page ends the series even if the server repeats a cursor.
-      selectItems: (page) => page.issues ?? [],
-      selectNextToken: (page) =>
-        page.issues && page.issues.length > 0 ? (page.next_page_token || null) : null,
-      maxPages: MAX_ISSUE_COLLECTION_PAGES,
-    })
-    if (collected.stopReason === 'max-pages') {
-      throw new Error('Unable to load the complete issue list for this series.')
+  const loadAllIssues = useCallback(async () => {
+    const loadedIssues: Issue[] = []
+    const seenPageTokens = new Set<string>()
+    let nextPageToken: string | null = null
+
+    while (true) {
+      const params: IssueListParams = { page_size: 100 }
+      if (nextPageToken) {
+        params.page_token = nextPageToken
+      }
+      const data = await issuesService.list(threadId, params)
+
+      if (!data.issues || data.issues.length === 0) {
+        break
+      }
+
+      loadedIssues.push(...(data.issues || []))
+
+      if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+        break
+      }
+
+      seenPageTokens.add(data.next_page_token)
+      nextPageToken = data.next_page_token
     }
-    return collected.items
+
+    return loadedIssues
   }, [threadId, issuesService])
 
   const fetchIssues = useCallback(async (retryAttempt = 0) => {

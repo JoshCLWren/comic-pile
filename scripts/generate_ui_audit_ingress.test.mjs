@@ -4,14 +4,14 @@ import {renderAuditIngress} from './generate_ui_audit_ingress.mjs';
 
 test('audit ingress preserves production method/path routing and native priority', () => {
   const config = {routes: [
-    {src: '^/api/v2/auth/login$', methods: ['POST'], dest: '/api/native_roll.rs'},
+    {src: '^/api/v1/auth/login$', methods: ['POST'], dest: '/api/native_roll.rs'},
     {src: '^/api/v1/threads/[^/]+/restore$', methods: ['POST', 'OPTIONS'], dest: '/api/native_roll.rs'},
     {src: '^/api/v1/threads/[^/]+/issues$', methods: ['GET'], dest: '/api/native_roll.rs'},
     {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
   ]};
   const nginx = renderAuditIngress(config);
   assert.match(nginx, /default rust;/);
-  assert.match(nginx, /~\^\(\?:POST\):\(\?:\/api\/v2\/auth\/login\)\$ rust;/);
+  assert.match(nginx, /~\^\(\?:POST\):\(\?:\/api\/v1\/auth\/login\)\$ rust;/);
   assert.match(nginx, /~\^\(\?:POST\|OPTIONS\):\(\?:\/api\/v1\/threads\/\[\^\/\]\+\/restore\)\$ rust;/);
   assert(nginx.indexOf('auth/login') < nginx.indexOf('/restore'));
   assert.match(nginx, /proxy_pass \$audit_api_upstream;/);
