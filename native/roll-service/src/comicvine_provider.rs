@@ -813,9 +813,10 @@ async fn hydrate_catalog_commit_with_key(
                 )
                 .await
             {
-                tracing::warn!(
+                log_provider_failure("catalog_commit_persist", ProviderFailure::PersistFailed);
+                tracing::debug!(
                     error_kind = crate::error_kind(&err),
-                    "catalog commit metadata hydration failed"
+                    "catalog commit persist error classified"
                 );
             }
         }
@@ -910,25 +911,16 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
         };
         let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
             Ok(value) => value,
-            Err(error) => {
-                match &error {
-                    ProviderFailure::RateLimited(retry_after_seconds) => tracing::info!(
-                        retry_after_seconds,
-                        "inline hydration throttled; retry is user-controlled"
-                    ),
-                    _ => tracing::info!(?error, "inline identity hydration provider call failed"),
-                }
+            Err(failure) => {
+                log_provider_failure("inline_identity_hydration", failure);
                 return;
             }
         };
         let (mut patch, has, url, updated) = match normalized_metadata(&provider_data, comicvine_id)
         {
             Ok(ok) => ok,
-            Err(error) => {
-                tracing::info!(
-                    ?error,
-                    "inline identity hydration normalization failed; refresh row kept"
-                );
+            Err(failure) => {
+                log_provider_failure("inline_identity_hydration_normalize", failure);
                 return;
             }
         };
@@ -937,6 +929,10 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             preserve_cached_credits(&mut patch, cached.as_ref());
         }
         let Ok(json_patch) = serde_json::to_string(&patch) else {
+            log_provider_failure(
+                "inline_identity_hydration_serialize",
+                ProviderFailure::InvalidResponse,
+            );
             return;
         };
         if let Err(err) = conn
@@ -952,9 +948,10 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             )
             .await
         {
-            tracing::warn!(
+            log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
+            tracing::debug!(
                 error_kind = crate::error_kind(&err),
-                "inline identity hydration metadata write failed"
+                "inline identity persist error classified"
             );
         }
     };
