@@ -8,13 +8,8 @@
   "require_runtime": "native-rust",
   "known_unowned_baseline": [],
   "summary": {
-<<<<<<< HEAD
-    "total_entries": 158,
-    "with_owner": 158,
-=======
     "total_entries": 159,
     "with_owner": 159,
->>>>>>> origin/main
     "baseline_debt": 0,
     "nonconforming_v2": 98
   },
