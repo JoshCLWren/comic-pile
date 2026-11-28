@@ -19,7 +19,9 @@ from scripts import check_route_fragment_guard as guard
 from scripts.check_route_fragment_guard import (
     agents_block_changed,
     extract_agents_block,
+    find_action_route_violations,
     find_generated_violations,
+    is_action_shaped_route,
     is_generated_path,
     is_source_fragment,
 )
