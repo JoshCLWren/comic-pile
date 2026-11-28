@@ -62,23 +62,8 @@ const METADATA: ThreadMetadata = {
 
 function bootstrapState(overrides: Partial<RollState> = {}): RollState {
   return {
-    session_id: 1,
-    user_id: 1,
     pending_thread_id: 1,
     last_rolled_result: 4,
-    session_mode: {
-      active_bandwidth: null,
-      predicted_bandwidth: null,
-      bandwidth_confidence: null,
-      bandwidth_source: null,
-      bandwidth_version: null,
-      active_intent: null,
-      predicted_intent: null,
-      intent_confidence: null,
-      intent_source: null,
-      intent_version: null,
-      session_mode_correction_guidance: null,
-    },
     active_thread: {
       id: 1,
       title: 'Saga',
@@ -92,8 +77,6 @@ function bootstrapState(overrides: Partial<RollState> = {}): RollState {
     roll_pool: [{ id: 1, title: 'Saga', format: 'comic' }],
     snoozed_threads: [],
     snoozed_count: 0,
-    skipped_thread_ids: [],
-    skipped_threads: [],
     pool_reason: 'ready',
     ...overrides,
   }
@@ -280,7 +263,7 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
       // event-loop reconciliation window expire before the page callback runs.
       publishRollState(authoritative)
       await new Promise((resolve) => setTimeout(resolve, 25))
-      return { rate: THREAD, bootstrap: authoritative }
+      return { rate: THREAD, rollState: authoritative }
     })
 
     await act(async () => {
@@ -295,7 +278,7 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
 
   it('keeps the simple-migration rating when the authoritative snapshot is unavailable', async () => {
     const mutate = vi.fn<(payload: RatePayload) => Promise<RateMutationOutcome>>()
-      .mockResolvedValue({ rate: THREAD, bootstrap: null })
+      .mockResolvedValue({ rate: THREAD, rollState: null })
     const rateMutation: DirectRateMutation = { mutate, isPending: false }
     const refetchRollState = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(

@@ -107,7 +107,6 @@ beforeEach(() => {
   mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
   mockedUseSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseDismissPending.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })

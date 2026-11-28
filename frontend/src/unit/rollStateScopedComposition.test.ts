@@ -63,7 +63,7 @@ describe('scoped Roll composition service', () => {
 
     expect(state.pending_thread_id).toBe(3)
     expect(state.last_read).toEqual(LAST_READ)
-    expect(state.session_id).toBeUndefined()
+    expect(state).not.toHaveProperty('session_id')
   })
 
   it('composes canonical scoped recovery for a blocked pending issue', async () => {

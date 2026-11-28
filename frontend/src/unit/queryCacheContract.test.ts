@@ -12,7 +12,6 @@ import {
   invalidateAfterResumeRecovery,
   invalidateAfterThreadMetadataEdit,
   invalidateAfterUndo,
-  invalidateCurrentSessionAfterSnooze,
   applyCreatedCustomCBL,
   applyUpdatedCustomCBL,
   applyDeletedCustomCBL,
@@ -273,7 +272,7 @@ describe('targeted cache effects', () => {
     })
   })
 
-  it('seeds the session last-read cache and the bootstrap projection from a committed rate', async () => {
+  it('seeds the last-read cache and the scoped Roll projection from a committed rate', async () => {
     const { client } = createSpiedClient()
     const rated: RateResponsePayload = {
       ...thread,
@@ -289,7 +288,6 @@ describe('targeted cache effects', () => {
       },
     }
     client.setQueryData<Partial<RollState>>(queryKeys.roll.state(), {
-      session_id: 12,
       last_read: null,
     })
 
@@ -501,15 +499,6 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
     // No shelf is reset unconditionally by a read/progress edit: the finished
     // shelf is only reset by mutation-specific callers on completion.
-    expect(resetQueries).not.toHaveBeenCalled()
-  })
-
-  it('treats snooze session reconciliation as a no-op after session.current retirement (#4839)', async () => {
-    const { client, invalidateQueries, resetQueries } = createSpiedClient()
-
-    await invalidateCurrentSessionAfterSnooze(client)
-
-    expect(invalidateQueries).not.toHaveBeenCalled()
     expect(resetQueries).not.toHaveBeenCalled()
   })
 

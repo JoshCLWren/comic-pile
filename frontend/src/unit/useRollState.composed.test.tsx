@@ -96,7 +96,7 @@ describe('useRollState composed scoped view', () => {
     expect(result.current.data?.last_read).toEqual(LAST_READ)
     expect(result.current.data?.roll_pool).toHaveLength(1)
     expect(result.current.data?.roll_recovery).toBeNull()
-    expect(result.current.data?.session_id).toBeUndefined()
+    expect(result.current.data).not.toHaveProperty('session_id')
   })
 
   it('loads the exact pending card when the eligible pool excludes it', async () => {

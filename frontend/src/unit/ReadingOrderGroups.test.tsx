@@ -89,6 +89,8 @@ describe('ReadingOrderGroups', () => {
       error: null,
       failureCount: 0,
       isRetrying: false,
+      recoveryIsPending: false,
+      recoveryError: null,
       refetch: vi.fn(),
     })
   })
@@ -161,6 +163,8 @@ describe('ReadingOrderGroups', () => {
       error: null,
       failureCount: 0,
       isRetrying: false,
+      recoveryIsPending: false,
+      recoveryError: null,
       refetch: vi.fn(),
     })
     mockedSwitchPrerequisite.mockResolvedValue({
@@ -191,6 +195,8 @@ describe('ReadingOrderGroups', () => {
       error: null,
       failureCount: 0,
       isRetrying: false,
+      recoveryIsPending: false,
+      recoveryError: null,
       refetch: vi.fn(),
     })
     mockedSwitchPrerequisite.mockResolvedValue({
@@ -220,6 +226,8 @@ describe('ReadingOrderGroups', () => {
       error: null,
       failureCount: 0,
       isRetrying: false,
+      recoveryIsPending: false,
+      recoveryError: null,
       refetch: vi.fn(),
     })
     mockedSwitchPrerequisite.mockRejectedValue(new Error('stale'))
@@ -244,6 +252,8 @@ describe('ReadingOrderGroups', () => {
       error: null,
       failureCount: 0,
       isRetrying: false,
+      recoveryIsPending: false,
+      recoveryError: null,
       refetch: vi.fn(),
     })
     mockedIsAmbiguousNetworkFailure.mockReturnValue(true)

@@ -40,7 +40,7 @@ describe('canonical scoped Roll recovery wire boundary', () => {
       { node_type: 'issue', node_id: 20, label: 'Middle Series #2', is_readable: false },
       { node_type: 'issue', node_id: 30, label: 'Earlier Series #1', is_readable: true },
     ])
-    expect(recovery?.chains[0].map((node) => node.node_id)).toEqual([3, 20, 30])
+    expect(recovery?.chains?.[0]?.map((node) => node.node_id)).toEqual([3, 20, 30])
   })
 
   it('preserves bounded cycle, depth, and node-limit diagnostics', () => {

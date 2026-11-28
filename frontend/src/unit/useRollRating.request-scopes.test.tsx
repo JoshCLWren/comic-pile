@@ -223,9 +223,9 @@ it('a failed reading-orders request stays local and leaves rating actions usable
   await act(async () => { await result.current.handleSubmitRating() })
   await act(async () => { await result.current.handleCancelRating() })
   expect(mockRateMutation.mutate).toHaveBeenCalled()
-  // Cancel clears only the browser-owned selection; no server call is made.
+  // Cancel clears only the browser-owned selection; it does not submit another rate.
   expect(mockClearPending).toHaveBeenCalled()
-  expect(mockDismissPendingMutation.mutate).not.toHaveBeenCalled()
+  expect(mockRateMutation.mutate).toHaveBeenCalledTimes(1)
   // Those actions only ever clear the channel; the optional failure never wrote to it.
   for (const call of setErrorMessage.mock.calls) {
     expect(call[0]).not.toContain('reading orders')
