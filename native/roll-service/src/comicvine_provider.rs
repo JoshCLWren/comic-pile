@@ -339,19 +339,24 @@ pub(crate) async fn provider_response(
     extra_query: &str,
     api_key: &str,
 ) -> Result<Value, ProviderFailure> {
-    let failure = match provider_exchange(outbound, resource, extra_query, api_key).await {
-        Ok(Exchange::Payload(payload)) if python_envelope_ok(&payload) => return Ok(payload),
-        Ok(Exchange::Payload(payload)) => envelope_failure(&payload),
-        Ok(Exchange::Throttled { retry_after }) => ProviderFailure::RateLimited {
+    // Transport-level failures were already classified and logged by
+    // `provider_exchange`; only the classes decided here are logged below.
+    let exchange = match provider_exchange(outbound, resource, extra_query, api_key).await {
+        Ok(exchange) => exchange,
+        Err(failure) => return Err(failure),
+    };
+    let failure = match exchange {
+        Exchange::Payload(payload) if python_envelope_ok(&payload) => return Ok(payload),
+        Exchange::Payload(payload) => envelope_failure(&payload),
+        Exchange::Throttled { retry_after } => ProviderFailure::RateLimited {
             retry_after_seconds: repair_retry_after_seconds(
                 retry_after.as_deref(),
                 chrono::Utc::now(),
             ),
         },
-        Ok(Exchange::HttpStatus { status }) => {
+        Exchange::HttpStatus { status } => {
             ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus { status })
         }
-        Err(failure) => failure,
     };
     log_provider_failure("provider_response", failure);
     Err(failure)
@@ -390,7 +395,27 @@ pub(crate) async fn provider_exchange(
 /// One exchange under an injectable deadline. The production wrapper always
 /// uses [`PROVIDER_TIMEOUT`]; tests use a tiny deadline with a pending fake so
 /// the timeout class is exercised without sleeping or opening a socket.
+///
+/// Every failure produced at the transport boundary is classified and logged
+/// exactly once here. Callers only log the classes they add themselves (rate
+/// limit, envelope, HTTP status), so no failure is silently collapsed and no
+/// class is emitted twice.
 async fn provider_exchange_with_timeout(
+    outbound: &Arc<dyn OutboundHttp>,
+    resource: &str,
+    extra_query: &str,
+    api_key: &str,
+    deadline: Duration,
+) -> Result<Exchange, ProviderFailure> {
+    let result =
+        provider_exchange_inner(outbound, resource, extra_query, api_key, deadline).await;
+    if let Err(failure) = result {
+        log_provider_failure("provider_exchange", failure);
+    }
+    result
+}
+
+async fn provider_exchange_inner(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
     extra_query: &str,
