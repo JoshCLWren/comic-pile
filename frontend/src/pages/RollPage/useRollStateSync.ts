@@ -12,7 +12,7 @@ interface UseRollBootstrapSyncParams {
  * Redirects to the login boundary when the session expires. The page owns no
  * refetch here; the selected die is derived during render in `RollPage`
  * from `scopedDieState.die` with a d6 default (see `selectedDie.ts`), and the rolled
- * result is hydrated by `useRollPendingSession` (wider source
+ * result is hydrated by `usePendingRatingView` (wider source
  * `active_thread.last_rolled_result ?? bootstrap.last_rolled_result` when a
  * pending thread exists) with the die/CTA derived from
  * `rolledResult != null`. The scoped `last_roll` spans every session and must

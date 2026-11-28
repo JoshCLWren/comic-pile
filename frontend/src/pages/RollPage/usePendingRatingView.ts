@@ -18,7 +18,7 @@ interface UseRollPendingSessionParams {
  * it restores the full rating context without issuing any additional request,
  * so a reload or navigation never loses an in-flight read.
  */
-export function useRollPendingSession({ state, bootstrap, rollPool, pending }: UseRollPendingSessionParams): void {
+export function usePendingRatingView({ state, bootstrap, rollPool, pending }: UseRollPendingSessionParams): void {
   const {
     suppressPendingAutoOpenRef,
     selectedThreadId,
@@ -37,9 +37,9 @@ export function useRollPendingSession({ state, bootstrap, rollPool, pending }: U
 
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
-    // Browser storage is authoritative; the bootstrap-shaped view model is a
-    // fallback for callers that still inject it in focused tests.
-    const pendingThreadId = pending?.thread_id ?? bootstrap?.pending_thread_id
+    // Browser storage is the only pending-selection authority. The composed
+    // view supplies metadata for that exact selection, never a server pointer.
+    const pendingThreadId = pending?.thread_id
     if (!pendingThreadId) return
 
     const pendingId = Number(pendingThreadId)
@@ -116,7 +116,6 @@ export function useRollPendingSession({ state, bootstrap, rollPool, pending }: U
     setIsOverrideOpen(false)
     setIsDieModalOpen(false)
   }, [
-    bootstrap?.pending_thread_id,
     pending?.thread_id,
     pending?.result,
     pending?.issue_id,

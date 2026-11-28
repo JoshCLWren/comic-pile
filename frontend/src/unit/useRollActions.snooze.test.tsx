@@ -78,6 +78,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
       },
       refetchRollState,
       enterRatingView: vi.fn(() => Promise.resolve()),
+      pendingThreadId: bootstrap.pending_thread_id,
       onSnoozeRefreshFailed,
     })
 

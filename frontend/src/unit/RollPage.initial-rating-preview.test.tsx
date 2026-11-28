@@ -71,7 +71,7 @@ vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: () => null }))
 vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: () => <div>pool</div> }))
 
-// Emulates a pending roll for a d8 current die: useRollPendingSession hydrates
+// Emulates a pending roll for a d8 current die: usePendingRatingView hydrates
 // the rating view with the default 3.0 rating on first paint, before the slider
 // is touched (issue #2533 repro).
 const pendingBootstrap = {

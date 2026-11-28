@@ -29,7 +29,7 @@ import type { Thread } from '../../types'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollStateSync } from './useRollStateSync'
-import { useRollPendingSession } from './useRollPendingSession'
+import { usePendingRatingView } from './usePendingRatingView'
 import { useRollRating } from './useRollRating'
 import { useRollSnooze } from './useRollSnooze'
 import { useRollActions } from './useRollActions'
@@ -56,7 +56,7 @@ import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCar
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
- * feature modules (`useRollStateSync`, `useRollPendingSession`,
+ * feature modules (`useRollStateSync`, `usePendingRatingView`,
  * `useRollRating`, `useRollSnooze`, `useRollActions`,
  * `useRollModals`, `useRollViewport`) plus the page-level navigation and
  * error boundary concerns.
@@ -187,7 +187,7 @@ export default function RollPage() {
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
 
-  useRollPendingSession({
+  usePendingRatingView({
     state,
     bootstrap,
     rollPool,

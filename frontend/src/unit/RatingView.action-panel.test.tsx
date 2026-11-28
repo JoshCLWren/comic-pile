@@ -247,10 +247,9 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(reroll).toBeDisabled()
   })
 
-  it('cancel button is disabled while dismissIsPending', () => {
-    render(ratingView({ dismissIsPending: true }))
-    const cancel = screen.getByRole('button', { name: /cancel roll/i })
-    expect(cancel).toBeDisabled()
+  it('cancel remains available without a server pending mutation', () => {
+    render(ratingView())
+    expect(screen.getByRole('button', { name: /cancel roll/i })).toBeEnabled()
   })
 
   it('invokes callbacks on save, roll again, and cancel', async () => {
@@ -265,7 +264,7 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(onUpdateRating).toHaveBeenCalledWith('4')
 
     await user.click(screen.getByRole('button', { name: /mark read & save/i }))
-    expect(onSubmitRating).toHaveBeenCalledWith(false)
+    expect(onSubmitRating).toHaveBeenCalledWith()
 
     await user.click(screen.getByRole('button', { name: /roll again/i }))
     expect(onReroll).toHaveBeenCalled()

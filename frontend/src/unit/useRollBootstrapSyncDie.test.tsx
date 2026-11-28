@@ -1,7 +1,7 @@
 import { render, renderHook, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useRollStateSync } from '../pages/RollPage/useRollStateSync'
-import { useRollPendingSession } from '../pages/RollPage/useRollPendingSession'
+import { usePendingRatingView } from '../pages/RollPage/usePendingRatingView'
 import { RollCta } from '../pages/RollPage/components/RollCta'
 import type { RollState } from '../types/rollState'
 import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useRollPageState'
@@ -55,7 +55,7 @@ describe('useRollStateSync redirect-only (#4352)', () => {
 
     // By construction the bootstrap sync never writes rolled, so the
     // bootstrap value cannot resurrect a cleared roll on its own. Only
-    // useRollPendingSession (wider source when a pending thread exists)
+    // usePendingRatingView (wider source when a pending thread exists)
     // may write rolledResult.
     expect(setRolledResult).not.toHaveBeenCalled()
   })
@@ -196,7 +196,7 @@ describe('pending session hydration (#4352 wider source kept)', () => {
     })
 
     renderHook(() =>
-      useRollPendingSession({
+      usePendingRatingView({
         state: pendingState(setRolled),
         bootstrap,
         rollPool: [],
@@ -230,7 +230,7 @@ describe('pending session hydration (#4352 wider source kept)', () => {
     })
 
     renderHook(() =>
-      useRollPendingSession({
+      usePendingRatingView({
         state: pendingState(setRolled),
         bootstrap,
         rollPool: [],

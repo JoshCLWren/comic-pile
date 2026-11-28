@@ -180,7 +180,7 @@ export function useRollActions({
           if (!canSnoozeSeries({
             threadId: selectedThread!.id,
             isSnoozed,
-            pendingThreadId: pendingThreadId ?? bootstrap?.pending_thread_id ?? null,
+            pendingThreadId: pendingThreadId ?? null,
           })) {
             setErrorMessage(SNOOZE_REQUIRES_PENDING_SERIES_REASON)
             break
@@ -230,9 +230,7 @@ export function useRollActions({
     // Refresh scoped inputs only; the browser-owned selection stays the source
     // of truth. The retained refetch seam returns the already-composed view.
     const latest = await refetchRollState?.()
-    const pendingId = Number(
-      pendingThreadId ?? latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0,
-    )
+    const pendingId = Number(pendingThreadId ?? 0)
     if (!pendingId) return false
     const pendingMetadata =
       (latest?.active_thread && latest.active_thread.id === pendingId
@@ -277,7 +275,7 @@ export function useRollActions({
   function handleRoll() {
     if (isRolling) return
     navigator.vibrate?.(15)
-    const selectedPendingId = pendingThreadId ?? bootstrap?.pending_thread_id ?? null
+    const selectedPendingId = pendingThreadId ?? null
     if (selectedPendingId && !suppressPendingAutoOpenRef.current) {
       const pendingId = Number(selectedPendingId)
       const pendingMetadata =
