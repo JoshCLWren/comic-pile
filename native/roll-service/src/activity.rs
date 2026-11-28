@@ -32,6 +32,22 @@
 //! The cursor is `(primary timestamp, primary id, sub-position)`, so a page can
 //! end between a snooze and its roll without omitting or repeating either.
 //!
+//! ## Reader filters
+//!
+//! `q`, `series`, `type`, `date_from`, `date_to` and `timezone` filter the
+//! logical stream on the server. `q` is a literal, case-insensitive substring
+//! over the primary action's series title, issue number and event type;
+//! `series` narrows to a literal case-insensitive substring of the series
+//! title. A companion is part of its primary's logical action and is emitted
+//! with it, so filtering is decided on the primary event. `type` matches the
+//! reader-visible action type: a coalesced rating counts as `rate` even when
+//! its durable row is an idempotent `issue_command`, and a snooze's linked roll
+//! counts as `roll` while the snooze row itself is suppressed. Date bounds are
+//! inclusive reader-local calendar dates resolved through the supplied IANA
+//! `timezone` (UTC by default), so midnight and DST stay on the reader's day.
+//! Every filter is applied before the bounded page fetch and is carried by the
+//! opaque cursor's primary, so combined filters keep stable chronology.
+//!
 //! ## Ownership
 //!
 //! Ownership is `events.user_id`. Migration `c44050000001` attributed every
@@ -47,16 +63,140 @@ use axum::{
     Json,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 
+/// Query contract for `GET /api/v2/activity`.
+///
+/// The legacy `cursor` alias is retained for clients that predate `page_token`.
+/// Filter fields are strings at the HTTP edge so malformed dates/types can be
+/// rejected with an explicit 400 before any SQL is issued.
 #[derive(Debug, Deserialize)]
 pub struct ActivityQuery {
     limit: Option<i64>,
     page_token: Option<String>,
     cursor: Option<String>,
+    q: Option<String>,
+    series: Option<String>,
+    #[serde(rename = "type")]
+    event_type: Option<String>,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    timezone: Option<String>,
+}
+
+/// Reader-visible action types the History filter may select.
+///
+/// Unknown values are rejected rather than silently returning an empty stream,
+/// so a typo is distinguishable from a reader who genuinely has no such rows.
+const ACTIVITY_TYPES: [&str; 12] = [
+    "roll",
+    "snooze",
+    "unsnooze",
+    "rate",
+    "manual_die",
+    "reset_dice",
+    "dismiss",
+    "undo",
+    "rolled_but_skipped",
+    "read",
+    "issue_command",
+    "issue_unread",
+];
+
+const MAX_FILTER_LENGTH: usize = 200;
+
+/// Validated, normalized reader filters passed to SQL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActivityFilters {
+    search: Option<String>,
+    series: Option<String>,
+    event_type: Option<String>,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    timezone: String,
+}
+
+impl ActivityFilters {
+    fn parse(query: &ActivityQuery) -> Result<Self, ApiError> {
+        let search = trimmed_filter(query.q.as_deref(), "q")?;
+        let series = trimmed_filter(query.series.as_deref(), "series")?;
+        let event_type = match query.event_type.as_deref().map(str::trim) {
+            None | Some("") => None,
+            Some(raw) => {
+                let value = raw.to_ascii_lowercase();
+                if !ACTIVITY_TYPES.contains(&value.as_str()) {
+                    return Err(ApiError::BadRequest(format!(
+                        "Unknown activity type filter: {raw}"
+                    )));
+                }
+                Some(value)
+            }
+        };
+        let date_from = parse_date_filter(query.date_from.as_deref())?;
+        let date_to = parse_date_filter(query.date_to.as_deref())?;
+        if let (Some(from), Some(to)) = (&date_from, &date_to) {
+            if from > to {
+                return Err(ApiError::BadRequest(
+                    "Activity date_from must not be after date_to".to_string(),
+                ));
+            }
+        }
+        let timezone = match query.timezone.as_deref().map(str::trim) {
+            None | Some("") => "UTC".to_string(),
+            Some(raw) => {
+                if raw.len() > 64
+                    || !raw
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '+' | '-'))
+                {
+                    return Err(ApiError::BadRequest("Invalid activity timezone".to_string()));
+                }
+                raw.to_string()
+            }
+        };
+        Ok(Self {
+            search,
+            series,
+            event_type,
+            date_from,
+            date_to,
+            timezone,
+        })
+    }
+}
+
+/// Trim a bounded substring filter; blank input means "no filter".
+fn trimmed_filter(raw: Option<&str>, name: &str) -> Result<Option<String>, ApiError> {
+    match raw.map(str::trim) {
+        None | Some("") => Ok(None),
+        Some(value) if value.chars().count() > MAX_FILTER_LENGTH => Err(ApiError::BadRequest(
+            format!("Activity {name} filter is too long"),
+        )),
+        Some(value) => Ok(Some(value.to_string())),
+    }
+}
+
+/// Accept only canonical `YYYY-MM-DD` reader-local dates.
+fn parse_date_filter(raw: Option<&str>) -> Result<Option<String>, ApiError> {
+    let Some(value) = raw.map(str::trim) else {
+        return Ok(None);
+    };
+    let bytes = value.as_bytes();
+    let canonical = bytes.len() == 10
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit());
+    let parsed = canonical
+        .then(|| NaiveDate::parse_from_str(value, "%Y-%m-%d").ok())
+        .flatten()
+        .ok_or_else(|| ApiError::BadRequest("Activity dates must be YYYY-MM-DD".to_string()))?;
+    Ok(Some(parsed.format("%Y-%m-%d").to_string()))
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, utoipa::ToSchema)]
@@ -150,8 +290,18 @@ WITH primaries AS (
            e.issue_number, COALESCE(e.thread_id, e.selected_thread_id) AS thread_id,
            e.session_id, e.context
       FROM events e
+      LEFT JOIN threads t ON t.id = COALESCE(e.thread_id, e.selected_thread_id)
      WHERE e.user_id = $1
        AND ($2::timestamptz IS NULL OR (e.timestamp, e.id) >= ($2::timestamptz, $3::int))
+       AND ($5::text IS NULL
+            OR strpos(lower(coalesce(t.title, '')), lower($5)) > 0
+            OR strpos(lower(coalesce(e.issue_number, '')), lower($5)) > 0
+            OR strpos(lower(e.type), lower($5)) > 0)
+       AND ($6::text IS NULL OR strpos(lower(coalesce(t.title, '')), lower($6)) > 0)
+       AND ($8::date IS NULL
+            OR e.timestamp >= ((($8::date)::timestamp) AT TIME ZONE $10))
+       AND ($9::date IS NULL
+            OR e.timestamp < (((($9::date + 1)::timestamp)) AT TIME ZONE $10))
        AND NOT (
              e.type = 'roll'
          AND e.context->>'roll_offer_key' IS NOT NULL
@@ -185,7 +335,9 @@ SELECT p.id, p.type,
        r.id, r.type,
        to_char(r.timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
        r.die, r.die_after, r.rating, r.issue_id, r.issue_number, r.thread_id, rt.title,
-       p.session_id, r.session_id
+       p.session_id, r.session_id,
+       ($7::text IS NULL OR p.type = $7 OR ($7 = 'rate' AND d.id IS NOT NULL)),
+       ($7::text IS NULL OR ($7 = 'roll' AND r.id IS NOT NULL))
   FROM primaries p
   LEFT JOIN threads pt ON pt.id = p.thread_id
   LEFT JOIN LATERAL (
