@@ -496,6 +496,11 @@ describe('core route request budgets', () => {
     render(renderAt('/', <RollPage />, true))
 
     await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/die-state')).toBe(true))
+    // The card batch is enabled by the eligible-id response, so it is a
+    // dependent request. Drain by observing it rather than by a fixed count of
+    // microtasks: under a loaded worker the eligible response can settle after
+    // the drain window even though the production query still issues the POST.
+    await waitFor(() => expect(countRequests(calls, 'POST', '/v2/issues/cards')).toBe(1))
     await drainSettledWork()
 
     // Cold Roll reads the die, ordered eligible ids and one bounded card batch.
