@@ -40,15 +40,13 @@ function parseLink(value: unknown): OwnedCblListLink | null {
   return { sourceId, listId, listVersion, contentHash, revisionSha }
 }
 
-type OwnedCblListBySource = Record<string, OwnedCblListLink>
-
-function readAll(): OwnedCblListBySource {
+function readAll() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return {}
     const parsed: unknown = JSON.parse(raw)
     if (!isObject(parsed)) return {}
-    const links: OwnedCblListBySource = {}
+    const links: Record<string, OwnedCblListLink> = {}
     for (const [key, value] of Object.entries(parsed)) {
       const link = parseLink(value)
       if (link && Number(key) === link.sourceId) links[key] = link

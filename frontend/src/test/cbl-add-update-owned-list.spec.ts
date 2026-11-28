@@ -21,6 +21,7 @@ type CommitPayload = {
   series_overrides: Array<{ cbl_position: number; decision: string }>
   list_version?: number
   idempotency_key?: string
+  overlap_decisions?: Array<{ overlap_id: string; choice: string }>
 }
 
 const source = {
