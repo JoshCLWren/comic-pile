@@ -93,7 +93,6 @@ const MAX_ISSUES_TO_ADD: i64 = 10_000;
 pub struct ThreadResponse {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub status: String,
@@ -116,7 +115,6 @@ pub struct ThreadResponse {
 pub struct RollResponse {
     pub thread_id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub die_size: i32,
@@ -136,7 +134,6 @@ pub struct RollResponse {
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct ThreadCreateRequest {
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub total_issues: Option<i32>,
     pub notes: Option<String>,
@@ -150,7 +147,6 @@ pub struct ThreadCreateRequest {
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct ThreadUpdateRequest {
     pub title: Option<String>,
-    pub format: Option<String>,
     pub issues_remaining: Option<i32>,
     pub notes: Option<String>,
     pub manual_creator_credits: Option<Vec<Value>>,
@@ -158,9 +154,8 @@ pub struct ThreadUpdateRequest {
 }
 
 /// Fields a caller may name in an AIP-134 `update_mask` for a Thread patch.
-pub const THREAD_PATCH_FIELDS: [&str; 6] = [
+pub const THREAD_PATCH_FIELDS: [&str; 5] = [
     "title",
-    "format",
     "issues_remaining",
     "notes",
     "manual_creator_credits",
@@ -177,8 +172,6 @@ pub const THREAD_PATCH_FIELDS: [&str; 6] = [
 pub struct ThreadPatchRequest {
     /// New series title. Omitted fields are preserved.
     pub title: Option<String>,
-    /// New format; normalized to the reader's canonical vocabulary.
-    pub format: Option<String>,
     /// Manual issue counter for untracked series (legacy queue transition).
     pub issues_remaining: Option<i32>,
     /// Notes. `null` or a blank string clears the stored value; omit to keep it.
@@ -200,8 +193,6 @@ pub struct ThreadPatchRequest {
 pub struct ThreadPatchPrecondition {
     /// Title observed by the client.
     pub title: Option<String>,
-    /// Format observed by the client.
-    pub format: Option<String>,
     /// Notes observed by the client; `null` means it observed no notes.
     pub notes: Option<Option<String>>,
     /// Manual creator credits observed by the client.
