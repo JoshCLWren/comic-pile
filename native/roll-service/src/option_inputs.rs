@@ -1542,7 +1542,7 @@ mod tests {
             "A's authored prerequisite must stay inside A: {a_edges:?}"
         );
         assert!(
-            a_edges.iter().any(|e| e.origin == "reader"
+            a_edges.iter().any(|e| e.prerequisite_origin.as_deref() == Some("reader")
                 && e.source_issue_id == 9202
                 && e.target_issue_id == 9204),
             "A's authored prerequisite must be live: {a_edges:?}"
