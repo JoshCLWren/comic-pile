@@ -754,7 +754,7 @@ test.describe('CBL replacement review', () => {
     // The two explicit confirmation dialogs intentionally originate from 409 responses.
     allowExpectedBrowserFailures.allow(
       { category: 'console', message: 'status of 409 (Conflict)' },
-      { category: 'console', message: 'API Error: AxiosError: Request failed with status code 409' },
+      { category: 'console', message: 'AxiosError: Request failed with status code 409' },
     )
     await page.getByTestId('confirm-replace').click()
 
