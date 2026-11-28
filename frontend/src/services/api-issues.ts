@@ -72,6 +72,16 @@ const BULK_READ_MARKER_CHUNK_SIZE = 100
  * client-side next-unread pointer is stored. Every request is owned-scoped and
  * bounded before any allocation or loop.
  *
+ * Reading progress intentionally uses `POST /v2/issue-read-markers` instead of
+ * the single-issue `PATCH /v2/issues/{issue_id}` named in the issue. That PATCH
+ * (`issue_handler::read_rate_issue`) requires a unique 8-128 character
+ * `idempotency_key` per issue and combines status with rating; applying it per
+ * issue would create an N+1 write chain for a one-shot conversion. The bulk
+ * marker handler (`issue_read_state.rs::bulk_mark`) is owner-scoped, caps one
+ * request at 100 issues, re-derives thread counters/read-at/history in one
+ * transaction, and leaves rating and Roll state untouched — the equivalent
+ * bounded v2 resource for migrating the leading read issues.
+ *
  * @param client - HTTP transport used for every request.
  * @param threadId - Thread whose issues are materialized.
  * @param lastIssueRead - Count of leading issues already read.

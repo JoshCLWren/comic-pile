@@ -41,6 +41,31 @@ it('migrates a thread through scoped v2 issue resources', async () => {
   // Reading progress, queue position and next-unread state come from the
   // server-owned v2 writes; the client never stores its own pointer.
   expect(thread).toEqual(updatedThread)
+  expect(thread.issues_remaining).toBe(5)
+  expect(thread.reading_progress).toBe('in_progress')
+  expect(thread.queue_position).toBe(3)
+  expect(thread.next_unread_issue_id).toBe(issues[7].id)
+})
+
+it('leaves rating and Roll state to their own v2 resources', async () => {
+  const issues = Array.from({ length: 3 }, (_, index) => ({ id: index + 1 }))
+  client.post.mockResolvedValueOnce({ issues, next_page_token: null })
+
+  await issuesApi.migrateThread(42, 2, 3)
+
+  // Migration only creates issues and marks progress. It never rates an issue,
+  // never steps the die, and never writes pending/current-issue state.
+  expect(client.post.mock.calls.map((call) => call[0])).toEqual([
+    '/v2/threads/42/issues',
+    '/v2/issue-read-markers',
+  ])
+  expect(client.put).not.toHaveBeenCalled()
+  expect(client.patch).not.toHaveBeenCalled()
+  expect(client.delete).not.toHaveBeenCalled()
+  // Cross-account denial for both v2 writes is DB-backed in Rust:
+  // issue_create_preview_http.rs::foreign_reader_cannot_preview_or_create_thread
+  // and issue_read_state_v2_http.rs::bulk_mark_read_is_atomic_and_records_one_event_per_entry
+  // both assert 404 for a foreign-owned id with no state change.
 })
 
 it('chunks bulk read markers at 100 issues without per-issue requests', async () => {
