@@ -2,7 +2,13 @@ import type { ProtectedRollMutationApi, RollBootstrapApi } from '../services/api
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
-import { isWindowDefined, isFunction, isNonNullObject } from '../utils/runtimeChecks'
+import {
+  isNumber,
+  isObject,
+  isWindowDefined,
+  isFunction,
+  isNonNullObject,
+} from '../utils/runtimeChecks'
 
 export const ROLL_BOOTSTRAP_RECONCILED_EVENT = 'comic-pile:roll-bootstrap-reconciled'
 
@@ -36,8 +42,8 @@ export function isAmbiguousNetworkFailure(error: unknown): boolean {
 function isRetryableRollRecoveryFailure(error: unknown): boolean {
   if (isAuthenticationMutationFailure(error)) return true
   if (!error || !isNonNullObject(error)) return false
-  const status = (error as { response?: { status?: number } }).response?.status
-  return status === 503
+  const response = error.response
+  return isObject(response) && isNumber(response.status) && response.status === 503
 }
 
 export function isAuthenticationMutationFailure(error: unknown): boolean {

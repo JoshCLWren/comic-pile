@@ -52,13 +52,14 @@ export function useRollPendingSelection(): UseRollPendingSelectionResult {
   const seedFromOffer = useCallback(
     (offer: RollOfferSeed) => {
       if (offer.thread_id == null || offer.issue_id == null) return
-      writePendingSelection(userId, {
+      const selection: RollPendingSelection = {
         thread_id: offer.thread_id,
         issue_id: offer.issue_id,
-        ...(offer.issue_number != null ? { issue_number: offer.issue_number } : {}),
-        ...(offer.result != null ? { result: offer.result } : {}),
         selected_at: Date.now(),
-      })
+      }
+      if (offer.issue_number != null) selection.issue_number = offer.issue_number
+      if (offer.result != null) selection.result = offer.result
+      writePendingSelection(userId, selection)
     },
     [userId],
   )

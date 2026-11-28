@@ -26,6 +26,13 @@ export interface RollPendingSelection {
   selected_at: number
 }
 
+import {
+  isNumber,
+  isObject,
+  isString,
+  isWindowDefined,
+} from '../utils/runtimeChecks'
+
 const STORAGE_KEY_PREFIX = 'comic-pile:roll:pending:v1:'
 const BROADCAST_CHANNEL_NAME = 'comic-pile:roll:pending'
 const ANONYMOUS_KEY = 'anonymous'
@@ -38,7 +45,7 @@ const listeners = new Map<string, Set<Listener>>()
 
 function channel(): BroadcastChannel | null {
   try {
-    return typeof BroadcastChannel === 'function'
+    return globalThis.BroadcastChannel != null
       ? new BroadcastChannel(BROADCAST_CHANNEL_NAME)
       : null
   } catch {
@@ -61,8 +68,10 @@ function publish(key: string, selection: RollPendingSelection | null, origin: 'l
   }
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+/** Decode one untrusted numeric field into a positive safe integer, or null. */
+function positiveInteger(value: unknown): number | null {
+  if (!isNumber(value) || !Number.isSafeInteger(value) || value <= 0) return null
+  return value
 }
 
 /** Parse untrusted stored JSON into a validated selection, or null. */
@@ -70,20 +79,18 @@ export function parsePendingSelection(raw: string | null | undefined): RollPendi
   if (!raw) return null
   try {
     const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed !== 'object' || parsed === null) return null
-    const candidate = parsed as Record<string, unknown>
-    if (!isPositiveInteger(candidate.issue_id) || !isPositiveInteger(candidate.thread_id)) return null
+    if (!isObject(parsed)) return null
+    const issueId = positiveInteger(parsed.issue_id)
+    const threadId = positiveInteger(parsed.thread_id)
+    if (issueId === null || threadId === null) return null
+    const selectedAt = positiveInteger(parsed.selected_at)
     const selection: RollPendingSelection = {
-      issue_id: candidate.issue_id,
-      thread_id: candidate.thread_id,
-      selected_at: isPositiveInteger(candidate.selected_at)
-        ? candidate.selected_at
-        : Date.now(),
+      issue_id: issueId,
+      thread_id: threadId,
+      selected_at: selectedAt ?? Date.now(),
     }
-    if (typeof candidate.issue_number === 'string') selection.issue_number = candidate.issue_number
-    if (typeof candidate.result === 'number' && Number.isFinite(candidate.result)) {
-      selection.result = candidate.result
-    }
+    if (isString(parsed.issue_number)) selection.issue_number = parsed.issue_number
+    if (isNumber(parsed.result)) selection.result = parsed.result
     return selection
   } catch {
     return null
@@ -124,9 +131,9 @@ export function writePendingSelection(
     issue_id: selection.issue_id,
     thread_id: selection.thread_id,
     selected_at: selection.selected_at > 0 ? selection.selected_at : Date.now(),
-    ...(selection.issue_number != null ? { issue_number: selection.issue_number } : {}),
-    ...(selection.result != null ? { result: selection.result } : {}),
   }
+  if (selection.issue_number != null) stored.issue_number = selection.issue_number
+  if (selection.result != null) stored.result = selection.result
   try {
     globalThis.localStorage?.setItem(key, JSON.stringify(stored))
   } catch {
@@ -184,16 +191,14 @@ export function subscribePendingSelection(
   }
   const handleMessage = (event: MessageEvent<{ key?: unknown; selection?: unknown }>): void => {
     const data = event.data
-    if (!data || data.key !== key) return
-    const raw = typeof data.selection === 'object' && data.selection !== null
-      ? JSON.stringify(data.selection)
-      : null
+    if (!isObject(data) || data.key !== key) return
+    const raw = isObject(data.selection) ? JSON.stringify(data.selection) : null
     publish(key, parsePendingSelection(raw), 'remote')
   }
 
   let storageListener: ((event: StorageEvent) => void) | null = null
   try {
-    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    if (isWindowDefined() && window.addEventListener != null) {
       storageListener = handleStorage
       window.addEventListener('storage', storageListener)
     }
