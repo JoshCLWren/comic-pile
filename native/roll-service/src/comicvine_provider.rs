@@ -407,8 +407,7 @@ async fn provider_exchange_with_timeout(
     api_key: &str,
     deadline: Duration,
 ) -> Result<Exchange, ProviderFailure> {
-    let result =
-        provider_exchange_inner(outbound, resource, extra_query, api_key, deadline).await;
+    let result = provider_exchange_inner(outbound, resource, extra_query, api_key, deadline).await;
     if let Err(failure) = result {
         log_provider_failure("provider_exchange", failure);
     }
