@@ -67,7 +67,9 @@ describe('ThreadPool Component', () => {
       const label = element.getAttribute('aria-label') || ''
       expect(label).toMatch(/connected to/i)
       expect(label).not.toMatch(/\broutes\b/i)
-      expect(element.textContent).toMatch(/The Amazing Spider-Man|Batman/)
+      // Cover-first presentation keeps the title in the accessible name
+      // instead of repeating it as row text under the artwork (#5981).
+      expect(label).toMatch(/The Amazing Spider-Man|Batman/)
       expect(element).not.toHaveTextContent(/Issue \d+/i)
     })
   })
@@ -132,13 +134,16 @@ describe('ThreadPool Component', () => {
       ],
     })
 
+    // Tags stay attached to the die face's accessible name; the cover-first
+    // board does not render a text-only tag row beneath each cover (#5981).
     expect(
-      screen.getByRole('region', { name: 'Tags for Amazing Spider-Man' }),
+      screen.getByRole('button', {
+        name: /Die face 1: Amazing Spider-Man, tagged Physical\. Open series actions\./,
+      }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Physical')).toBeInTheDocument()
     expect(
-      screen.queryByRole('region', { name: 'Tags for Batman' }),
-    ).not.toBeInTheDocument()
+      screen.getByRole('button', { name: /Die face 2: Batman\. Open series actions\./ }),
+    ).toBeInTheDocument()
   })
 
   it('announces die face tags to assistive technology', () => {
