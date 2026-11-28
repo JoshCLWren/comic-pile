@@ -565,22 +565,39 @@ fn decode_reference(raw: &str) -> Result<String, IngestError> {
         "quot" => Ok("\"".to_string()),
         "apos" => Ok("'".to_string()),
         numeric if numeric.starts_with("#x") || numeric.starts_with("#X") => {
-            u32::from_str_radix(&numeric[2..], 16)
-                .ok()
-                .and_then(char::from_u32)
-                .map(|value| value.to_string())
-                .ok_or_else(|| IngestError::new(format!("invalid XML entity: &{entity};")))
+            decode_numeric_reference(&numeric[2..], 16)
         }
-        numeric if numeric.starts_with('#') => numeric[1..]
-            .parse::<u32>()
-            .ok()
-            .and_then(char::from_u32)
-            .map(|value| value.to_string())
-            .ok_or_else(|| IngestError::new(format!("invalid XML entity: &{entity};"))),
+        numeric if numeric.starts_with('#') => decode_numeric_reference(&numeric[1..], 10),
         other => Err(IngestError::new(format!(
             "unresolved XML entity: &{other};"
         ))),
     }
+}
+
+fn decode_numeric_reference(digits: &str, radix: u32) -> Result<String, IngestError> {
+    let valid_digits = if radix == 16 {
+        !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_hexdigit())
+    } else {
+        !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
+    };
+    let code = if valid_digits {
+        u32::from_str_radix(digits, radix).ok()
+    } else {
+        None
+    }
+    .filter(|code| is_xml_character(*code));
+    code.and_then(char::from_u32)
+        .map(|value| value.to_string())
+        .ok_or_else(|| IngestError::new("invalid XML numeric character reference"))
+}
+
+fn is_xml_character(code: u32) -> bool {
+    code == 0x9
+        || code == 0xA
+        || code == 0xD
+        || (0x20..=0xD7FF).contains(&code)
+        || (0xE000..=0xFFFD).contains(&code)
+        || (0x10000..=0x10FFFF).contains(&code)
 }
 
 fn attribute(
@@ -1461,6 +1478,12 @@ mod tests {
     fn rejects_unresolved_entities_and_oversized_persisted_fields() {
         let unknown_entity = b"<ReadingList><Name>Batman &bogus;</Name><Books /></ReadingList>";
         assert!(parse_cbl_bytes(unknown_entity, "DC/Entity.cbl").is_err());
+        for reference in ["&#0;", "&#x0;", "&#+1;", "&#x+1;", "&#xD800;", "&#x110000;"] {
+            let xml = format!(
+                "<ReadingList><Name>Bad {reference}</Name><Books /></ReadingList>"
+            );
+            assert!(parse_cbl_bytes(xml.as_bytes(), "DC/Entity.cbl").is_err(), "{reference}");
+        }
 
         let long_series = "X".repeat(MAX_SERIES_NAME_LENGTH + 1);
         let long_series_xml = format!(

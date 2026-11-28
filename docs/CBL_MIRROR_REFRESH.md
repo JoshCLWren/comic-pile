@@ -82,6 +82,7 @@ If production still uses a legacy machine-path source identity, pass it as an
 alias without editing the database by hand:
 
 ```bash
+CBL_INGEST_DATABASE_URL="$MIGRATE_DATABASE_URL" \
 cargo run --locked --manifest-path "$COMIC_PILE_ROOT/Cargo.toml" \
   -p comicpile-roll-service --bin cbl_ingest -- \
   "$MIRROR_ROOT" --revision-sha "$MIRROR_SHA" \
