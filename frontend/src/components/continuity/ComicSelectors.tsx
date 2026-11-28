@@ -107,7 +107,6 @@ export function ContinuityThreadSelector({
           >
             {value.title}
           </p>
-          {value.format ? <p className="mt-1 text-xs text-stone-500">{value.format}</p> : null}
         </div>
       )}
 
@@ -136,7 +135,6 @@ export function ContinuityThreadSelector({
               <span className="block font-semibold">{thread.title}</span>
               <span className="block text-xs text-stone-500">
                 {[
-                  thread.format,
                   isNumber(thread.issues_remaining) ? `${thread.issues_remaining} remaining` : null,
                   isNumber(thread.total_issues) ? `${thread.total_issues} total` : null,
                 ]
