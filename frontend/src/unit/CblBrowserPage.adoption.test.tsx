@@ -275,7 +275,9 @@ describe('CblBrowserPage adoption', () => {
         'Previously added. Linked to Reading List #900',
       )
     })
-    expect(screen.getByRole('button', { name: 'Update this Reading List' })).toBeEnabled()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Update this Reading List' })).toBeEnabled()
+    })
 
     await user.click(screen.getByRole('button', { name: 'Customize' }))
     await waitFor(() => {
@@ -293,10 +295,7 @@ describe('CblBrowserPage adoption', () => {
     await waitFor(() => {
       const [, , choices] = mockCommitSource.mock.calls[0]
       expect(choices.list_version).toBe(3)
-      expect(choices.series_overrides).toEqual([
-        { cbl_position: 1, decision: 'exclude' },
-        { cbl_position: 2, decision: 'include' },
-      ])
+      expect(choices.entry_decisions).toEqual({ '101': false, '102': true })
       expect(screen.getByTestId('location')).toHaveTextContent('/reading-lists/900')
     })
   })
@@ -636,7 +635,7 @@ describe('CblBrowserPage adoption', () => {
     await confirmAdd(user)
     await waitFor(() => {
       expect(
-        screen.getByText(/This source changed after you reviewed it/),
+        screen.getByText(/This source or its Reading List changed after you reviewed it/),
       ).toBeInTheDocument()
     })
     expect(
@@ -1184,7 +1183,7 @@ describe('CblBrowserPage adoption', () => {
     })
     await waitFor(() => {
       expect(mockApplyCommitted).toHaveBeenCalled()
-      expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/42')
+      expect(screen.getByTestId('location')).toHaveTextContent('/reading-lists/900')
     })
   })
 
