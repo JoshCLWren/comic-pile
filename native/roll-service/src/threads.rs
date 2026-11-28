@@ -274,6 +274,7 @@ pub(crate) fn display_position_expr(
                     row_number() OVER (ORDER BY {blocked}, t.queue_position, t.id)::int AS display_position
              FROM threads t
              WHERE t.user_id = {user_expr} AND t.status = 'active'
+               AND t.queue_position >= 1
          ) ranked WHERE ranked.id = {thread_expr})"
     )
 }
@@ -1233,6 +1234,7 @@ ranked AS (
     FROM threads t
     JOIN me ON t.user_id = me.user_id
     WHERE t.status = 'active'
+      {queue_membership}
 ),
 page AS (
     SELECT t.id, t.next_unread_issue_id, t.title, t.format, t.queue_position, t.status,
@@ -1251,6 +1253,7 @@ page AS (
     WHERE t.status = 'active'
       AND ($4 = '' OR t.title ILIKE '%' || $4 || '%')
       {cursor}
+      {queue_membership}
     ORDER BY page_ord
     LIMIT $5
 ),
@@ -1443,29 +1446,9 @@ async fn query_page(
     // Reference both mode parameters unconditionally so the statement keeps a
     // stable bind count whether the Option E preview is active or not.
     let blocked = blocked_order_expr("$7", "$8");
-    let order = match sort {
-        "title" => "t.title, t.id".to_string(),
-        "created" => "t.created_at DESC, t.id DESC".to_string(),
-        _ => format!("({blocked}), t.queue_position, t.id"),
-    };
+    let order = order_expression(sort, &blocked);
     let (cursor_sql, cursor_bindings) = cursor_clause(sort, cursor);
-    let sql = THREADS_SQL_PREFIX
-        .replace("t.status = 'active'", &format!("t.status = '{status}'"))
-        .replace(
-            &format!("WHERE t.status = '{status}' AND t.queue_position >= 1"),
-            if status == "completed" {
-                "WHERE FALSE"
-            } else {
-                "WHERE t.status = 'active' AND t.queue_position >= 1"
-            },
-        )
-        .replace("{order}", &order)
-        .replace("{cursor}", &cursor_sql)
-        .replace("{blocked}", &blocked)
-        .replace("{activity_timestamp}", &iso_timestamp("p.last_activity_at"))
-        .replace("{created_timestamp}", &iso_timestamp("p.created_at"))
-        .replace("{tag_created_timestamp}", &iso_timestamp("tg.created_at"))
-        .replace("{tag_updated_timestamp}", &iso_timestamp("tg.updated_at"));
+    let sql = build_threads_sql(status, &order, &cursor_sql, &blocked);
 
     let expected_epoch = claims.expected_epoch()?;
     let candidates: Vec<i32> = projection
