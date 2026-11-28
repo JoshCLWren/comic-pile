@@ -1386,7 +1386,7 @@ mod tests {
                 1,
                 "strict",
                 "after_previous",
-                "1000",
+                "4050-1000",
                 (9201, 9202),
             ),
             (
@@ -1397,7 +1397,7 @@ mod tests {
                 1,
                 "loose",
                 "hold",
-                "2000",
+                "4050-2000",
                 (9401, 9402),
             ),
         ] {
@@ -1514,8 +1514,13 @@ mod tests {
                 );
             }
         }
-        // The issue with no mapping and no catalog link stays unknown, never guessed.
-        assert!(!a_after.contains_key(&9203));
+        // The issue with no mapping and no catalog link inherits only the
+        // thread's confirmed series identity (4050-1000), never a title guess.
+        assert_eq!(
+            a_after.get(&9203),
+            Some(&BTreeSet::from([("comicvine".into(), "1000".into())])),
+            "unmapped issue must not invent evidence: {a_after:?}"
+        );
 
         let a_inputs = assemble_snapshot(a_snapshot).expect("A snapshot");
         a_inputs.require_resolved().expect("A resolved");
