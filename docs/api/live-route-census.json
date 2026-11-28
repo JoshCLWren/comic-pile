@@ -24,7 +24,7 @@
     "v1_with_owner": 65,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 924,
+    "first_party_call_sites": 896,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -1840,10 +1840,9 @@
         "frontend/src/unit/auth-bootstrap-retry-budget.test.tsx",
         "frontend/src/unit/auth-provider-recovery.test.tsx",
         "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/theme-runtime.test.tsx",
         "frontend/src/unit/ui-audit-stabilize.test.ts"
       ],
-      "caller_count": 37,
+      "caller_count": 36,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4459,
@@ -5781,16 +5780,11 @@
       "consumers": [
         "frontend/src/services/api-preferences.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
-        "frontend/src/unit/Navigation.sidebar-polish.test.tsx",
-        "frontend/src/unit/Navigation.theme-picker.test.tsx",
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/auth-provider-query-outage.test.tsx",
         "frontend/src/unit/auth-provider-recovery.test.tsx",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/theme-runtime.test.tsx"
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
-      "caller_count": 31,
+      "caller_count": 9,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -5810,16 +5804,11 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-preferences.ts",
-        "frontend/src/unit/Navigation.sidebar-polish.test.tsx",
-        "frontend/src/unit/Navigation.theme-picker.test.tsx",
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/auth-provider-query-outage.test.tsx",
         "frontend/src/unit/auth-provider-recovery.test.tsx",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/theme-runtime.test.tsx"
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
-      "caller_count": 30,
+      "caller_count": 8,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
