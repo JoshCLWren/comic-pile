@@ -2,7 +2,7 @@
   "type": "module",
   "name": "comic-pile",
   "version": "0.1.0",
-  "description": "Dice-Driven Comic Reading Tracker - FastAPI + HTMX + Tailwind CSS",
+  "description": "Dice-Driven Comic Reading Tracker - Rust + React + TypeScript",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@oxlint/plugins": "1.94.0",
@@ -21,10 +21,8 @@
   "scripts": {
     "build": "pnpm --filter frontend run build",
     "audit:ui": "bash scripts/run_ui_audit.sh",
-    "lint:js": "echo No JavaScript files to lint",
-    "lint:html": "pnpm exec htmlhint app/templates/*.html",
-    "lint": "pnpm run lint:js && pnpm run lint:html",
-    "lint:fix": "sh -c 'if ls static/react/assets/*.js >/dev/null 2>&1 || ls static/assets/*.js >/dev/null 2>&1; then pnpm exec eslint static/react/assets/*.js static/assets/*.js --fix; else echo \"No JavaScript files to fix\"; fi'",
+    "lint": "pnpm --filter frontend run lint",
+    "lint:fix": "pnpm --filter frontend exec eslint . --fix",
     "lint:anti-slop": "oxlint -c .oxlintrc.json",
     "dice:playground": "pnpm --filter frontend run dice:playground",
     "test:dice-playground": "pnpm --filter frontend run test:dice-playground",
