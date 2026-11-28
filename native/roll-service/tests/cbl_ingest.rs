@@ -107,6 +107,17 @@ async fn apply(
     revision: &str,
     alias: Option<&str>,
 ) -> comicpile_roll_service::cbl_ingest::SyncSummary {
+    apply_at(state, parsed, failures, revision, alias, synced_at()).await
+}
+
+async fn apply_at(
+    state: &Arc<AppState>,
+    parsed: &[CBLList],
+    failures: &[CBLParseFailure],
+    revision: &str,
+    alias: Option<&str>,
+    applied_at: chrono::DateTime<Utc>,
+) -> comicpile_roll_service::cbl_ingest::SyncSummary {
     let mut conn = state.pool.get().await.unwrap();
     let transaction = conn.transaction().await.unwrap();
     let aliases = alias
@@ -120,7 +131,7 @@ async fn apply(
         &protected(failures),
         &aliases,
         false,
-        synced_at(),
+        applied_at,
     )
     .await
     .unwrap();
@@ -266,19 +277,32 @@ async fn applying_a_pinned_revision_is_idempotent_and_records_provenance() {
     .await;
     assert_eq!(linked, 1);
 
-    let second = apply(&state, &parsed, &failures, "abc1234", None).await;
+    let second = apply_at(
+        &state,
+        &parsed,
+        &failures,
+        "abc1234",
+        None,
+        synced_at() + chrono::Duration::days(1),
+    )
+    .await;
     assert!(!second.changed);
     assert_eq!(second.inserted_lists, 0);
     assert_eq!(second.updated_lists, 0);
     assert_eq!(second.unchanged_lists, 2);
     assert_eq!(second.entries_written, 0);
     let entries: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_source_entries").await;
-    let synced: i64 = scalar(
+    let original_synced: i64 = scalar(
         &state,
         "SELECT COUNT(*) FROM cbl_sources WHERE synced_at = '2026-11-27 12:00:00+00'",
     )
     .await;
-    assert_eq!((entries, synced), (2, 1));
+    let restamped: i64 = scalar(
+        &state,
+        "SELECT COUNT(*) FROM cbl_sources WHERE synced_at = '2026-11-28 12:00:00+00'",
+    )
+    .await;
+    assert_eq!((entries, original_synced, restamped), (2, 1, 0));
 }
 
 #[tokio::test]
