@@ -275,9 +275,6 @@ export default function QueueThreadCard({
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
-              {thread.format}
-            </span>
             {thread.comicvine_mapping != null && (
               <QueueMappingHealthIndicator
                 mapping={thread.comicvine_mapping}
