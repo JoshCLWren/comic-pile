@@ -257,7 +257,7 @@ async fn dry_run_reports_counts_without_writing_any_rows() {
     let summary = sync_cbl_lists(
         &**conn,
         "JoshCLWren/CBL-ReadingLists",
-        test_revision('a'),
+        &test_revision('a'),
         &parsed,
         &BTreeSet::new(),
         &[],
@@ -271,6 +271,28 @@ async fn dry_run_reports_counts_without_writing_any_rows() {
     assert!(summary.source_created);
     assert_eq!(summary.inserted_lists, 2);
     assert_eq!(summary.entries_written, 2);
+    assert_eq!(summary.identities_upserted, 4);
+    conn.batch_execute(
+        "INSERT INTO external_identities
+             (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+          VALUES ('comicvine', 'series', '4059', '{}', NOW(), NOW()),
+                 ('comicvine', 'issue', '7002', '{}', NOW(), NOW());",
+    )
+    .await
+    .unwrap();
+    let partial = sync_cbl_lists(
+        &**conn,
+        "JoshCLWren/CBL-ReadingLists",
+        &test_revision('a'),
+        &parsed,
+        &BTreeSet::new(),
+        &[],
+        true,
+        synced_at(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(partial.identities_upserted, 2);
     let sources: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_sources").await;
     let lists: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_source_lists").await;
     assert_eq!((sources, lists), (0, 0));
@@ -292,7 +314,7 @@ async fn applying_a_pinned_revision_is_idempotent_and_records_provenance() {
     let (parsed, failures) = fixture.parse();
     assert!(failures.is_empty());
 
-    let first = apply(&state, &parsed, &failures, test_revision('a'), None).await;
+    let first = apply(&state, &parsed, &failures, &test_revision('a'), None).await;
     assert!(first.changed);
     assert_eq!(first.inserted_lists, 2);
     assert_eq!(first.entries_written, 2);
@@ -320,16 +342,27 @@ async fn applying_a_pinned_revision_is_idempotent_and_records_provenance() {
     .await;
     assert_eq!(linked, 1);
 
-    let second = apply(&state, &parsed, &failures, test_revision('a'), None).await;
+    let second = apply_at(
+        &state,
+        &parsed,
+        &failures,
+        &test_revision('a'),
+        None,
+        synced_at() + Duration::seconds(60),
+    )
+    .await;
     assert!(!second.changed);
     assert_eq!(second.inserted_lists, 0);
     assert_eq!(second.updated_lists, 0);
     assert_eq!(second.unchanged_lists, 2);
     assert_eq!(second.entries_written, 0);
+    assert_eq!(second.identities_upserted, 0);
     let entries: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_source_entries").await;
     let synced: i64 = scalar(
         &state,
-        "SELECT COUNT(*) FROM cbl_sources WHERE synced_at = '2026-11-27 12:00:00+00'",
+        "SELECT COUNT(*) FROM cbl_sources \
+         WHERE synced_at = '2026-11-27 12:00:00+00' \
+           AND updated_at = '2026-11-27 12:00:00+00'",
     )
     .await;
     assert_eq!((entries, synced), (2, 1));
@@ -349,7 +382,7 @@ async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
         ),
     ]);
     let (parsed, failures) = original.parse();
-    apply(&state, &parsed, &failures, test_revision('a'), None).await;
+    apply(&state, &parsed, &failures, &test_revision('a'), None).await;
     let removed_id: i32 = scalar(
         &state,
         "SELECT id FROM cbl_source_lists WHERE source_path = 'DC/Batman/Robin.cbl'",
@@ -367,7 +400,7 @@ async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
         ),
     )]);
     let (next, failures) = changed.parse();
-    let summary = apply(&state, &next, &failures, test_revision('b'), None).await;
+    let summary = apply(&state, &next, &failures, &test_revision('b'), None).await;
     assert_eq!(summary.updated_lists, 1);
     assert_eq!(summary.deactivated_lists, 1);
     assert_eq!(summary.entries_written, 2);
@@ -411,7 +444,7 @@ async fn a_parse_failure_protects_the_last_known_good_list() {
         &cbl("Fantastic Four 001", &[("Fantastic Four", "1", None, None)]),
     )]);
     let (parsed, failures) = fixture.parse();
-    apply(&state, &parsed, &failures, test_revision('c'), None).await;
+    apply(&state, &parsed, &failures, &test_revision('c'), None).await;
 
     let broken = MirrorFixture::new(&[(
         "Marvel/Fantastic Four.cbl",
@@ -419,8 +452,9 @@ async fn a_parse_failure_protects_the_last_known_good_list() {
     )]);
     let (empty, failures) = broken.parse();
     assert_eq!(failures.len(), 1);
-    let summary = apply(&state, &empty, &failures, test_revision('d'), None).await;
+    let summary = apply(&state, &empty, &failures, &test_revision('d'), None).await;
     assert_eq!(summary.deactivated_lists, 0);
+    assert_eq!(summary.protected_lists, 1);
     let row = {
         let conn = state.pool.get().await.unwrap();
         conn.query_one(
@@ -457,7 +491,7 @@ async fn repository_alias_is_reconciled_in_place() {
         &state,
         &parsed,
         &failures,
-        test_revision('e'),
+        &test_revision('e'),
         Some("/mnt/bigdata/CBL-ReadingLists"),
     )
     .await;
