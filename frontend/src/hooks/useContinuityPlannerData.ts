@@ -80,21 +80,22 @@ export function useThreadIssues(selectedThreadId: number | null) {
         : [],
     queryFn: async (): Promise<Issue[]> => {
       if (selectedThreadId === null) return []
-      const result: Issue[] = []
-      const seen = new Set<string>()
-      let token: string | null = null
-      do {
-        const params: IssueListParams = { page_size: 100 }
-        if (token) {
-          params.page_token = token
-        }
-        const page = await issuesApi.list(selectedThreadId, params)
-        result.push(...page.issues)
-        token = page.next_page_token
-        if (token && seen.has(token)) break
-        if (token) seen.add(token)
-      } while (token)
-      return result
+      const collected = await collectAllPages({
+        fetchPage: (token) => {
+          const params: IssueListParams = { page_size: 100 }
+          if (token) {
+            params.page_token = token
+          }
+          return issuesApi.list(selectedThreadId, params)
+        },
+        selectItems: (page) => page.issues,
+        selectNextToken: (page) => page.next_page_token || null,
+        maxPages: MAX_ISSUE_COLLECTION_PAGES,
+      })
+      if (collected.stopReason === 'max-pages') {
+        throw new Error('Unable to load the complete issue list for this series.')
+      }
+      return collected.items
     },
     enabled: selectedThreadId != null,
   })
