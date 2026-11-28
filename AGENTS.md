@@ -63,9 +63,9 @@ factory claims and do not bundle unrelated API refactors.
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 157 (157 native-rust + 0 python-fastapi).
+- Live v2 operations: 174 (174 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs` (via `vercel.json`).
-- Full Python-handler surface: 22 operations (v1 22 + unversioned 0); v1 active 0 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 16 operations (v1 16 + unversioned 0); v1 active 0 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -88,11 +88,18 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4841 (6): `POST /api/v2/reading-order-groups/{group_id}/issue-ranges -> native-rust`; `POST /api/v2/reading-order-groups/{group_id}/members -> native-rust`; `DELETE /api/v2/reading-order-groups/{group_id}/members/{member_id} -> native-rust`; `GET /api/v2/reading-order-groups/{group_id}/reading-plans -> native-rust`; `POST /api/v2/reading-order-groups:resolveMemberships -> native-rust`; `GET /api/v2/threads/{thread_id}/reading-order-group-memberships -> native-rust`
 - #4844 (9): `GET /api/v2/reading-lists/issue-candidates -> native-rust`; `POST /api/v2/reading-lists/{list_id}/adoption-commits -> native-rust`; `GET /api/v2/reading-lists/{list_id}/export -> native-rust`; `GET /api/v2/reading-lists/{list_id}/overlap-decisions -> native-rust`; `PUT /api/v2/reading-lists/{list_id}/overlap-decisions -> native-rust`; `DELETE /api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id} -> native-rust`; `POST /api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits -> native-rust`; `POST /api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications -> native-rust`; `POST /api/v2/series-mapping-commits -> native-rust`
 - #4849 (1): `GET /api/v2/releases -> native-rust`
-- #4850 (4): `POST /api/v2/roll/dismiss-pending -> native-rust`; `POST /api/v2/roll/override -> native-rust`; `POST /api/v2/roll/switch-prerequisite -> native-rust`; `POST /api/v2/roll/unsnooze -> native-rust`
+- #4850 (3): `POST /api/v2/roll/dismiss-pending -> native-rust`; `POST /api/v2/roll/switch-prerequisite -> native-rust`; `POST /api/v2/roll/unsnooze -> native-rust`
 - #4851 (4): `GET /api/v2/reading-orders/ -> native-rust`; `POST /api/v2/reading-orders/{reading_order_id}/items -> native-rust`; `POST /api/v2/reading-plan-sync/runs -> native-rust`; `GET /api/v2/reading-plan-sync/status -> native-rust`
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
 - #5435 (5): `POST /api/v2/queue-exclusion-groups/{group_id}/restore -> native-rust`; `POST /api/v2/queue-exclusions -> native-rust`; `POST /api/v2/queue-exclusions/restore -> native-rust`; `POST /api/v2/queue-exclusions/status:check -> native-rust`; `POST /api/v2/reading-lists/memberships:check -> native-rust`
 - #5702 (1): `POST /api/v2/threads -> native-rust`
+- #5703 (2): `DELETE /api/v2/threads/{thread_id} -> native-rust`; `PATCH /api/v2/threads/{thread_id} -> native-rust`
+- #5705 (1): `POST /api/v2/threads:checkDuplicates -> native-rust`
+- #5706 (2): `GET /api/v2/threads/{thread_id}/creatorCredits -> native-rust`; `GET /api/v2/threads/{thread_id}/issues -> native-rust`
+- #5708 (5): `GET /api/v2/readingSessions -> native-rust`; `POST /api/v2/readingSessions -> native-rust`; `GET /api/v2/readingSessions/{session_id} -> native-rust`; `GET /api/v2/readingSessions/{session_id}/details -> native-rust`; `GET /api/v2/readingSessions/{session_id}/snapshots -> native-rust`
+- #5710 (5): `GET /api/v2/readingOrderGroups -> native-rust`; `POST /api/v2/readingOrderGroups -> native-rust`; `DELETE /api/v2/readingOrderGroups/{group_id} -> native-rust`; `GET /api/v2/readingOrderGroups/{group_id} -> native-rust`; `PATCH /api/v2/readingOrderGroups/{group_id} -> native-rust`
+- #5715 (2): `POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection -> native-rust`; `GET /api/v2/threads/{thread_id}/readingOrders -> native-rust`
+- #5716 (1): `POST /api/v2/seriesMappings:preview -> native-rust`
 <!-- route-burndown:end -->
 
 ### Route generation ownership (bot-owned)
