@@ -421,5 +421,54 @@ test('identity-inbox v2 resources retain all seven native contracts and Rust ing
     assert.ok(op?.operationId, 'missing native operationId for ' + method + ' ' + route);
     assert.ok(Object.keys(op.responses).some(code => code.startsWith('2')), route);
     assert.equal(liveOperation(fragment, method, route).dest, '/api/native_api.rs', route);
+<<<<<<< HEAD
+=======
+  }
+});
+
+test('retired roll override is a tombstone that regeneration drops from the inventory', (t) => {
+  // A retired operation is removed from the fragment's operations array, but its
+  // owned_path_patterns entry must stay: _mergeRouteFragments filters prior
+  // inventory rows solely by those patterns (#4341 factory review finding F1).
+  // Fragment-only PRs leave the bot-owned inventory stale until post-merge
+  // regeneration, so stage the live inputs in a temp dir and regenerate there.
+  const roll = liveFragment('roll');
+  assert.ok(
+    roll.owned_path_patterns.includes('^/api/v2/roll/override$'),
+    'roll fragment must retain the retired override tombstone pattern',
+  );
+  assert.ok(
+    !roll.operations.some(op => op.path === '/api/v2/roll/override'),
+    'roll fragment must not re-declare the retired override operation',
+  );
+
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-retired-override-'));
+  t.after(() => rmSync(tmp, {recursive: true, force: true}));
+  mkdirSync(path.join(tmp, 'docs', 'api'), {recursive: true});
+  cpSync(path.join(repoRoot, 'docs/api/route-fragments'), path.join(tmp, 'fragments'), {recursive: true});
+  for (const [source, target] of [
+    ['docs/api/v2-route-inventory.json', 'inventory.json'],
+    ['docs/api/route-fragments/vercel-rewrites.json', 'vercel-rewrites.json'],
+    ['vercel.json', 'vercel.json'],
+    ['AGENTS.md', 'AGENTS.md'],
+    ['docs/api/sql-budget-sources.json', 'docs/api/sql-budget-sources.json'],
+  ]) {
+    copyFileSync(path.join(repoRoot, source), path.join(tmp, target));
+  }
+  const files = {
+    inventory: path.join(tmp, 'inventory.json'),
+    vercel: path.join(tmp, 'vercel.json'),
+    agents: path.join(tmp, 'AGENTS.md'),
+    rewrite: path.join(tmp, 'vercel-rewrites.json'),
+    fragments: path.join(tmp, 'fragments'),
+  };
+  run([process.execPath, nodeScript], generatorArgs(files), tmp);
+
+  const regenerated = JSON.parse(readFileSync(files.inventory, 'utf8'));
+  const retired = op => op.method === 'POST' && op.path === '/api/v2/roll/override';
+  assert.ok(!regenerated.operations.some(retired), 'regenerated inventory still lists POST /api/v2/roll/override');
+  for (const bucket of ['v1_operations', 'unversioned_operations']) {
+    assert.ok(!(regenerated.full_surface?.[bucket] ?? []).some(retired), bucket + ' still lists the retired route');
+>>>>>>> origin/main
   }
 });

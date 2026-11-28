@@ -53,7 +53,6 @@ use utoipa::OpenApi;
         crate::roll_offer::offer_documentation,
         crate::roll_offer::unsnooze_documentation,
         crate::roll_reset::reset_documentation,
-        crate::roll_override::override_roll_documentation,
         crate::roll_switch_prerequisite::switch_prerequisite_documentation,
         crate::dismiss_pending::dismiss_pending_documentation,
         crate::session_history::list_session_snapshots_documentation,
