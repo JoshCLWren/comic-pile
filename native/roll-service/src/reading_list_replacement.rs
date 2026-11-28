@@ -172,7 +172,7 @@ pub struct ReplacementUndoResponse {
 
 
 fn qe(error: tokio_postgres::Error) -> ApiError {
-    eprintln!("REPLACEMENT SQL ERROR: {error}");
+    eprintln!("REPLACEMENT SQL ERROR: {error:?}");
     db::query_error(error)
 }
 
