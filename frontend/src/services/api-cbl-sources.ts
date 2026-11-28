@@ -1,4 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
+import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface CBLSourceListDiscoveryItem {
   id: number
@@ -235,13 +236,7 @@ export interface CBLAdoptionPreview {
  * the destination or identity of an adopted list. `custom_cbl_list_id` is the
  * stable reader-owned Reading List ID returned by the v2 commit endpoint.
  */
-export interface CBLAdoptionCommitResult {
-  id: number
-  name: string
-  user_id: number
-  ordering_mode: string
-  created_at: string
-  updated_at: string
+export interface CBLAdoptionCommitResult extends ContinuityPlan {
   custom_cbl_list_id?: number | null
   list_version?: number | null
   selections?: unknown | null
