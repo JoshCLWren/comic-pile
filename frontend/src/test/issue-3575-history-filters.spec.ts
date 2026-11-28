@@ -13,7 +13,21 @@ import { generateTestUser } from './helpers'
 
 const ACTIVITY_PATH = '/api/v2/activity'
 
-const rolled = {
+type ActivityRow = {
+  event_id: number
+  type: string
+  timestamp: string
+  die_before: number | null
+  die_after: number | null
+  rating: number | null
+  issue_id: number | null
+  thread_id: number | null
+  thread_title: string | null
+  issue_number: string | null
+  session_id: number | null
+}
+
+const rolled: ActivityRow = {
   event_id: 1050511,
   type: 'roll',
   timestamp: '2026-11-08T15:42:35.028000Z',
@@ -27,7 +41,7 @@ const rolled = {
   session_id: null,
 }
 
-const rated = {
+const rated: ActivityRow = {
   event_id: 1050517,
   type: 'rate',
   timestamp: '2026-11-08T16:01:54.388000Z',
@@ -41,7 +55,7 @@ const rated = {
   session_id: null,
 }
 
-function activityBody(items: typeof rolled[]) {
+function activityBody(items: ActivityRow[]) {
   return JSON.stringify({
     activities: items,
     events: items,
