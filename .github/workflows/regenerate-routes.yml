@@ -130,7 +130,7 @@ jobs:
               --title 'chore(routes): regenerate checked routing artifacts' \
               --body 'Bot-generated route artifacts only. CI verifies deterministic output at the exact PR head before the required CI Summary check permits merge.
 
-          
+          Refs #4931. No generated files are written directly to protected main.
 
           <!-- route-regeneration:bot-owned -->')"
             echo "Opened regeneration PR $pr."
