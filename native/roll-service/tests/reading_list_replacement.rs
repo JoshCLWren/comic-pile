@@ -405,7 +405,7 @@ async fn undo_restores_only_list_membership_and_keeps_later_read_event() {
     // A read event that happens after the replacement is independent history.
     let conn = fixture.state.pool.get().await.unwrap();
     conn.execute(
-        "INSERT INTO events (id, type, timestamp, issue_id, created_at) VALUES (4026500, 'read', NOW(), $1, NOW())",
+        "INSERT INTO events (id, type, timestamp, issue_id) VALUES (4026500, 'read', NOW(), $1)",
         &[&ISSUE_A],
     )
     .await
