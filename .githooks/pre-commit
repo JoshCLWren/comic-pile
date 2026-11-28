@@ -66,13 +66,11 @@ if [ -n "$RUST_FILES" ]; then
     echo "Formatting staged Rust files with rustfmt..."
     for file in $RUST_FILES; do
         # Re-staging a file that also has unstaged edits would commit those edits.
+        # Checking the working tree would validate different content than Git commits.
         if ! git diff --quiet -- "$file"; then
-            if ! rustfmt --edition 2021 --check "$file" >/dev/null; then
-                echo "${RED}ERROR: $file is not formatted and has unstaged changes.${NC}"
-                echo "${RED}Run cargo fmt --all, review the result, and stage it.${NC}"
-                exit 1
-            fi
-            continue
+            echo "${RED}ERROR: $file has both staged and unstaged changes.${NC}"
+            echo "${RED}Stage or restore the unstaged changes before committing.${NC}"
+            exit 1
         fi
         rustfmt --edition 2021 "$file"
         git add -- "$file"
