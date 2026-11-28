@@ -1604,15 +1604,11 @@ mod tests {
                <Database Name=\"cv\" Series=\"133048\" Issue=\"823883\" />\
              </Book>",
         );
-        let list =
-            parse_cbl_bytes(&xml, "Marvel/Master Reading Order/CMRO.cbl").expect("parse");
+        let list = parse_cbl_bytes(&xml, "Marvel/Master Reading Order/CMRO.cbl").expect("parse");
         assert_eq!(list.books.len(), 1);
         assert_eq!(list.books[0].series, "Marvel Mini-Books");
         assert_eq!(list.books[0].issue_number, "");
-        assert_eq!(
-            list.books[0].comicvine_series_id.as_deref(),
-            Some("133048")
-        );
+        assert_eq!(list.books[0].comicvine_series_id.as_deref(), Some("133048"));
         assert_eq!(list.books[0].comicvine_issue_id.as_deref(), Some("823883"));
 
         // A Number attribute that is absent, unlike one that is empty, is
