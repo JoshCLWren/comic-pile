@@ -81,7 +81,7 @@ describe('rating exit without server-owned pending', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    rateMutation.mutate.mockResolvedValue({ rate: undefined, bootstrap: null })
+    rateMutation.mutate.mockResolvedValue({ rate: undefined, rollState: null })
     refetchRollState.mockResolvedValue(undefined)
   })
 

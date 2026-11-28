@@ -98,7 +98,7 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
   }
 }
 
-const mockRateMutation = { mutate: vi.fn().mockResolvedValue({ rate: undefined, bootstrap: null }), isPending: false }
+const mockRateMutation = { mutate: vi.fn().mockResolvedValue({ rate: undefined, rollState: null }), isPending: false }
 const mockRefetchBootstrap = vi.fn().mockResolvedValue(undefined)
 const mockClearPending = vi.fn()
 

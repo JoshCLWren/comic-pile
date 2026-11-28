@@ -55,7 +55,7 @@ function shouldSnoozeAfterRating(
  */
 export interface RateMutationOutcome {
   rate: RateResponsePayload | undefined
-  bootstrap: RollState | null
+  rollState: RollState | null
 }
 
 export interface RateDeps {
@@ -97,9 +97,9 @@ export function useRate(deps: RateDeps = {}) {
           addRollSnooze(data.thread_id)
         }
 
-        let bootstrap: RollState | null = null
+        let snapshot: RollState | null = null
         try {
-          bootstrap = await fetchAndPublishRollState(rollState, userId)
+          snapshot = await fetchAndPublishRollState(rollState, userId)
         } catch (reconciliationError: unknown) {
           console.error(
             'Rating saved but authoritative Roll state failed to refresh:',
@@ -107,7 +107,7 @@ export function useRate(deps: RateDeps = {}) {
           )
         }
 
-        return { rate: result, bootstrap }
+        return { rate: result, rollState: snapshot }
       } catch (error: unknown) {
         if (isAuthenticationMutationFailure(error)) {
           try {
@@ -124,16 +124,16 @@ export function useRate(deps: RateDeps = {}) {
               if (shouldSnoozeAfterRating(data, recovery.value?.issues_remaining)) {
                 addRollSnooze(data.thread_id)
               }
-              let bootstrap: RollState | null = null
+              let snapshot: RollState | null = null
               try {
-                bootstrap = await fetchAndPublishRollState(rollState, userId)
+                snapshot = await fetchAndPublishRollState(rollState, userId)
               } catch (reconciliationError: unknown) {
                 console.error(
                   'Rating saved but authoritative Roll state failed to refresh:',
                   reconciliationError,
                 )
               }
-              return { rate: recovery.value, bootstrap }
+              return { rate: recovery.value, rollState: snapshot }
             }
           } catch (recoveryError: unknown) {
             console.error(
@@ -156,10 +156,10 @@ export function useRate(deps: RateDeps = {}) {
                 // The reconciling bootstrap was fetched before the snooze was
                 // recorded; refetch so the published pool excludes the comic.
                 addRollSnooze(data.thread_id)
-                const bootstrap = await fetchAndPublishRollState(rollState, userId)
-                return { rate: undefined, bootstrap }
+                const snapshot = await fetchAndPublishRollState(rollState, userId)
+                return { rate: undefined, rollState: snapshot }
               }
-              return { rate: undefined, bootstrap: reconciliation.bootstrap }
+              return { rate: undefined, rollState: reconciliation.rollState }
             }
           } catch (reconciliationError: unknown) {
             console.error(

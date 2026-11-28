@@ -89,7 +89,7 @@ export async function fetchAndPublishRollState(
 export interface AmbiguousRollMutationReconciliation {
   committed: boolean
   /** Authoritative state fetched and published while reconciling. */
-  bootstrap: RollState
+  rollState: RollState
 }
 
 export async function reconcileAmbiguousRollMutation(
@@ -105,7 +105,7 @@ export async function reconcileAmbiguousRollMutation(
     : pendingThreadId !== expectedPendingThreadId
   if (committed) clearAllPendingSelections(userId)
 
-  return { committed, bootstrap: state }
+  return { committed, rollState: state }
 }
 
 function delay(ms: number): Promise<void> {

@@ -223,7 +223,7 @@ beforeEach(() => {
       isError: false,
       error: null,
     }
-    return { rate: rateResponse, bootstrap: null }
+    return { rate: rateResponse, rollState: null }
   })
 })
 
