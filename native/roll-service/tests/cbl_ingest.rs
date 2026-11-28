@@ -508,6 +508,141 @@ async fn repository_alias_is_reconciled_in_place() {
     assert_eq!(entries, 1);
 }
 
+#[tokio::test]
+async fn canonical_repository_and_active_alias_fail_closed() {
+    let (state, _guard) = setup().await;
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(
+        "INSERT INTO cbl_sources
+             (repository, revision_sha, synced_at, created_at, updated_at)
+          VALUES ('JoshCLWren/CBL-ReadingLists', 'canonical', NOW(), NOW(), NOW()),
+                 ('/mnt/bigdata/CBL-ReadingLists', 'alias', NOW(), NOW(), NOW());",
+    )
+    .await
+    .unwrap();
+    let canonical_id: i32 = scalar(
+        &state,
+        "SELECT id FROM cbl_sources WHERE repository = 'JoshCLWren/CBL-ReadingLists'",
+    )
+    .await;
+    let alias_id: i32 = scalar(
+        &state,
+        "SELECT id FROM cbl_sources WHERE repository = '/mnt/bigdata/CBL-ReadingLists'",
+    )
+    .await;
+    for (source_id, path) in [(canonical_id, "DC/Canonical.cbl"), (alias_id, "DC/Alias.cbl")] {
+        conn.execute(
+            "INSERT INTO cbl_source_lists
+                 (source_id, source_path, name, declared_issue_count, content_hash,
+                  revision_sha, active, created_at, updated_at)
+             VALUES ($1, $2, $2, 0, 'hash', 'old', TRUE, NOW(), NOW())",
+            &[&source_id, &path],
+        )
+        .await
+        .unwrap();
+    }
+    let fixture = MirrorFixture::new(&[("DC/Canonical.cbl", &cbl("Canonical", &[]))]);
+    let (parsed, failures) = fixture.parse();
+    let transaction = conn.transaction().await.unwrap();
+    let error = sync_cbl_lists(
+        &*transaction,
+        "JoshCLWren/CBL-ReadingLists",
+        &test_revision('f'),
+        &parsed,
+        &protected(&failures),
+        &["/mnt/bigdata/CBL-ReadingLists".to_string()],
+        false,
+        synced_at(),
+    )
+    .await
+    .expect_err("active alias must fail closed");
+    assert!(error.to_string().contains("active repository alias"));
+    transaction.rollback().await.unwrap();
+    let active_aliases: i64 = scalar(
+        &state,
+        "SELECT COUNT(*) FROM cbl_source_lists l \
+         JOIN cbl_sources s ON s.id = l.source_id \
+         WHERE s.repository = '/mnt/bigdata/CBL-ReadingLists' AND l.active IS TRUE",
+    )
+    .await;
+    assert_eq!(active_aliases, 1);
+}
+
+#[tokio::test]
+async fn concurrent_first_ingests_are_serialized() {
+    let (state, _guard) = setup().await;
+    let fixture = MirrorFixture::new(&[("DC/One.cbl", &cbl("One", &[("One", "1", None, None)]))]);
+    let (parsed, failures) = fixture.parse();
+    let mut first_conn = state.pool.get().await.unwrap();
+    let mut second_conn = state.pool.get().await.unwrap();
+    let first_tx = first_conn.transaction().await.unwrap();
+    let second_tx = second_conn.transaction().await.unwrap();
+    let (first, second) = tokio::join!(
+        sync_cbl_lists(
+            &*first_tx,
+            "JoshCLWren/CBL-ReadingLists",
+            &test_revision('a'),
+            &parsed,
+            &protected(&failures),
+            &[],
+            false,
+            synced_at(),
+        ),
+        sync_cbl_lists(
+            &*second_tx,
+            "JoshCLWren/CBL-ReadingLists",
+            &test_revision('a'),
+            &parsed,
+            &protected(&failures),
+            &[],
+            false,
+            synced_at() + Duration::seconds(1),
+        ),
+    );
+    first_tx.commit().await.unwrap();
+    second_tx.commit().await.unwrap();
+    let first = first.unwrap();
+    let second = second.unwrap();
+    let mut created = [first.source_created, second.source_created];
+    created.sort_unstable();
+    assert_eq!(created, [false, true]);
+    assert_eq!(first.inserted_lists + second.inserted_lists, 1);
+    assert_eq!(first.unchanged_lists + second.unchanged_lists, 1);
+    let sources: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_sources").await;
+    let lists: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_source_lists").await;
+    assert_eq!((sources, lists), (1, 1));
+}
+
+#[tokio::test]
+async fn entry_inserts_cross_the_batch_boundary() {
+    let (state, _guard) = setup().await;
+    let entries = vec![("Series", "1", None, None); 501];
+    let body = cbl("Large", &entries);
+    let fixture = MirrorFixture::new(&[("DC/Large.cbl", &body)]);
+    let (parsed, failures) = fixture.parse();
+    let summary = apply(&state, &parsed, &failures, &test_revision('b'), None).await;
+    assert_eq!(summary.entries_written, 501);
+    let stored: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_source_entries").await;
+    assert_eq!(stored, 501);
+}
+
+#[test]
+fn cli_inventory_exits_nonzero_for_parse_failures() {
+    let fixture = MirrorFixture::new(&[("DC/Bad.cbl", "<Foo />")]);
+    let pinned = fixture.init_git();
+    let output = Command::new(env!("CARGO_BIN_EXE_cbl_ingest"))
+        .arg(&fixture.root)
+        .arg("--revision-sha")
+        .arg(pinned)
+        .arg("--inventory-only")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["inventory"]["failed_files"], 1);
+    assert_eq!(payload["parse_failures"][0]["source_path"], "DC/Bad.cbl");
+}
+
 fn ensure_path(value: &Path) -> String {
     value.to_string_lossy().into_owned()
 }
