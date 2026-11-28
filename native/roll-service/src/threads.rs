@@ -95,7 +95,6 @@ pub struct QueueExclusionGroupRef {
 pub struct ThreadListItem {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub status: String,
@@ -137,7 +136,6 @@ pub struct ThreadListResponse {
 pub struct ThreadDetailResponse {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub status: String,
@@ -472,7 +470,7 @@ pub async fn get_thread_detail(
                    AND COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0) <= $3
                    AND NOT EXISTS (SELECT 1 FROM revoked_tokens r WHERE r.jti = $2)
          )
-         SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+         SELECT t.id, t.title, t.issues_remaining, t.queue_position,
                 t.status, t.last_rating,
                 to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
                 t.notes, t.is_test, t.is_blocked,
