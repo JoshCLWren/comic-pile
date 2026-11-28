@@ -8,6 +8,8 @@ the idempotency/deployment invariants required by the issue contract.
 from __future__ import annotations
 
 import json
+import socket
+import urllib.error
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
