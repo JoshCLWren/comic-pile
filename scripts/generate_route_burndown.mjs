@@ -1004,8 +1004,10 @@ function _parseArgs(argv) {
       args.vercel = argv[++i];
     } else if (arg === '--agents') {
       args.agents = argv[++i];
+    } else if (arg === '--router') {
+      args.router = argv[++i];
     } else if (arg === '--help' || arg === '-h') {
-      console.log('usage: generate_route_burndown.mjs [--inventory PATH] [--fragments DIR] [--rewrite-fragment PATH] [--vercel PATH] [--agents PATH] [--check]');
+      console.log('usage: generate_route_burndown.mjs [--inventory PATH] [--fragments DIR] [--rewrite-fragment PATH] [--vercel PATH] [--agents PATH] [--router PATH] [--check]');
       process.exit(0);
     } else {
       throw new BurndownGenerationError(`unknown argument: ${arg}`);
