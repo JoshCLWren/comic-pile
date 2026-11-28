@@ -400,8 +400,7 @@ SELECT p.id, p.type,
        r.die, r.die_after, r.rating, r.issue_id, r.issue_number, r.thread_id, rt.title,
        p.session_id, r.session_id,
        ($7::text IS NULL
-        OR (CASE WHEN d.id IS NOT NULL THEN 'rate' ELSE p.type END) = $7
-        OR ($7 = 'roll' AND r.id IS NOT NULL)),
+        OR (CASE WHEN d.id IS NOT NULL THEN 'rate' ELSE p.type END) = $7),
        ($7::text IS NULL OR ($7 = 'roll' AND r.id IS NOT NULL))
   FROM primaries p
   LEFT JOIN threads pt ON pt.id = p.thread_id
