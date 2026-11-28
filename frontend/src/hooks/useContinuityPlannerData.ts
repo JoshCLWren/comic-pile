@@ -4,6 +4,11 @@ import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { issuesApi, type IssueListParams } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
+import {
+  COLLECT_ALL_DEFAULT_MAX_PAGES,
+  MAX_ISSUE_COLLECTION_PAGES,
+  collectAllPages,
+} from '../pagination/collectAllPages'
 import type { Issue, ThreadListItem } from '../types'
 
 /**
@@ -18,17 +23,24 @@ export function useAllThreads() {
   return useQuery({
     queryKey: queryKeys.thread.list(),
     queryFn: async (): Promise<ThreadListItem[]> => {
-      const result: ThreadListItem[] = []
-      const seen = new Set<string>()
-      let token: string | null = null
-      do {
-        const page = await threadsApi.list({ page_size: 100 }, token)
-        result.push(...page.threads)
-        token = page.next_page_token ?? null
-        if (token && seen.has(token)) break
-        if (token) seen.add(token)
-      } while (token)
-      return result
+      const firstPage = await threadsApi.list({ page_size: 100 }, null)
+      const total = firstPage.filtered_count ?? firstPage.active_count
+      const maxPages = Math.max(
+        COLLECT_ALL_DEFAULT_MAX_PAGES,
+        Math.ceil((total ?? 0) / 100),
+      )
+      const collected = await collectAllPages({
+        fetchPage: async (token) => token === null
+          ? firstPage
+          : threadsApi.list({ page_size: 100 }, token),
+        selectItems: (page) => page.threads,
+        selectNextToken: (page) => page.next_page_token || null,
+        maxPages,
+      })
+      if (collected.stopReason === 'max-pages') {
+        throw new Error('Unable to load the complete comics list for selection.')
+      }
+      return collected.items
     },
   })
 }
@@ -68,21 +80,22 @@ export function useThreadIssues(selectedThreadId: number | null) {
         : [],
     queryFn: async (): Promise<Issue[]> => {
       if (selectedThreadId === null) return []
-      const result: Issue[] = []
-      const seen = new Set<string>()
-      let token: string | null = null
-      do {
-        const params: IssueListParams = { page_size: 100 }
-        if (token) {
-          params.page_token = token
-        }
-        const page = await issuesApi.list(selectedThreadId, params)
-        result.push(...page.issues)
-        token = page.next_page_token
-        if (token && seen.has(token)) break
-        if (token) seen.add(token)
-      } while (token)
-      return result
+      const collected = await collectAllPages({
+        fetchPage: (token) => {
+          const params: IssueListParams = { page_size: 100 }
+          if (token) {
+            params.page_token = token
+          }
+          return issuesApi.list(selectedThreadId, params)
+        },
+        selectItems: (page) => page.issues,
+        selectNextToken: (page) => page.next_page_token || null,
+        maxPages: MAX_ISSUE_COLLECTION_PAGES,
+      })
+      if (collected.stopReason === 'max-pages') {
+        throw new Error('Unable to load the complete issue list for this series.')
+      }
+      return collected.items
     },
     enabled: selectedThreadId != null,
   })

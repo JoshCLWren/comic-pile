@@ -146,6 +146,35 @@ describe('useQueueThreads (bounded incremental loader)', () => {
     expect(result.current.nextPageToken).toBeNull()
   })
 
+  it('drops a replayed thread id when a cursor page repeats a row', async () => {
+    // A read-only revisit can refetch cached cursors after concurrent writes;
+    // a repeated id must not become a second rendered series (#3604).
+    // SAFETY: the stubbed pages supply only the fields the pager reads
+    listThreads.mockResolvedValueOnce({
+      threads: [{ id: 1 } as never, { id: 2 } as never],
+      next_page_token: 'tok-2',
+      active_count: 2,
+    })
+    // SAFETY: the stubbed pages supply only the fields the pager reads
+    listThreads.mockResolvedValueOnce({
+      threads: [{ id: 2 } as never, { id: 3 } as never],
+      next_page_token: null,
+      active_count: 3,
+    })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    await act(async () => {
+      await result.current.loadMore()
+    })
+
+    await waitFor(() => expect(result.current.data).toHaveLength(3))
+    expect(result.current.data?.map((thread) => thread.id)).toEqual([1, 2, 3])
+  })
+
   it('loadMore is a no-op when there is no next page', async () => {
     // SAFETY: the stubbed page supplies only the fields the pager reads
     listThreads.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null, active_count: 0 })

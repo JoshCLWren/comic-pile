@@ -756,6 +756,37 @@ describe('QueueMapSeriesDialog', () => {
     expect(invalidateQueueSpy).not.toHaveBeenCalled()
   })
 
+  it('distinguishes a refused commit from a committed mapping whose follow-up hydration failed', async () => {
+    // #5170: a definitive 4xx refusal leaves the series unmapped; a successful
+    // commit whose post-commit cache/hydration refresh fails is still mapped.
+    // The dialog must never report the second case as "Nothing was changed".
+    const user = userEvent.setup()
+
+    mockedCommit.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: 'invalid_approved_row' } },
+    })
+    const refused = renderDialog()
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not map the series. Nothing was changed.',
+    )
+    expect(refused.onMapped).not.toHaveBeenCalled()
+    refused.unmount()
+
+    clearIntelligenceManySpy.mockRejectedValueOnce(new Error('hydration refresh failed'))
+    const saved = renderDialog()
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
+    expect(saved.onMapped).toHaveBeenCalledWith([2])
+    expect(screen.queryByText('Could not map the series. Nothing was changed.')).not.toBeInTheDocument()
+    // The follow-up refresh was still attempted; only the commit result won.
+    expect(clearIntelligenceManySpy).toHaveBeenCalledWith(expect.anything(), [2])
+    expect(invalidateQueueSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('retries a lost commit response and accepts the replayed success', async () => {
     // Issue #3776 / Greptile #4126: a lost response may hide an already-committed
     // mapping. The idempotency key makes a replay safe, so the reader should not
