@@ -389,6 +389,10 @@ jobs:
       # factory-only fast path, so the assertions run for every pull request.
       - name: Contributor fork CI boundary guards
         run: uv run --frozen python -m pytest -q --no-cov tests/test_contributor_ci.py
+      # Release recovery regressions must execute in a required job: a green
+      # lint/type check alone does not prove the URL and failure-summary paths.
+      - name: Release writer recovery regressions
+        run: uv run --frozen python -m pytest -q --no-cov tests/test_release_recovery.py tests/test_release_writer_queue.py
 
   factory-shellcheck:
     name: Factory Shell Scripts (shellcheck)
