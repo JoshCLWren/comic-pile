@@ -474,9 +474,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             }
             Event::CData(ref text) => {
                 if elements.is_empty() {
-                    return Err(IngestError::new(
-                        "CBL CDATA must stay inside ReadingList",
-                    ));
+                    return Err(IngestError::new("CBL CDATA must stay inside ReadingList"));
                 }
                 if capture.is_some() {
                     captured_text.push_str(text.as_ref());

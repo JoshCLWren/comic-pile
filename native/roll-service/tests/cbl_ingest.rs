@@ -489,6 +489,82 @@ async fn trailing_character_data_is_protected_as_a_parse_failure() {
 }
 
 #[tokio::test]
+async fn concurrent_first_applies_serialize_and_report_truthful_counts() {
+    let (state, _guard) = setup().await;
+    let parsed: Vec<CBLList> = (0..600)
+        .map(|index| CBLList {
+            source_path: format!("DC/Bulk/{index:04}.cbl"),
+            content_hash: format!("{index:064x}"),
+            name: format!("Bulk {index:04}"),
+            declared_issue_count: Some(0),
+            books: Vec::new(),
+        })
+        .collect();
+    let protected = BTreeSet::new();
+    let barrier = Arc::new(Barrier::new(2));
+
+    let mut first_conn = state.pool.get().await.unwrap();
+    let first_transaction = first_conn.transaction().await.unwrap();
+    let mut second_conn = state.pool.get().await.unwrap();
+    let second_transaction = second_conn.transaction().await.unwrap();
+    let first_barrier = Arc::clone(&barrier);
+    let second_barrier = Arc::clone(&barrier);
+    let first = async move {
+        first_barrier.wait().await;
+        let result = sync_cbl_lists(
+            &*first_transaction,
+            "JoshCLWren/CBL-ReadingLists",
+            "abc1234",
+            &parsed,
+            &protected,
+            &[],
+            false,
+            synced_at(),
+        )
+        .await;
+        first_transaction.commit().await.unwrap();
+        result.unwrap()
+    };
+    let second = async move {
+        second_barrier.wait().await;
+        let result = sync_cbl_lists(
+            &*second_transaction,
+            "JoshCLWren/CBL-ReadingLists",
+            "abc1234",
+            &parsed,
+            &protected,
+            &[],
+            false,
+            synced_at(),
+        )
+        .await;
+        second_transaction.commit().await.unwrap();
+        result.unwrap()
+    };
+    let (first, second) = tokio::join!(first, second);
+    drop(first_conn);
+    drop(second_conn);
+
+    assert_eq!(
+        usize::from(first.source_created) + usize::from(second.source_created),
+        1
+    );
+    let (creator, follower) = if first.source_created {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    assert_eq!(creator.inserted_lists, 600);
+    assert_eq!(follower.source_created, false);
+    assert_eq!(follower.inserted_lists, 0);
+    assert_eq!(follower.updated_lists, 0);
+    assert_eq!(follower.unchanged_lists, 600);
+    let sources: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_sources").await;
+    let lists: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_source_lists").await;
+    assert_eq!((sources, lists), (1, 600));
+}
+
+#[tokio::test]
 async fn repository_alias_is_reconciled_in_place() {
     let (state, _guard) = setup().await;
     let conn = state.pool.get().await.unwrap();
