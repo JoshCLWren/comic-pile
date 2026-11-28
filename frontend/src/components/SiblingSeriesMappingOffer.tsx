@@ -175,12 +175,12 @@ export default function SiblingSeriesMappingOffer({
   if (preview.isPending) {
     return (
       <div className="space-y-4" data-testid="sibling-mapping-offer">
-        <p className="text-sm text-stone-300">
-          Checking the rest of <span className="font-bold text-stone-100">{seriesLabel}</span> for
+        <p className="text-sm text-[var(--theme-text-primary)]">
+          Checking the rest of <span className="font-bold text-[var(--theme-text-primary)]">{seriesLabel}</span> for
           exact matches.
         </p>
         <div className="flex justify-center py-6">
-          <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-[var(--theme-comic-accent)]/30 border-t-amber-500 rounded-full animate-spin" />
         </div>
       </div>
     )
@@ -189,7 +189,7 @@ export default function SiblingSeriesMappingOffer({
   if (preview.isError) {
     return (
       <div className="space-y-4" data-testid="sibling-mapping-offer">
-        <p role="alert" className="rounded-lg bg-stone-800/40 border border-stone-700/50 p-3 text-sm text-stone-300">
+        <p role="alert" className="rounded-lg bg-[var(--theme-bg-panel)]/40 border border-[var(--theme-border)]/50 p-3 text-sm text-[var(--theme-text-primary)]">
           {seriesLabel} was matched, but the remaining issues in the series could not be checked.
         </p>
         <button
@@ -204,7 +204,7 @@ export default function SiblingSeriesMappingOffer({
           type="button"
           onClick={onDismiss}
           data-testid="sibling-mapping-dismiss"
-          className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
+          className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/60 border border-[var(--theme-border)]/50 hover:bg-[var(--theme-bg-hover)] transition"
         >
           Done
         </button>
@@ -215,8 +215,8 @@ export default function SiblingSeriesMappingOffer({
   if (approvableRows.length === 0) {
     return (
       <div className="space-y-4" data-testid="sibling-mapping-offer">
-        <p className="text-sm text-stone-300">
-          <span className="font-bold text-stone-100">{seriesLabel}</span> is linked for this issue.
+        <p className="text-sm text-[var(--theme-text-primary)]">
+          <span className="font-bold text-[var(--theme-text-primary)]">{seriesLabel}</span> is linked for this issue.
           {' '}{preview.data?.scope.status === 'unavailable'
             ? seriesMappingScopeMessage(preview.data.scope.basis)
             : ownedRows.some((row) => row.issue_id !== originIssueId && row.classification === 'already_confirmed')
@@ -227,7 +227,7 @@ export default function SiblingSeriesMappingOffer({
           type="button"
           onClick={onDismiss}
           data-testid="sibling-mapping-dismiss"
-          className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition"
+          className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/60 border border-[var(--theme-border)]/50 hover:bg-[var(--theme-bg-hover)] transition"
         >
           Done
         </button>
@@ -243,8 +243,8 @@ export default function SiblingSeriesMappingOffer({
   return (
     <div className="space-y-4" data-testid="sibling-mapping-offer">
       <section aria-label="Sibling mapping offer" className="space-y-3">
-        <p className="text-sm text-stone-300">
-          <span className="font-bold text-stone-100">{seriesLabel}</span> is now matched for this
+        <p className="text-sm text-[var(--theme-text-primary)]">
+          <span className="font-bold text-[var(--theme-text-primary)]">{seriesLabel}</span> is now matched for this
           issue. The remaining issues in the series can use the same volume.
         </p>
         {approvableRows.some((row) => row.metadata_refresh_required) && (
@@ -257,7 +257,7 @@ export default function SiblingSeriesMappingOffer({
         {commit.isSuccess && (
           <p
             role="status"
-            className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-stone-800/40 p-3 text-sm text-stone-100"
+            className="rounded-lg border border-[var(--theme-primary-action)]/40 bg-[var(--theme-bg-panel)]/40 p-3 text-sm text-[var(--theme-text-primary)]"
           >
             {commit.data.confirmed_issue_ids.length} sibling{' '}
             {commit.data.confirmed_issue_ids.length === 1 ? 'issue' : 'issues'} {includesMetadataRefresh ? 'updated from' : 'mapped to'}{' '}
@@ -280,14 +280,14 @@ export default function SiblingSeriesMappingOffer({
                 key={row.row_id}
                 data-testid="sibling-mapping-row"
                 data-classification={row.classification}
-                className="space-y-2 rounded-xl bg-stone-800/50 border border-stone-700/50 p-3"
+                className="space-y-2 rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 p-3"
               >
                 <div className="flex items-center gap-3">
                   {isApprovable ? (
                     <input
                       id={checkboxId}
                       type="checkbox"
-                      className="h-5 w-5 shrink-0 accent-amber-500"
+                      className="h-5 w-5 shrink-0 accent-[var(--theme-comic-accent)]"
                       checked={selectedRowIds.includes(row.row_id)}
                       onChange={(event) => toggleRow(row.row_id, event.target.checked)}
                     />
@@ -296,10 +296,10 @@ export default function SiblingSeriesMappingOffer({
                   )}
                   <label
                     htmlFor={isApprovable ? checkboxId : undefined}
-                    className="min-w-0 flex-1 text-sm text-stone-100"
+                    className="min-w-0 flex-1 text-sm text-[var(--theme-text-primary)]"
                   >
                     <span className="font-bold">{issueNumberLabel(row)}</span>
-                    {row.title ? <span className="text-stone-300"> {row.title}</span> : null}
+                    {row.title ? <span className="text-[var(--theme-text-primary)]"> {row.title}</span> : null}
                   </label>
                   <span
                     className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${STATUS_ACCENT_CLASS[row.classification]}`}
@@ -325,7 +325,7 @@ export default function SiblingSeriesMappingOffer({
         </ul>
 
         {providerInventoryCount > 0 && (
-          <p className="text-xs text-stone-500" data-testid="sibling-mapping-provider-inventory">
+          <p className="text-xs text-[var(--theme-text-dim)]" data-testid="sibling-mapping-provider-inventory">
             {providerInventoryCount} other{' '}
             {providerInventoryCount === 1 ? 'issue is' : 'issues are'} in this volume but not in
             your library.
@@ -339,7 +339,7 @@ export default function SiblingSeriesMappingOffer({
           onClick={onDismiss}
           disabled={commit.isPending}
           data-testid="sibling-mapping-dismiss"
-          className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/60 border border-stone-700/50 hover:bg-stone-800 transition disabled:opacity-50"
+          className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/60 border border-[var(--theme-border)]/50 hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
         >
           {commit.isSuccess ? 'Done' : 'Not now'}
         </button>
@@ -348,7 +348,7 @@ export default function SiblingSeriesMappingOffer({
           onClick={approveSelected}
           disabled={commit.isPending || commit.isSuccess || selectedCount === 0}
           data-testid="sibling-mapping-approve"
-          className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
+          className="min-h-11 flex-1 rounded-xl px-4 text-sm font-bold text-[var(--theme-primary-action-text)] bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition disabled:opacity-50"
         >
           {commit.isPending
             ? 'Mapping...'

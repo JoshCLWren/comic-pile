@@ -75,7 +75,9 @@ it('uses an opaque modal surface with a dimmed overlay', () => {
 
   const stylesheet = readFileSync(resolve(__dirname, '../styles.css'), 'utf8')
   const modalRule = stylesheet.match(/\.surface-modal\s*\{([^}]*)\}/)?.[1] ?? ''
-  expect(modalRule).toContain('rgba(17, 14, 10, 0.95)')
+  expect(modalRule).toContain('background: var(--theme-bg-panel);')
+  expect(modalRule).toContain('border: 1px solid var(--theme-border);')
+  expect(modalRule).not.toContain('rgba(17, 14, 10, 0.95)')
   expect(modalRule).not.toContain('rgba(255, 255, 255, 0.03)')
 })
 

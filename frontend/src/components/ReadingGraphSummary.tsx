@@ -155,7 +155,7 @@ export default function ReadingGraphSummary({
             type="button"
             onClick={onReview}
             disabled={disabled}
-            className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
           >
             {reviewLabel}
           </button>

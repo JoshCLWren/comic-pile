@@ -210,7 +210,7 @@ export default function ContinuityPlansIndexPage() {
                         type="button"
                         onClick={confirmDelete}
                         disabled={isDeletingThis}
-                        className="min-h-11 flex-1 rounded-xl bg-red-500 font-black text-white disabled:opacity-50"
+                        className="min-h-11 flex-1 rounded-xl bg-red-500 font-black text-[var(--theme-text-primary)] disabled:opacity-50"
                       >
                         {isDeletingThis ? 'Deleting…' : 'Delete'}
                       </button>

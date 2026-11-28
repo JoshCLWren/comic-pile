@@ -387,7 +387,7 @@ export default function PositionMenu({
         type="button"
         onClick={handleTriggerClick}
         onKeyDown={handleTriggerKeyDown}
-        className="flex items-center justify-center w-11 h-11 text-stone-500 hover:text-white transition-colors text-lg rounded-lg hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+        className="flex items-center justify-center w-11 h-11 text-[var(--theme-text-dim)] hover:text-[var(--theme-text-primary)] transition-colors text-lg rounded-lg hover:bg-[var(--theme-bg-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
         aria-label="Series actions"
         aria-haspopup="menu"
         aria-expanded={isOpen}
@@ -399,7 +399,7 @@ export default function PositionMenu({
         <OverlayPortal>
           <div
             ref={menuRef}
-            className="fixed w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
+            className="fixed w-52 bg-[#1a1410]/95 border border-[var(--theme-border)] rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
             style={menuPosition}
             role="menu"
             aria-label="Series actions"
@@ -408,7 +408,7 @@ export default function PositionMenu({
               item.isExplanation ? (
                 <div
                   key={item.label}
-                  className="px-4 py-3 text-left text-xs text-stone-500 border-b border-white/10"
+                  className="px-4 py-3 text-left text-xs text-[var(--theme-text-dim)] border-b border-[var(--theme-border)]"
                   role="separator"
                   aria-label={item.label}
                 >
@@ -426,12 +426,12 @@ export default function PositionMenu({
                   aria-label={item.ariaLabel}
                   disabled={item.disabled}
                   title={item.title}
-                  className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
+                  className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-[var(--theme-bg-hover)] ${
                     item.disabled
-                      ? 'text-stone-600 cursor-not-allowed'
+                      ? 'text-[var(--theme-text-muted)] cursor-not-allowed'
                       : item.destructive
                         ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
-                        : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
+                        : 'text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] focus-visible:bg-[var(--theme-bg-hover)] focus-visible:text-[var(--theme-text-primary)]'
                   }`}
                   role="menuitem"
                 >

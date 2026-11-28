@@ -56,7 +56,7 @@ export default function DeleteIssueDialog({
               type="button"
               onClick={onConfirm}
               data-testid="confirm-delete-issue"
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-danger-hover)] transition-colors"
             >
               {deferred ? 'Remove from series' : 'Delete Issue'}
             </button>

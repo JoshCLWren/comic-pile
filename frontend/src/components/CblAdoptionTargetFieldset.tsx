@@ -28,7 +28,7 @@ export function CblAdoptionTargetFieldset({
           type="button"
           onClick={onRetry}
           disabled={disabled}
-          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
         >
           Retry Reading Plan check
         </button>

@@ -13,7 +13,7 @@ export default function NotFoundPage() {
         <div className="mt-6 flex items-center justify-center gap-3">
           <Link
             to="/"
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-stone-900 transition-colors hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-[var(--theme-primary-action-text)] transition-colors hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
           >
             <ArrowLeftIcon className="h-4 w-4" aria-hidden="true" />
             Back to Roll

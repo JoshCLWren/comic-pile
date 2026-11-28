@@ -177,27 +177,27 @@ export default function ResumeRecovery({
       {recoveryState !== 'idle' && (
         <div
           aria-live="assertive"
-          className="fixed inset-x-3 top-3 z-[100] mx-auto max-w-md rounded-xl border border-stone-200 bg-white p-4 shadow-lg"
+          className="fixed inset-x-3 top-3 z-[100] mx-auto max-w-md rounded-xl border border-[var(--theme-border)] bg-white p-4 shadow-lg"
           role={recoveryState === 'failed' ? 'alert' : 'status'}
         >
           {recoveryState === 'reconnecting' ? (
-            <p className="text-sm font-medium text-stone-700">Reconnecting ComicPile...</p>
+            <p className="text-sm font-medium text-[var(--theme-text-muted)]">Reconnecting ComicPile...</p>
           ) : (
             <>
-              <p className="font-semibold text-stone-900">ComicPile could not reconnect</p>
-              <p className="mt-1 text-sm text-stone-600">
+              <p className="font-semibold text-[var(--theme-primary-action-text)]">ComicPile could not reconnect</p>
+              <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
                 Your last screen is still here. Retry the connection or reload the app.
               </p>
               <div className="mt-3 flex gap-2">
                 <button
-                  className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-medium text-white"
+                  className="rounded-lg bg-[var(--theme-bg-page)] px-3 py-2 text-sm font-medium text-[var(--theme-text-primary)]"
                   onClick={() => void runRecovery('explicit')}
                   type="button"
                 >
                   Retry
                 </button>
                 <button
-                  className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700"
+                  className="rounded-lg border border-[var(--theme-border)] px-3 py-2 text-sm font-medium text-[var(--theme-text-muted)]"
                   onClick={() => window.location.reload()}
                   type="button"
                 >

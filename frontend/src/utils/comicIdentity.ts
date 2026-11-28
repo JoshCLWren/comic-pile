@@ -116,7 +116,7 @@ export function getStateColorClass(state: MemberState): string {
     case 'read':
       return 'text-emerald-400'
     case 'unread':
-      return 'text-amber-400'
+      return 'text-[var(--theme-comic-accent)]'
     case 'missing':
       return 'text-rose-400'
   }

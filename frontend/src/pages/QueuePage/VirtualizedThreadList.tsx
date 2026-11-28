@@ -217,7 +217,7 @@ export default function VirtualizedThreadList<T>({
           aria-label="Series queue"
           className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         >
-          <div className="flex items-center justify-center text-stone-500 py-8">
+          <div className="flex items-center justify-center text-[var(--theme-text-dim)] py-8">
             No series in queue
           </div>
         </div>

@@ -90,7 +90,7 @@ const tokens = tokenMap(rootBlock(styles))
 
 describe('Night Shift single-palette contract (#5980)', () => {
   it('uses the approved prototype colors for the canonical roles', () => {
-    const expected: Record<string, string> = {
+    const expected = {
       '--theme-bg-page': '#20242d',
       '--theme-bg-panel': '#303644',
       '--theme-text-primary': '#eef1f4',
@@ -101,7 +101,7 @@ describe('Night Shift single-palette contract (#5980)', () => {
       '--theme-primary-action-text': '#111111',
       '--die-light': '#c2e9f1',
       '--die-dark': '#658e97',
-    }
+    } satisfies Record<string, string>
     for (const [token, value] of Object.entries(expected)) {
       expect(resolveToken(tokens, token).toLowerCase(), token).toBe(value)
     }
@@ -117,7 +117,7 @@ describe('Night Shift single-palette contract (#5980)', () => {
   })
 
   it('points legacy aliases at the canonical semantic roles', () => {
-    const aliases: Record<string, string> = {
+    const aliases = {
       '--bg-main': 'var(--theme-bg-page)',
       '--bg-darker': 'var(--theme-bg-panel)',
       '--text-primary': 'var(--theme-text-primary)',
@@ -128,7 +128,7 @@ describe('Night Shift single-palette contract (#5980)', () => {
       '--glass-bg': 'var(--theme-bg-panel)',
       '--glass-border': 'var(--theme-border)',
       '--theme-text': 'var(--theme-text-primary)',
-    }
+    } satisfies Record<string, string>
     for (const [alias, target] of Object.entries(aliases)) {
       expect(tokens.get(alias), alias).toBe(target)
     }

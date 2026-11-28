@@ -156,18 +156,18 @@ function ReleaseCard({ release }: { release: Release }) {
   const time = releaseTimeLabel(release.released_at)
 
   return (
-    <article className="rounded-xl border border-stone-800 bg-stone-900/50 p-4">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">
+    <article className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/50 p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--theme-comic-accent)]">
         {release.category}
       </p>
-      <h3 className="mt-1 text-lg font-bold text-stone-100">{title}</h3>
+      <h3 className="mt-1 text-lg font-bold text-[var(--theme-text-primary)]">{title}</h3>
       {time && (
-        <p className="mt-1 text-xs text-stone-400">
+        <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
           Published at {time}
         </p>
       )}
       {summary !== title && (
-        <p className="mt-2 leading-7 text-stone-300">{summary}</p>
+        <p className="mt-2 leading-7 text-[var(--theme-text-primary)]">{summary}</p>
       )}
     </article>
   )
@@ -202,26 +202,26 @@ export default function WhatsNewPage() {
 
   return (
     <section aria-labelledby="whats-new-title" className="mx-auto max-w-3xl pb-8">
-      <header className="mb-6 rounded-2xl border border-amber-500/20 bg-stone-950/70 p-5 shadow-lg">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-400">
+      <header className="mb-6 rounded-2xl border border-[var(--theme-comic-accent)]/20 bg-[var(--theme-bg-page)]/70 p-5 shadow-lg">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--theme-comic-accent)]">
           ComicPile release notes
         </p>
-        <h1 id="whats-new-title" className="mt-2 text-3xl font-black text-stone-100">
+        <h1 id="whats-new-title" className="mt-2 text-3xl font-black text-[var(--theme-text-primary)]">
           What&apos;s new
         </h1>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+        <p className="mt-2 text-sm leading-6 text-[var(--theme-text-muted)]">
           Recent improvements, fixes, and new ways to manage your reading pile.
         </p>
       </header>
 
       {loading && (
-        <div role="status" className="rounded-xl border border-stone-800 bg-stone-950/60 p-6 text-stone-400">
+        <div role="status" className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/60 p-6 text-[var(--theme-text-muted)]">
           Loading release notes…
         </div>
       )}
 
       {!loading && visibleReleases.length === 0 && !error && !hasMore && (
-        <div className="rounded-xl border border-stone-800 bg-stone-950/60 p-6 text-stone-400">
+        <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/60 p-6 text-[var(--theme-text-muted)]">
           No release notes have been published yet.
         </div>
       )}
@@ -233,7 +233,7 @@ export default function WhatsNewPage() {
           <button
             type="button"
             onClick={() => void retry()}
-            className="mt-4 min-h-11 rounded-lg bg-amber-400 px-4 py-2 font-bold text-stone-950"
+            className="mt-4 min-h-11 rounded-lg bg-[var(--theme-primary-action-hover)] px-4 py-2 font-bold text-[var(--theme-primary-action-text)]"
           >
             Try again
           </button>
@@ -246,13 +246,13 @@ export default function WhatsNewPage() {
             <section
               key={day.key}
               aria-labelledby={`release-day-${day.key}`}
-              className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5"
+              className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/60 p-5"
             >
-              <div className="mb-4 border-b border-stone-800 pb-3">
-                <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-stone-100">
+              <div className="mb-4 border-b border-[var(--theme-border)] pb-3">
+                <h2 id={`release-day-${day.key}`} className="text-2xl font-black text-[var(--theme-text-primary)]">
                   {day.label}
                 </h2>
-                <p className="mt-1 text-sm text-stone-400">
+                <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
                   {day.releases.length} {day.releases.length === 1 ? 'update' : 'updates'} published this day.
                 </p>
               </div>
@@ -270,7 +270,7 @@ export default function WhatsNewPage() {
                 type="button"
                 disabled={loadingMore}
                 onClick={() => void loadMore()}
-                className="min-h-11 rounded-lg border border-amber-500/40 bg-stone-950 px-5 py-2 font-bold text-amber-300 disabled:cursor-wait disabled:opacity-60"
+                className="min-h-11 rounded-lg border border-[var(--theme-comic-accent)]/40 bg-[var(--theme-bg-page)] px-5 py-2 font-bold text-[var(--theme-comic-accent)] disabled:cursor-wait disabled:opacity-60"
               >
                 {loadingMore ? 'Loading older updates…' : 'Load older updates'}
               </button>

@@ -61,7 +61,7 @@ export default function ReadingModeLauncher() {
         type="button"
         onClick={() => setQuizOpen(true)}
         data-testid="open-reading-mode-quiz"
-        className="text-sm text-amber-400 underline-offset-2 hover:underline"
+        className="text-sm text-[var(--theme-comic-accent)] underline-offset-2 hover:underline"
       >
         Find my reading mode
       </button>
@@ -70,14 +70,14 @@ export default function ReadingModeLauncher() {
         <div
           role="status"
           data-testid="reading-mode-suggestion"
-          className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-amber-200"
+          className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--theme-comic-accent)]/40 bg-[var(--theme-comic-accent)]/10 px-3 py-2 text-sm text-[var(--theme-comic-accent)]"
         >
           <span>Not sure what to read? Let the quiz pick a mode.</span>
           <button
             type="button"
             onClick={() => setQuizOpen(true)}
             data-testid="reading-mode-suggestion-take"
-            className="rounded-md bg-amber-500 px-2 py-1 font-bold text-stone-900"
+            className="rounded-md bg-[var(--theme-primary-action)] px-2 py-1 font-bold text-[var(--theme-primary-action-text)]"
           >
             Take the quiz
           </button>
@@ -86,7 +86,7 @@ export default function ReadingModeLauncher() {
             onClick={handleDismiss}
             disabled={dismissing}
             data-testid="reading-mode-suggestion-dismiss"
-            className="rounded-md border border-amber-300/40 px-2 py-1 text-amber-200 hover:border-amber-200"
+            className="rounded-md border border-[var(--theme-comic-accent)]/40 px-2 py-1 text-[var(--theme-comic-accent)] hover:border-[var(--theme-comic-accent)]"
           >
             Not now
           </button>

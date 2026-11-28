@@ -501,7 +501,7 @@ export default function AddSeriesFromComicVineDialog({
             role="alert"
             className={
               unknownOutcome
-                ? 'p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200'
+                ? 'p-3 rounded-lg bg-[var(--theme-comic-accent)]/10 border border-[var(--theme-comic-accent)]/30 text-sm text-[var(--theme-comic-accent)]'
                 : 'p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300'
             }
           >
@@ -511,7 +511,7 @@ export default function AddSeriesFromComicVineDialog({
                 type="button"
                 onClick={handleRetrySearch}
                 data-testid="add-series-comicvine-retry"
-                className="mt-2 min-h-11 px-4 rounded-lg text-sm font-bold text-white bg-[var(--theme-primary-action)] border border-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] hover:border-[var(--theme-primary-action-hover)] transition"
+                className="mt-2 min-h-11 px-4 rounded-lg text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-primary-action)] border border-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] hover:border-[var(--theme-primary-action-hover)] transition"
               >
                 Retry
               </button>
@@ -521,7 +521,7 @@ export default function AddSeriesFromComicVineDialog({
 
         {step === 'search' && (
           <>
-            <p className="text-sm text-stone-400">
+            <p className="text-sm text-[var(--theme-text-muted)]">
               Search for a ComicVine series to add to your queue.
             </p>
             <div className="relative">
@@ -532,11 +532,11 @@ export default function AddSeriesFromComicVineDialog({
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search series title (e.g., Batman, Saga, One Piece)"
-                className="w-full min-h-11 rounded-xl px-4 pr-10 text-sm text-stone-100 bg-stone-800 border border-stone-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+                className="w-full min-h-11 rounded-xl px-4 pr-10 text-sm text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] focus:border-[var(--theme-comic-accent)] focus:ring-1 focus:ring-[var(--theme-focus-ring)] outline-none transition"
               />
               {searchLoading && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-[var(--theme-comic-accent)]/30 border-t-amber-500 rounded-full animate-spin" />
                 </div>
               )}
             </div>
@@ -548,7 +548,7 @@ export default function AddSeriesFromComicVineDialog({
                     type="button"
                     onClick={() => handleSelectSeries(series)}
                     aria-label={seriesAccessibleName(series)}
-                    className="w-full text-left p-3 rounded-xl bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition group"
+                    className="w-full text-left p-3 rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 hover:border-[var(--theme-comic-accent)]/50 hover:bg-[var(--theme-bg-hover)] transition group"
                   >
                     <div className="flex items-start gap-3">
                       {series.image_url && (
@@ -559,10 +559,10 @@ export default function AddSeriesFromComicVineDialog({
                         />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-stone-100 group-hover:text-amber-300 transition truncate">
+                        <p className="text-sm font-bold text-[var(--theme-text-primary)] group-hover:text-[var(--theme-comic-accent)] transition truncate">
                           {series.name}
                         </p>
-                        <p className="text-sm font-medium text-stone-300">
+                        <p className="text-sm font-medium text-[var(--theme-text-primary)]">
                           {seriesMetaText(series)}
                         </p>
                       </div>
@@ -574,7 +574,7 @@ export default function AddSeriesFromComicVineDialog({
                     type="button"
                     onClick={handleLoadMore}
                     disabled={searchLoading}
-                    className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
+                    className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 hover:border-[var(--theme-comic-accent)]/50 hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
                   >
                     {searchLoading ? 'Loading...' : 'Load more'}
                   </button>
@@ -582,12 +582,12 @@ export default function AddSeriesFromComicVineDialog({
               </div>
             )}
             {showIdleHint && (
-              <p className="text-sm text-stone-400 text-center py-4">
+              <p className="text-sm text-[var(--theme-text-muted)] text-center py-4">
                 Type a series name to search ComicVine
               </p>
             )}
             {searchPhase === 'ready' && !showResults && query.trim() && (
-              <p className="text-sm text-stone-300 text-center py-4">
+              <p className="text-sm text-[var(--theme-text-primary)] text-center py-4">
                 No series found. Try a different search term.
               </p>
             )}
@@ -599,12 +599,12 @@ export default function AddSeriesFromComicVineDialog({
             <button
               type="button"
               onClick={handleBackToSearch}
-              className="text-sm text-amber-500 hover:text-amber-400 font-bold"
+              className="text-sm text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] font-bold"
             >
               ← Back to search
             </button>
-            <div className="p-4 rounded-xl bg-stone-800/50 border border-stone-700/50 space-y-3" data-testid="add-series-confirm-card">
-              <p className="text-xs font-black uppercase tracking-wider text-stone-400">Selected series</p>
+            <div className="p-4 rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 space-y-3" data-testid="add-series-confirm-card">
+              <p className="text-xs font-black uppercase tracking-wider text-[var(--theme-text-muted)]">Selected series</p>
               <div className="flex items-start gap-3">
                 {selectedSeries.image_url && (
                   <ImageWithLoading
@@ -614,13 +614,13 @@ export default function AddSeriesFromComicVineDialog({
                   />
                 )}
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-stone-100">{selectedSeries.name}</p>
-                  <p className="text-sm text-stone-300">
+                  <p className="text-sm font-bold text-[var(--theme-text-primary)]">{selectedSeries.name}</p>
+                  <p className="text-sm text-[var(--theme-text-primary)]">
                     {seriesMetaText(selectedSeries)}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-[var(--theme-text-muted)]">
                 {existingSeries
                   ? `"${existingSeries.series_name ?? selectedSeries.name}" is already in your queue. Adding it again will not create a new series or duplicate issues — only missing issues are added to the existing series.`
                   : `This will create a new series in your queue with ${selectedSeries.issue_count == null ? 'all issues' : formatIssueCount(selectedSeries.issue_count)} from the ComicVine volume.`}
@@ -630,7 +630,7 @@ export default function AddSeriesFromComicVineDialog({
               <div className="space-y-2">
                 <label
                   htmlFor="already-read-count"
-                  className="text-[10px] font-black uppercase tracking-wider text-stone-500"
+                  className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-dim)]"
                 >
                   Issues already read (optional)
                 </label>
@@ -650,7 +650,7 @@ export default function AddSeriesFromComicVineDialog({
                   className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 />
                 {alreadyReadIsValid ? (
-                  <p id="already-read-hint" className="text-xs text-stone-400">
+                  <p id="already-read-hint" className="text-xs text-[var(--theme-text-muted)]">
                     {alreadyReadCount > 0
                       ? `First ${alreadyReadCount} of ${formatIssueCount(maxAlreadyRead)} will be marked as read`
                       : `Enter how many issues you've already read from the start of the series (max ${formatIssueCount(maxAlreadyRead)})`}
@@ -670,7 +670,7 @@ export default function AddSeriesFromComicVineDialog({
               type="button"
               onClick={handleAdd}
               disabled={isAdding || !alreadyReadIsValid}
-              className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
+              className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-primary-action-text)] bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition disabled:opacity-50"
             >
               {isAdding ? 'Adding...' : 'Add Series to ComicPile'}
             </button>

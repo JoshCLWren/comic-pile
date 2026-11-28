@@ -106,7 +106,7 @@ export default function AddToComicPileDialog({
           </div>
         )}
 
-        <div className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/50 border border-stone-700/50">
+        <div className="flex items-start gap-3 p-3 rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50">
           {imageUrl && (
             <ImageWithLoading
               src={imageUrl}
@@ -115,19 +115,19 @@ export default function AddToComicPileDialog({
             />
           )}
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-dim)]">
               ComicVine Issue
             </p>
-            <p className="text-sm font-bold text-stone-200 truncate">
+            <p className="text-sm font-bold text-[var(--theme-text-primary)] truncate">
               {seriesName ?? 'Unknown Series'}{issueNumber ? ` #${issueNumber}` : ''}
             </p>
-            <p className="text-[10px] text-stone-500">ID: {comicvineIssueId}</p>
+            <p className="text-[10px] text-[var(--theme-text-dim)]">ID: {comicvineIssueId}</p>
           </div>
         </div>
 
         {(anchorBeforeThreadId != null || anchorAfterThreadId != null) && (
           <p
-            className="text-[10px] text-stone-400"
+            className="text-[10px] text-[var(--theme-text-muted)]"
             data-testid="placement-anchor-hint"
           >
             Will be placed between its story-arc neighbors in the selected order.
@@ -135,7 +135,7 @@ export default function AddToComicPileDialog({
         )}
 
         <div>
-          <label htmlFor="add-thread-title" className="block text-[10px] font-black uppercase tracking-wider text-stone-500 mb-1.5">
+          <label htmlFor="add-thread-title" className="block text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-dim)] mb-1.5">
             Thread Title
           </label>
           <input
@@ -144,19 +144,19 @@ export default function AddToComicPileDialog({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Batman #125"
-            className="w-full min-h-11 rounded-xl px-4 text-sm text-stone-100 bg-stone-800 border border-stone-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+            className="w-full min-h-11 rounded-xl px-4 text-sm text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] focus:border-[var(--theme-comic-accent)] focus:ring-1 focus:ring-[var(--theme-focus-ring)] outline-none transition"
           />
         </div>
 
         <div>
-          <label htmlFor="reading-order-select" className="block text-[10px] font-black uppercase tracking-wider text-stone-500 mb-1.5">
+          <label htmlFor="reading-order-select" className="block text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-dim)] mb-1.5">
             Add to Reading Order (optional)
           </label>
           <select
             id="reading-order-select"
             value={selectedOrderId}
             onChange={(e) => setSelectedOrderId(e.target.value)}
-            className="w-full min-h-11 rounded-xl px-4 text-sm text-stone-100 bg-stone-800 border border-stone-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+            className="w-full min-h-11 rounded-xl px-4 text-sm text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] focus:border-[var(--theme-comic-accent)] focus:ring-1 focus:ring-[var(--theme-focus-ring)] outline-none transition"
           >
             <option value="">{isLoadingOrders ? 'Loading reading orders...' : 'None'}</option>
             {readingOrders.map((order) => (
@@ -171,7 +171,7 @@ export default function AddToComicPileDialog({
           type="button"
           onClick={handleSubmit}
           disabled={isSubmitting || !title.trim()}
-          className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
+          className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-primary-action-text)] bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition disabled:opacity-50"
         >
           {isSubmitting ? 'Adding...' : 'Add to ComicPile'}
         </button>

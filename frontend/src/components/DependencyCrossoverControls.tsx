@@ -171,7 +171,7 @@ export default function DependencyCrossoverControls({
             className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
               mode === 'none'
                 ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
-                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)]'
             }`}
             onClick={() => setMode('none')}
             disabled={controlsDisabled}
@@ -184,7 +184,7 @@ export default function DependencyCrossoverControls({
             className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
               mode === 'existing'
                 ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
-                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)]'
             }`}
             onClick={() => setMode('existing')}
             disabled={controlsDisabled}
@@ -197,7 +197,7 @@ export default function DependencyCrossoverControls({
             className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
               mode === 'new'
                 ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
-                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)]'
             }`}
             onClick={() => setMode('new')}
             disabled={controlsDisabled}
@@ -275,7 +275,7 @@ export default function DependencyCrossoverControls({
 
           <button
             type="button"
-            className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-medium text-stone-950 hover:bg-[var(--theme-primary-action-hover)] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+            className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-medium text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             onClick={handleSaveMemberships}
             disabled={controlsDisabled || !hasSelectedMembership}
           >

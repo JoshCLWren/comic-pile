@@ -196,7 +196,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={modals.showCreateModal}
-            className="md:hidden fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-4 h-14 w-14 rounded-full bg-[var(--theme-primary-action)] text-stone-950 font-black text-3xl shadow-[0_4px_20px_color-mix(in_srgb,var(--theme-primary-action)_40%,transparent)] z-50 flex items-center justify-center hover:bg-[var(--theme-primary-action-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-bg-page)]"
+            className="md:hidden fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-4 h-14 w-14 rounded-full bg-[var(--theme-primary-action)] text-[var(--theme-primary-action-text)] font-black text-3xl shadow-[0_4px_20px_color-mix(in_srgb,var(--theme-primary-action)_40%,transparent)] z-50 flex items-center justify-center hover:bg-[var(--theme-primary-action-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-bg-page)]"
             aria-label="Add Series"
           >
             +
@@ -250,7 +250,7 @@ export default function QueuePage() {
               <button
                 type="button"
                 onClick={handleLoadMore}
-                className="mx-auto block rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-500 transition-colors"
+                className="mx-auto block rounded-md bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action)] transition-colors"
                 data-testid="queue-load-more-retry"
               >
                 Try again

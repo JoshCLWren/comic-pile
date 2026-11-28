@@ -95,9 +95,9 @@ export function ThreadPool({
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-[var(--theme-comic-accent)] shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{displayPool.length} in play</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-primary)]">{displayPool.length} in play</p>
           {dieSize && displayPool.length > 0 && displayPool.length < dieSize && (
-            <p className="text-[10px] text-stone-500 mt-1" data-smaller-than-die>
+            <p className="text-[10px] text-[var(--theme-text-dim)] mt-1" data-smaller-than-die>
               Only {displayPool.length} of d{dieSize} faces are mapped to an in-play series — the roll picks among these visible faces.
             </p>
           )}
@@ -119,10 +119,10 @@ export function ThreadPool({
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+              <p className="text-sm text-[var(--theme-text-primary)] font-bold uppercase tracking-widest">
                 Series are waiting on earlier issues
               </p>
-              <p className="text-xs text-stone-500 mt-1">
+              <p className="text-xs text-[var(--theme-text-dim)] mt-1">
                 Your in-play series are blocked by an earlier issue. Check your queue to see what needs to be read to unlock the dice.
               </p>
             </div>
@@ -137,10 +137,10 @@ export function ThreadPool({
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">📚</div>
             <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+              <p className="text-sm text-[var(--theme-text-primary)] font-bold uppercase tracking-widest">
                 Every series is completed
               </p>
-              <p className="text-xs text-stone-500 mt-1">
+              <p className="text-xs text-[var(--theme-text-dim)] mt-1">
                 You&apos;ve read every issue in your queue. Add a new series to keep rolling.
               </p>
             </div>
@@ -155,10 +155,10 @@ export function ThreadPool({
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">📚</div>
             <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+              <p className="text-sm text-[var(--theme-text-primary)] font-bold uppercase tracking-widest">
                 No series are in play
               </p>
-              <p className="text-xs text-stone-500 mt-1">
+              <p className="text-xs text-[var(--theme-text-dim)] mt-1">
                 Your unread issues are not in the active queue or are excluded from the pool. Check your queue to put them back in play.
               </p>
             </div>
@@ -173,8 +173,8 @@ export function ThreadPool({
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">Nothing to roll yet</p>
-              <p className="text-xs text-stone-500 mt-1">Your reading queue is empty — add some comic series to get started.</p>
+              <p className="text-sm text-[var(--theme-text-primary)] font-bold uppercase tracking-widest">Nothing to roll yet</p>
+              <p className="text-xs text-[var(--theme-text-dim)] mt-1">Your reading queue is empty — add some comic series to get started.</p>
             </div>
             <button
               onClick={() => navigate('/queue', { state: { openCreate: true } })}
@@ -183,8 +183,8 @@ export function ThreadPool({
               + Add a Series
             </button>
             <div className="text-left bg-[var(--theme-bg-panel)] rounded-xl p-4 mt-4">
-              <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">How it works:</p>
-              <ul className="text-xs text-stone-500 space-y-1">
+              <p className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">How it works:</p>
+              <ul className="text-xs text-[var(--theme-text-dim)] space-y-1">
                 <li>• Add the series you&apos;re reading</li>
                 <li>• Roll the dice to pick what to read next</li>
                 <li>• Set dependencies to enforce reading order between series</li>
@@ -201,10 +201,10 @@ export function ThreadPool({
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">
+              <p className="text-sm text-[var(--theme-text-primary)] font-bold uppercase tracking-widest">
                 Every series is snoozed
               </p>
-              <p className="text-xs text-stone-500 mt-1">
+              <p className="text-xs text-[var(--theme-text-dim)] mt-1">
                 Add Comics or Reset Dice when resetting would restore candidates.
               </p>
             </div>
@@ -235,7 +235,7 @@ export function ThreadPool({
               ) : null}
               <button
                 onClick={() => navigate('/queue')}
-                className="w-full h-11 min-h-[44px] bg-transparent hover:bg-white/5 border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 transition-colors"
+                className="w-full h-11 min-h-[44px] bg-transparent hover:bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-text-primary)] transition-colors"
               >
                 Go to Queue
               </button>
@@ -265,10 +265,10 @@ export function ThreadPool({
                 role="button"
                 tabIndex={0}
                 aria-label={`Die face ${index + 1}: ${displayTitle}${issueNumber ? `, issue ${issueNumber}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}${(thread.overflow_routes_count ?? 0) > 0 ? `, ${thread.overflow_routes_count} more connected routes` : ''}. Open series actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
+                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-[var(--theme-bg-hover)] ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
-                <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
+                <span className="text-lg font-black text-[var(--theme-text-dim)]/50 group-hover:text-[var(--theme-text-muted)]/50 transition-colors w-6 text-center">
                   {index + 1}
                 </span>
                 {/* A die face with a canonical owned issue exposes the same
@@ -300,11 +300,11 @@ export function ThreadPool({
                   />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-stone-200 truncate text-sm">{displayTitle}</p>
-                  <p className="truncate text-xs text-stone-400">
+                  <p className="font-bold text-[var(--theme-text-primary)] truncate text-sm">{displayTitle}</p>
+                  <p className="truncate text-xs text-[var(--theme-text-muted)]">
                     {issueNumber ? `#${issueNumber}` : 'Next unread issue'}
                   </p>
-                  <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
+                  <p className="text-[10px] font-black text-[var(--theme-text-dim)] uppercase tracking-widest mt-0.5">{thread.format}</p>
                   <ThreadTagChips
                     tags={tags}
                     label={`Tags for ${displayTitle}`}
@@ -328,14 +328,14 @@ export function ThreadPool({
             type="button"
             onClick={onToggleSnoozed}
             aria-expanded={snoozedExpanded}
-            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+            className="w-full px-4 py-2 bg-[var(--theme-bg-panel)]/5 border border-[var(--theme-border)]/10 rounded-xl flex items-center gap-2 hover:bg-[var(--theme-bg-hover)] transition-colors"
           >
             <span
-              className={`text-stone-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
+              className={`text-[var(--theme-text-muted)] text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
             >
               ▶
             </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
+            <span className="text-[10px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest cursor-help border-b border-dashed border-[var(--theme-border)]">
               Snoozed ({snoozedTotal})
             </span>
           </button>
@@ -353,7 +353,7 @@ export function ThreadPool({
                     variant="compact"
                     imageClassName="h-full w-full object-cover"
                   />
-                  <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
+                  <p className="flex-1 text-sm text-[var(--theme-text-muted)] truncate">{thread.title}</p>
                   <button
                     type="button"
                     onClick={() => onUnsnooze(thread.id)}

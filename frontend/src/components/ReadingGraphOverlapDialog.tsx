@@ -58,7 +58,7 @@ const OverlapChoiceButton = forwardRef<HTMLButtonElement, OverlapChoiceButtonPro
       className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
         checked
           ? 'border-[var(--theme-continuity-accent)] bg-[var(--theme-bg-panel)]'
-          : 'border-[var(--theme-border)] hover:bg-white/5'
+          : 'border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)]'
       }`}
     >
         <span className="block text-sm font-black text-[var(--theme-text-primary)]">
@@ -273,7 +273,7 @@ export default function ReadingGraphOverlapDialog({
           <button
             type="button"
             onClick={goBack}
-            className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
           >
             {step === 0 ? 'Cancel' : 'Back'}
           </button>

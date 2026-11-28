@@ -13,7 +13,7 @@ function StarRow({ rating }: { rating: number }) {
   for (let i = 0; i < full; i++) stars.push('\u2605')
   if (half) stars.push('\u00BD')
   return (
-    <span className="text-amber-400 text-xs tabular-nums" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
+    <span className="text-[var(--theme-comic-accent)] text-xs tabular-nums" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
       {stars.join('')}
     </span>
   )
@@ -39,11 +39,11 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
       >
         <h4
           id="series-panel-heading"
-          className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500"
+          className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--theme-text-dim)]"
         >
           Series history
         </h4>
-        <p className="text-[11px] text-stone-500 italic">
+        <p className="text-[11px] text-[var(--theme-text-dim)] italic">
           Canonical series history unavailable
         </p>
       </section>
@@ -63,7 +63,7 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
     >
       <h4
         id="series-panel-heading"
-        className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500"
+        className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--theme-text-dim)]"
       >
         {series.series_name ? `${series.series_name} history` : 'Series history'}
       </h4>
@@ -76,16 +76,16 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
           >
             {series.average_rating.toFixed(2)}
           </span>
-          <span className="text-[11px] font-bold text-stone-400">
+          <span className="text-[11px] font-bold text-[var(--theme-text-muted)]">
             {series.ratings_count} rated
           </span>
         </div>
       ) : (
-        <p className="text-[11px] text-stone-500">No ratings yet</p>
+        <p className="text-[11px] text-[var(--theme-text-dim)]">No ratings yet</p>
       )}
 
       {series.previous_issue ? (
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-400">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--theme-text-muted)]">
           <span className="font-bold">Previous:</span>{' '}
           <span>#{series.previous_issue.issue_number}</span>
           {series.previous_issue.rating !== null ? (
@@ -109,17 +109,17 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
 
       {series.recent_ratings.length > 0 ? (
         <div className="space-y-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--theme-text-dim)]">
             Recent ratings
           </p>
           <div className="flex flex-wrap gap-x-3 gap-y-2">
             {series.recent_ratings.map((r: ReaderContextRecentRating) => (
               <div
                 key={r.issue_id}
-                className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-300"
+                className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--theme-text-primary)]"
               >
                 <div className="min-w-0">
-                  <span className="text-stone-500">#{r.issue_number}</span>{' '}
+                  <span className="text-[var(--theme-text-dim)]">#{r.issue_number}</span>{' '}
                   <StarRow rating={r.rating} />
                 </div>
                 <CompactIssueCardTrigger
@@ -137,17 +137,17 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
       ) : null}
 
       {(series.highest_rating !== null || series.lowest_rating !== null) ? (
-        <div className="flex gap-4 text-[11px] text-stone-400">
+        <div className="flex gap-4 text-[11px] text-[var(--theme-text-muted)]">
           {series.highest_rating !== null ? (
             <div>
               <span className="font-bold">High: </span>
-              <span className="tabular-nums text-amber-400">{series.highest_rating.toFixed(1)}</span>
+              <span className="tabular-nums text-[var(--theme-comic-accent)]">{series.highest_rating.toFixed(1)}</span>
             </div>
           ) : null}
           {series.lowest_rating !== null ? (
             <div>
               <span className="font-bold">Low: </span>
-              <span className="tabular-nums text-stone-500">{series.lowest_rating.toFixed(1)}</span>
+              <span className="tabular-nums text-[var(--theme-text-dim)]">{series.lowest_rating.toFixed(1)}</span>
             </div>
           ) : null}
         </div>

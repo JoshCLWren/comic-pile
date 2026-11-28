@@ -12,27 +12,27 @@ export function PreviewIssueRow({ item }: { item: IssuePreviewItem }) {
     : `issue #${item.issue_number} at position ${item.position}`)
   return (
     <div
-      className="rounded-md border border-white/10 p-2 space-y-1"
+      className="rounded-md border border-[var(--theme-border)] p-2 space-y-1"
       data-testid="preview-issue-row"
     >
       <div className="flex items-start justify-between gap-2">
         <span className={`font-bold ${item.is_new ? 'text-[var(--theme-primary-action)]' : 'text-[var(--theme-text-primary)]'}`}>
           {item.series_title ? `${item.series_title} ` : ''}#{item.issue_number}{item.is_new ? ' (new)' : ''}
         </span>
-        <span className="shrink-0 text-stone-500">pos {item.position}</span>
+        <span className="shrink-0 text-[var(--theme-text-dim)]">pos {item.position}</span>
       </div>
-      <div className="text-stone-300">{effect}</div>
+      <div className="text-[var(--theme-text-primary)]">{effect}</div>
       {sourceLists.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {sourceLists.map((listName) => (
-            <span key={listName} className="rounded bg-white/10 px-1.5 py-0.5" data-testid="preview-source-list">
+            <span key={listName} className="rounded bg-[var(--theme-bg-hover)] px-1.5 py-0.5" data-testid="preview-source-list">
               List: {listName}
             </span>
           ))}
         </div>
       )}
       {(item.is_read || item.has_rating || item.is_mapped || item.is_duplicate || item.frontier_label) && (
-        <div className="flex flex-wrap gap-1 text-stone-400">
+        <div className="flex flex-wrap gap-1 text-[var(--theme-text-muted)]">
           {item.is_read && <span data-testid="preview-read">Read</span>}
           {item.has_rating && <span data-testid="preview-rating">Rated</span>}
           {item.is_mapped && <span data-testid="preview-mapped">Identity mapped</span>}

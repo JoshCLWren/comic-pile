@@ -23,12 +23,12 @@ export function ReadingContextStatusCard({ isLoading, error }: ReadingContextSta
       >
         <h3
           id="reader-context-loading-heading"
-          className="font-black text-stone-300"
+          className="font-black text-[var(--theme-text-primary)]"
           style={readingContextType('bodyCopy')}
         >
           Checking reading context…
         </h3>
-        <div className="mt-2 h-3 w-24 animate-pulse rounded bg-white/5" />
+        <div className="mt-2 h-3 w-24 animate-pulse rounded bg-[var(--theme-bg-hover)]" />
       </section>
     )
   }
@@ -48,7 +48,7 @@ export function ReadingContextStatusCard({ isLoading, error }: ReadingContextSta
         >
           Local reading context unavailable
         </h3>
-        <p className="mt-1 text-stone-400" style={readingContextType('bodyCopy')}>
+        <p className="mt-1 text-[var(--theme-text-muted)]" style={readingContextType('bodyCopy')}>
           {error}
         </p>
       </section>

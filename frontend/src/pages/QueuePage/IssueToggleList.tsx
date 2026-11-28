@@ -907,12 +907,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     }
   }
 
- if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
+ if (isLoading) return <p className="text-xs text-[var(--theme-text-dim)]">Loading issues…</p>
 
   if (loadError) {
     return (
       <div className="space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Issues</p>
         <p className="text-xs text-red-400">Could not load issues: {loadError}</p>
         {actionError && (
           <p
@@ -942,13 +942,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Issues</p>
         <div className="flex items-center gap-2">
           {displayIssues.length > 5 && (
             <button
               type="button"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
+              className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] transition-colors"
             >
               {isExpanded ? 'Show fewer' : `Show all ${displayIssues.length}`}
             </button>
@@ -962,7 +962,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             className={[
               'min-h-[36px] md:min-h-[44px] px-2 rounded-lg border text-xs font-bold transition-colors',
               isReorderMode
-                ? 'border-amber-400/60 bg-amber-500/10 text-amber-300'
+                ? 'border-[var(--theme-comic-accent)]/60 bg-[var(--theme-comic-accent)]/10 text-[var(--theme-comic-accent)]'
                 : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]',
             ].join(' ')}
           >
@@ -971,12 +971,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         </div>
       </div>
       <p className="sr-only" aria-live="polite">{reorderAnnouncement}</p>
-      <p className="text-[11px] text-stone-500">Read states: marked read = read without rating; read &amp; rated = read with rating; still unread = not read.</p>
+      <p className="text-[11px] text-[var(--theme-text-dim)]">Read states: marked read = read without rating; read &amp; rated = read with rating; still unread = not read.</p>
       {hasHiddenIssues && (
-        <p className="text-xs text-stone-500 italic">Showing {visibleIssues.length} of {issues.length} issues around your current position</p>
+        <p className="text-xs text-[var(--theme-text-dim)] italic">Showing {visibleIssues.length} of {issues.length} issues around your current position</p>
       )}
       {issues.length === 0 && (
-        <p className="text-xs text-stone-500">No issues yet. Add the first range below.</p>
+        <p className="text-xs text-[var(--theme-text-dim)]">No issues yet. Add the first range below.</p>
       )}
       {isReorderMode ? (
         <div className="space-y-1 max-h-64 overflow-auto" data-testid="issue-reorder-list">
@@ -1011,7 +1011,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                   disabled={isBusy || index === 0}
                   className={[
                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-xs font-black transition-colors',
-                    'text-[var(--theme-text-muted)] hover:text-amber-300 disabled:opacity-40',
+                    'text-[var(--theme-text-muted)] hover:text-[var(--theme-comic-accent)] disabled:opacity-40',
                   ].join(' ')}
                   aria-label={`Move issue #${issue.issue_number} up`}
                   data-testid={`issue-move-up-${issue.id}`}
@@ -1026,7 +1026,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                   disabled={isBusy || index === displayIssues.length - 1}
                   className={[
                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-xs font-black transition-colors',
-                    'text-[var(--theme-text-muted)] hover:text-amber-300 disabled:opacity-40',
+                    'text-[var(--theme-text-muted)] hover:text-[var(--theme-comic-accent)] disabled:opacity-40',
                   ].join(' ')}
                   aria-label={`Move issue #${issue.issue_number} down`}
                   data-testid={`issue-move-down-${issue.id}`}
@@ -1059,9 +1059,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               className={[
                 'flex flex-wrap items-center rounded border transition-all',
                 issue.status === 'read'
-                  ? 'bg-amber-600/20 border-amber-500/30 text-amber-400'
-                  : 'bg-white/5 border-white/10 text-stone-400',
-                isDragOver ? 'border-amber-400/60 bg-amber-500/10' : '',
+                  ? 'bg-[var(--theme-comic-accent)]/20 border-[var(--theme-comic-accent)]/30 text-[var(--theme-comic-accent)]'
+                  : 'bg-[var(--theme-bg-hover)] border-[var(--theme-border)] text-[var(--theme-text-muted)]',
+                isDragOver ? 'border-[var(--theme-comic-accent)]/60 bg-[var(--theme-comic-accent)]/10' : '',
                 isDragged ? 'opacity-60' : '',
                 isBusy ? 'opacity-50' : '',
               ].join(' ')}
@@ -1111,14 +1111,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                   </Tooltip>
                 </>
               )}
-               <div className="hidden md:flex border-l border-white/10">
+               <div className="hidden md:flex border-l border-[var(--theme-border)]">
                  <button
                    type="button"
                    onClick={() => handleMoveIssue(issue, 'up')}
                    disabled={isBusy || !canMoveUp}
                    className={[
-                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
-                     'hover:text-amber-300 disabled:opacity-40',
+                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-[var(--theme-text-dim)] transition-colors',
+                     'hover:text-[var(--theme-comic-accent)] disabled:opacity-40',
                    ].join(' ')}
                    aria-label={`Move issue #${issue.issue_number} up`}
                    data-testid={`issue-move-up-${issue.id}`}
@@ -1132,8 +1132,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                    onClick={() => handleMoveIssue(issue, 'down')}
                    disabled={isBusy || !canMoveDown}
                    className={[
-                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
-                     'hover:text-amber-300 disabled:opacity-40',
+                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-[var(--theme-text-dim)] transition-colors',
+                     'hover:text-[var(--theme-comic-accent)] disabled:opacity-40',
                    ].join(' ')}
                    aria-label={`Move issue #${issue.issue_number} down`}
                    data-testid={`issue-move-down-${issue.id}`}
@@ -1150,7 +1150,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                  }}
                  disabled={deleting.has(issue.id)}
                  className={[
-                   'min-h-[36px] md:min-h-[44px] min-w-[28px] md:min-w-[44px] flex items-center justify-center pr-2 text-[10px] font-black text-stone-500 transition-colors',
+                   'min-h-[36px] md:min-h-[44px] min-w-[28px] md:min-w-[44px] flex items-center justify-center pr-2 text-[10px] font-black text-[var(--theme-text-dim)] transition-colors',
                    'hover:text-red-300 disabled:opacity-50',
                  ].join(' ')}
                  aria-label={`Delete issue #${issue.issue_number}`}
@@ -1217,14 +1217,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           placeholder="Add: 19-24 or 0, Annual 1"
           aria-invalid={addValidationError || addError ? true : undefined}
           aria-describedby={addErrorDescription}
-          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-3 md:py-4 text-xs text-stone-300"
+          className="flex-1 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-lg px-2 py-3 md:py-4 text-xs text-[var(--theme-text-primary)]"
           data-testid="issue-add-input"
         />
         <button
           type="button"
           onClick={() => handleAddIssues()}
           disabled={isAdding || isPreviewing || !addRange.trim() || !isAddRangeValid}
-          className="px-3 py-3 md:py-4 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
+          className="px-3 py-3 md:py-4 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-lg text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
           data-testid="issue-add-button"
         >
           {(isAdding || isPreviewing) ? '…' : 'Add'}
@@ -1257,7 +1257,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             <span
               // SAFETY: pending create ranges are display-only; index keys are stable for this list.
               key={`${range}-${index}`}
-              className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-2 py-1 text-xs text-amber-200"
+              className="rounded-lg border border-[var(--theme-comic-accent)]/50 bg-[var(--theme-comic-accent)]/30 px-2 py-1 text-xs text-[var(--theme-comic-accent)]"
               title="Will be added when you save"
             >
               + {range} (pending)
@@ -1279,10 +1279,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             {dependencies[selectedDepsIssue.id]?.incoming &&
               dependencies[selectedDepsIssue.id].incoming.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-bold text-stone-300 mb-2">Blocked by</h3>
+                  <h3 className="text-sm font-bold text-[var(--theme-text-primary)] mb-2">Blocked by</h3>
                   <ul className="space-y-1">
                     {dependencies[selectedDepsIssue.id].incoming.map((edge) => (
-                      <li key={edge.dependency_id} className="text-xs text-stone-400">
+                      <li key={edge.dependency_id} className="text-xs text-[var(--theme-text-muted)]">
                         ← {edge.source_thread_title} #{edge.source_issue_number}
                       </li>
                     ))}
@@ -1292,10 +1292,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             {dependencies[selectedDepsIssue.id]?.outgoing &&
               dependencies[selectedDepsIssue.id].outgoing.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-bold text-stone-300 mb-2">Blocking</h3>
+                  <h3 className="text-sm font-bold text-[var(--theme-text-primary)] mb-2">Blocking</h3>
                   <ul className="space-y-1">
                     {dependencies[selectedDepsIssue.id].outgoing.map((edge) => (
-                      <li key={edge.dependency_id} className="text-xs text-stone-400">
+                      <li key={edge.dependency_id} className="text-xs text-[var(--theme-text-muted)]">
                         → {edge.source_thread_title} #{edge.source_issue_number}
                       </li>
                     ))}
@@ -1306,10 +1306,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               dependencies[selectedDepsIssue.id].incoming.length === 0) &&
               (!dependencies[selectedDepsIssue.id]?.outgoing ||
                 dependencies[selectedDepsIssue.id].outgoing.length === 0) && (
-                <p className="text-xs text-stone-500">No dependencies found</p>
+                <p className="text-xs text-[var(--theme-text-dim)]">No dependencies found</p>
               )}
-            <div className="pt-2 border-t border-white/10">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 mb-2">Manage dependencies</p>
+            <div className="pt-2 border-t border-[var(--theme-border)]">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)] mb-2">Manage dependencies</p>
               {onOpenDependencies ? (
                 <button
                   type="button"
@@ -1323,7 +1323,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                   Open Dependency Builder →
                 </button>
               ) : (
-                <p className="text-xs text-stone-500">
+                <p className="text-xs text-[var(--theme-text-dim)]">
                   Save a Reading Plan or use the Dependency Builder from the Queue to create and manage prerequisites.
                 </p>
               )}
@@ -1375,7 +1375,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             <p className="text-sm text-[var(--theme-text-muted)]" role="alert">
               Could not preview this issue change: {structurePreviewError}
             </p>
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-[var(--theme-text-muted)]">
               {structuralEditRef.current.type === 'reorder'
                 ? 'The proposed order is shown above but has not been saved. Retry the preview, or undo it.'
                 : 'Nothing was changed. Retry the preview or cancel.'}
@@ -1397,7 +1397,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                   requestStructuralEdit(edit)
                 }}
                 disabled={isPreviewingStructure}
-                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
                 data-testid="retry-structure-preview"
               >
                 Retry preview

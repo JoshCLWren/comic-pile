@@ -83,13 +83,13 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
         </p>
       )}
 
-      <p className="text-sm text-stone-400">
+      <p className="text-sm text-[var(--theme-text-muted)]">
         Step {step + 1} of {questions.length}
       </p>
 
       {currentQuestion && (
         <fieldset className="space-y-3">
-          <legend className="text-lg font-bold text-stone-200">{currentQuestion.prompt}</legend>
+          <legend className="text-lg font-bold text-[var(--theme-text-primary)]">{currentQuestion.prompt}</legend>
           {currentQuestion.answers.map((answer) => {
             const checked = answers[currentQuestion.id] === answer.id
             return (
@@ -100,10 +100,10 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
                 aria-checked={checked}
                 data-testid={`quiz-answer-${currentQuestion.id}-${answer.id}`}
                 onClick={() => selectAnswer(answer.id)}
-                className={`w-full text-left rounded-lg border px-4 py-3 text-stone-200 transition-colors ${
+                className={`w-full text-left rounded-lg border px-4 py-3 text-[var(--theme-text-primary)] transition-colors ${
                   checked
-                    ? 'border-amber-400 bg-amber-400/10'
-                    : 'border-stone-700 hover:border-stone-500'
+                    ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-comic-accent)]/10'
+                    : 'border-[var(--theme-border)] hover:border-[var(--theme-comic-accent)]'
                 }`}
               >
                 {answer.label}
@@ -118,7 +118,7 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
           type="button"
           onClick={handleBack}
           data-testid="reading-mode-quiz-back"
-          className="rounded-lg border border-stone-700 px-4 py-2 text-stone-300 hover:border-stone-500"
+          className="rounded-lg border border-[var(--theme-border)] px-4 py-2 text-[var(--theme-text-primary)] hover:border-[var(--theme-comic-accent)]"
         >
           {step === 0 ? 'Cancel' : 'Back'}
         </button>
@@ -127,7 +127,7 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
           onClick={handleNext}
           disabled={!canAdvance}
           data-testid="reading-mode-quiz-next"
-          className="rounded-lg bg-amber-500 px-4 py-2 font-bold text-stone-900 disabled:opacity-40"
+          className="rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 font-bold text-[var(--theme-primary-action-text)] disabled:opacity-40"
         >
           {isLastStep ? 'Set my mode' : 'Next'}
         </button>

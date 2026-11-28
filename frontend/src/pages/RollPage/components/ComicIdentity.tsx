@@ -167,7 +167,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         data-cover-height-cap-vh={COVER_HEIGHT_CAP_VH}
         data-cover-width-cap-vh={coverWidthCapVh}
         aria-label="Loading comic details"
-        className="relative mx-auto overflow-hidden rounded-xl bg-white/5 animate-pulse"
+        className="relative mx-auto overflow-hidden rounded-xl bg-[var(--theme-bg-hover)] animate-pulse"
         style={{ ...coverStyle, ...coverFrameBorder }}
       />
     )
@@ -206,7 +206,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         data-cover-aspect-ratio={coverAspectRatio}
         data-cover-height-cap-vh={COVER_HEIGHT_CAP_VH}
         data-cover-width-cap-vh={coverWidthCapVh}
-        className="relative mx-auto overflow-hidden rounded-xl bg-white/5"
+        className="relative mx-auto overflow-hidden rounded-xl bg-[var(--theme-bg-hover)]"
         style={{ ...coverStyle, ...coverFrameBorder }}
       >
         <ComicIssueCover
@@ -235,7 +235,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-black/60 text-stone-300 hover:text-stone-100 hover:bg-black/80 transition-colors focus:ring-2 focus:ring-amber-500"
+              className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[var(--theme-bg-page)]/60 text-[var(--theme-text-primary)] hover:text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-page)]/80 transition-colors focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
               aria-label="View cover larger"
               title="View larger"
             >
@@ -246,7 +246,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 href={metadata.comicvine_url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-black/60 text-stone-300 hover:text-stone-100 hover:bg-black/80 transition-colors focus:ring-2 focus:ring-amber-500"
+                className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[var(--theme-bg-page)]/60 text-[var(--theme-text-primary)] hover:text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-page)]/80 transition-colors focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
                 aria-label="Open on ComicVine"
                 title="Open in ComicVine"
               >
@@ -259,7 +259,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
       <div className="space-y-3">
         {date && (
-          <p className="text-[11px] text-stone-500">{date}</p>
+          <p className="text-[11px] text-[var(--theme-text-dim)]">{date}</p>
         )}
 
         {metadata.description && (
@@ -267,13 +267,13 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
             className="group space-y-2"
             {...(isDesktop ? { open: true } : {})}
           >
-            <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-amber-500 rounded-lg p-2 hover:bg-white/5 transition-colors">
-              <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Summary</span>
-              <span className="text-stone-500 group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
+            <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded-lg p-2 hover:bg-[var(--theme-bg-hover)] transition-colors">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)]">Summary</span>
+              <span className="text-[var(--theme-text-dim)] group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
             </summary>
             <div
               data-testid="comic-summary"
-              className="pl-6 pr-2 pb-2 text-xs leading-relaxed text-stone-300 border-l border-white/10"
+              className="pl-6 pr-2 pb-2 text-xs leading-relaxed text-[var(--theme-text-primary)] border-l border-[var(--theme-border)]"
             >
               {isLongSummary && !summaryExpanded ? (
                 <>
@@ -281,7 +281,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                   <button
                     type="button"
                     onClick={() => setSummaryExpanded(true)}
-                    className="mt-1 inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
+                    className="mt-1 inline-flex min-h-6 items-center text-[10px] font-bold text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded"
                     aria-expanded={summaryExpanded}
                   >
                     Show more
@@ -294,7 +294,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                     <button
                       type="button"
                       onClick={() => setSummaryExpanded(false)}
-                      className="mt-1 inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
+                      className="mt-1 inline-flex min-h-6 items-center text-[10px] font-bold text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded"
                       aria-expanded={!summaryExpanded}
                     >
                       Show less
@@ -308,13 +308,13 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
         {metadata.creators.length > 0 && (
           <>
-            {metadata.description && <hr className="border-white/10 my-1" />}
+            {metadata.description && <hr className="border-[var(--theme-border)] my-1" />}
             <details ref={creatorsDetailsRef} className="group space-y-2">
-            <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-amber-500 rounded-lg p-2 hover:bg-white/5 transition-colors">
-              <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Creators</span>
-              <span className="ml-auto text-stone-500 group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
+            <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded-lg p-2 hover:bg-[var(--theme-bg-hover)] transition-colors">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)]">Creators</span>
+              <span className="ml-auto text-[var(--theme-text-dim)] group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
             </summary>
-            <div id="creators-list" className="pl-6 pr-2 pb-2 space-y-1 border-l border-white/10">
+            <div id="creators-list" className="pl-6 pr-2 pb-2 space-y-1 border-l border-[var(--theme-border)]">
               {creatorsToShow.map((creator, index) => {
                 const stableKey = creator.creator_id != null ? canonicalCreatorKey(creator.creator_id) : null
                 const summary = stableKey ? summaries[stableKey] : undefined
@@ -327,24 +327,24 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                              <div
                                key={`${creator.name}-${index}`}
                                data-testid="creator-row"
-                               className="flex flex-col gap-0.5 py-1 border-b border-white/5 last:border-none flex-wrap break-words min-w-0"
+                               className="flex flex-col gap-0.5 py-1 border-b border-[var(--theme-border)] last:border-none flex-wrap break-words min-w-0"
                              >
                             <div className="flex items-baseline gap-x-1.5 min-w-0">
-                              <span className="font-bold text-stone-200 break-words min-w-0">{creator.name}</span>
+                              <span className="font-bold text-[var(--theme-text-primary)] break-words min-w-0">{creator.name}</span>
                               {creator.roles.length > 0 && (
-                                <span className="text-stone-500 text-[11px] break-words min-w-0">
+                                <span className="text-[var(--theme-text-dim)] text-[11px] break-words min-w-0">
                                   {creator.roles.join(', ')}
                                 </span>
                               )}
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-stone-400 min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[var(--theme-text-muted)] min-w-0">
                                  {hasRatedStats && summary.average_rating != null ? (
                                    <>
                                      <span
                                        className="inline-flex items-center gap-0.5"
                                        aria-label={`Average rating ${formatRating(summary.average_rating)} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}${coverage && !coverage.ratings_complete ? ', partial coverage — lower bound' : ''}`}
                                      >
-                                       <span aria-hidden="true" className="text-amber-400/80">
+                                       <span aria-hidden="true" className="text-[var(--theme-comic-accent)]/80">
                                          ★
                                        </span>
                                        <span>{formatRating(summary.average_rating)}</span>
@@ -374,7 +374,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
               <button
                 type="button"
                 onClick={() => setShowAllCreators(!showAllCreators)}
-                className="ml-6 inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
+                className="ml-6 inline-flex min-h-6 items-center text-[10px] font-bold text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded"
                 aria-expanded={showAllCreators}
                 aria-controls="creators-list"
               >
@@ -395,12 +395,12 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
         {metadata.story_arcs.length > 0 && (
           <details ref={storyArcsDetailsRef} className="group space-y-3">
-            <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-amber-500 rounded-lg p-2 hover:bg-white/5 transition-colors">
-              <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">
+            <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded-lg p-2 hover:bg-[var(--theme-bg-hover)] transition-colors">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)]">
                 Story arcs ({metadata.story_arcs.length})
               </span>
             </summary>
-            <div className="pl-6 pr-2 pb-2 space-y-3 border-l border-white/10">
+            <div className="pl-6 pr-2 pb-2 space-y-3 border-l border-[var(--theme-border)]">
               {metadata.story_arcs
                 .slice(0, showAllStoryArcs ? metadata.story_arcs.length : STORY_ARC_LIMIT)
                 .map((arc) => {
@@ -411,14 +411,14 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                   return (
                     <section key={arc.comicvine_arc_id} className="space-y-2">
                       <h3 className="text-xs font-bold text-blue-300">{normalizeArcName(arc.name)}</h3>
-                      <p className="text-[9px] text-stone-500">
+                      <p className="text-[9px] text-[var(--theme-text-dim)]">
                         {arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length} in ComicPile ·{' '}
                         {arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length} missing
                         {arc.total_related_count != null && arc.total_related_count > arc.related_issues.length && (
-                          <span className="ml-1 text-stone-600">({arc.related_issues.length} of {arc.total_related_count} shown)</span>
+                          <span className="ml-1 text-[var(--theme-text-muted)]">({arc.related_issues.length} of {arc.total_related_count} shown)</span>
                         )}
                       </p>
-                      <p className="text-[9px] text-stone-500">Related by story-arc membership, not reading order.</p>
+                      <p className="text-[9px] text-[var(--theme-text-dim)]">Related by story-arc membership, not reading order.</p>
                       <div className="space-y-1.5" data-testid="story-arc-issue-list">
                         {displayedIssues.map((issue) => {
                           const identity = extractComicIdentity(issue, issue.comicpile_matches)
@@ -427,12 +427,12 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                           const stateColorClass = getStateColorClass(state)
 
                           return (
-                            <div key={issue.comicvine_issue_id} className="p-2 rounded-lg bg-black/15 border border-white/5">
+                            <div key={issue.comicvine_issue_id} className="p-2 rounded-lg bg-[var(--theme-bg-page)]/15 border border-[var(--theme-border)]">
                               <div className="flex gap-2 justify-between items-start">
                                 <div className="flex-1 min-w-0">
-                                  <span className="text-[11px] font-bold text-stone-300 truncate block">{identity.primary}</span>
+                                  <span className="text-[11px] font-bold text-[var(--theme-text-primary)] truncate block">{identity.primary}</span>
                                   {identity.secondary && (
-                                    <span className="text-[10px] text-stone-500 truncate block">{identity.secondary}</span>
+                                    <span className="text-[10px] text-[var(--theme-text-dim)] truncate block">{identity.secondary}</span>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
@@ -446,7 +446,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                                     <button
                                       type="button"
                                       onClick={() => handleAddToComicPile(identity, issue, arc.related_issues, null)}
-                                      className="inline-flex min-h-6 items-center text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 rounded border border-amber-500/30 bg-amber-500/10 transition-colors focus:ring-2 focus:ring-amber-500"
+                                      className="inline-flex min-h-6 items-center text-[9px] font-bold text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] shrink-0 px-2 rounded border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-comic-accent)]/10 transition-colors focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
                                       aria-label={`Add ${identity.primary} to ComicPile`}
                                     >
                                       Add to ComicPile
@@ -472,7 +472,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                           <button
                             type="button"
                             onClick={() => setShowAllRelatedIssues((prev) => ({ ...prev, [arc.comicvine_arc_id]: !prev[arc.comicvine_arc_id] }))}
-                            className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
+                            className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded"
                             aria-expanded={isExpanded}
                           >
                             {isExpanded ? 'Show fewer' : `Show all ${arc.related_issues.length} issues`}
@@ -496,7 +496,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 <button
                   type="button"
                   onClick={() => setShowAllStoryArcs(!showAllStoryArcs)}
-                  className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
+                  className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded"
                   aria-expanded={showAllStoryArcs}
                 >
                   {showAllStoryArcs ? 'Show fewer arcs' : `Show all ${metadata.story_arcs.length} story arcs`}
@@ -511,7 +511,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
             href={metadata.comicvine_url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex min-h-11 items-center text-xs font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded-lg px-2"
+            className="inline-flex min-h-11 items-center text-xs font-bold text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] rounded-lg px-2"
           >
             View issue on ComicVine
           </a>

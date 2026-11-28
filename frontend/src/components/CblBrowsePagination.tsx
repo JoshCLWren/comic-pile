@@ -37,7 +37,7 @@ export function CblBrowsePagination({
           type="button"
           onClick={() => onOpenPage(requestedPage - 1)}
           disabled={!settledBrowsePage?.has_previous || isCommitting}
-          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
         >
           Previous page
         </button>
@@ -52,7 +52,7 @@ export function CblBrowsePagination({
           type="button"
           onClick={() => onOpenPage(requestedPage + 1)}
           disabled={!settledBrowsePage?.has_next || isCommitting}
-          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
         >
           Next page
         </button>

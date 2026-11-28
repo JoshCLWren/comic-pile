@@ -494,17 +494,17 @@ export default function IssueCorrectionDialog({
       data-testid="issue-correction-dialog"
     >
       <div className="space-y-4">
-        <p className="text-sm text-stone-400">
-          Reading: <span className="text-stone-200 font-bold">{threadTitle}</span>
+        <p className="text-sm text-[var(--theme-text-muted)]">
+          Reading: <span className="text-[var(--theme-text-primary)] font-bold">{threadTitle}</span>
         </p>
 
         {isLoadingIssues ? (
-          <div className="bg-amber-600/10 border border-amber-600/20 rounded-lg p-6 text-center">
-            <p className="text-sm text-stone-400">Loading issues...</p>
+          <div className="bg-[var(--theme-comic-accent)]/10 border border-[var(--theme-comic-accent)]/20 rounded-lg p-6 text-center">
+            <p className="text-sm text-[var(--theme-text-muted)]">Loading issues...</p>
           </div>
         ) : (
-          <div className="bg-amber-600/10 border border-amber-600/20 rounded-lg p-4">
-            <label htmlFor="issue-number" className="block text-sm font-bold text-stone-300 mb-2">
+          <div className="bg-[var(--theme-comic-accent)]/10 border border-[var(--theme-comic-accent)]/20 rounded-lg p-4">
+            <label htmlFor="issue-number" className="block text-sm font-bold text-[var(--theme-text-primary)] mb-2">
               What issue are you currently on?
             </label>
 
@@ -513,7 +513,7 @@ export default function IssueCorrectionDialog({
                 type="button"
                 onClick={() => adjustIssue(-1)}
                 disabled={isLoading || !hasNumericSelection}
-                className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-amber-500"
+                className="w-14 h-14 flex items-center justify-center bg-[var(--theme-bg-hover)] hover:bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl text-2xl font-bold text-[var(--theme-text-primary)] transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
                 aria-label="Decrease issue number"
               >
                 −
@@ -536,7 +536,7 @@ export default function IssueCorrectionDialog({
                   aria-describedby="issue-range"
                 />
                 {totalIssues && (
-                  <p id="issue-range" className="text-xs text-stone-500 mt-1">
+                  <p id="issue-range" className="text-xs text-[var(--theme-text-dim)] mt-1">
                     of {totalIssues}
                   </p>
                 )}
@@ -546,7 +546,7 @@ export default function IssueCorrectionDialog({
                 type="button"
                 onClick={() => adjustIssue(1)}
                 disabled={isLoading || !hasNumericSelection}
-                className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-amber-500"
+                className="w-14 h-14 flex items-center justify-center bg-[var(--theme-bg-hover)] hover:bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl text-2xl font-bold text-[var(--theme-text-primary)] transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
                 aria-label="Increase issue number"
               >
                 +
@@ -568,7 +568,7 @@ export default function IssueCorrectionDialog({
             )}
             {!allIssues.some((issue) => issue.issue_number === selectedIssueNumber.trim()) && (
               <div className="mt-4">
-                <label htmlFor="issue-position" className="block text-xs font-bold text-stone-400 mb-2">
+                <label htmlFor="issue-position" className="block text-xs font-bold text-[var(--theme-text-muted)] mb-2">
                   Place new issue
                 </label>
                 <select
@@ -592,12 +592,12 @@ export default function IssueCorrectionDialog({
         )}
 
         {preview && (
-          <div className="rounded-lg border border-amber-600/30 bg-amber-600/10 p-3 space-y-2" data-testid="bulk-read-preview">
-            <p className="text-sm font-bold text-stone-200">Review bulk read changes</p>
-            <p className="text-xs text-stone-400">
+          <div className="rounded-lg border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-comic-accent)]/10 p-3 space-y-2" data-testid="bulk-read-preview">
+            <p className="text-sm font-bold text-[var(--theme-text-primary)]">Review bulk read changes</p>
+            <p className="text-xs text-[var(--theme-text-muted)]">
               Marking {preview.affected.length} issue{preview.affected.length === 1 ? '' : 's'} as read before #{preview.targetIssueNumber}.
             </p>
-            <ul className="text-xs text-stone-300 space-y-1 max-h-32 overflow-auto">
+            <ul className="text-xs text-[var(--theme-text-primary)] space-y-1 max-h-32 overflow-auto">
               {preview.affected.map((issue) => (
                 <li key={issue.id}>
                   #{issue.issue_number} — current: {issue.status}
@@ -607,15 +607,15 @@ export default function IssueCorrectionDialog({
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-[var(--theme-text-muted)]">
               {preview.willCompleteSeries
                 ? 'Series completion effect: this will complete the series and remove it from the active Queue.'
                 : 'Series completion effect: series will remain active.'}
             </p>
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-[var(--theme-text-muted)]">
               Dependent frontier: {preview.dependentFrontier.length > 0 ? preview.dependentFrontier.join(', ') : 'no direct dependent issues detected in this series.'}
             </p>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-[var(--theme-text-dim)]">
               Read states explained: marked read = read without rating; read &amp; rated = read with rating; still unread = not read.
             </p>
           </div>
@@ -623,8 +623,8 @@ export default function IssueCorrectionDialog({
 
         {lastOperation && (
           <div className="rounded-lg border border-green-600/30 bg-green-600/10 p-3 space-y-2" data-testid="bulk-read-review">
-            <p className="text-sm font-bold text-stone-200">Bulk read applied</p>
-            <p className="text-xs text-stone-400">
+            <p className="text-sm font-bold text-[var(--theme-text-primary)]">Bulk read applied</p>
+            <p className="text-xs text-[var(--theme-text-muted)]">
               Operation #{lastOperation.id} recorded {lastOperation.items.length} issue changes. You can review or undo this exact operation.
             </p>
             <div className="flex gap-2">
@@ -632,7 +632,7 @@ export default function IssueCorrectionDialog({
                 type="button"
                 onClick={() => void handleUndo()}
                 disabled={isUndoing}
-                className="py-2 px-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                className="py-2 px-3 bg-[var(--theme-bg-hover)] hover:bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-lg text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
               >
                 {isUndoing ? 'Undoing...' : 'Undo'}
               </button>
@@ -663,7 +663,7 @@ export default function IssueCorrectionDialog({
               onClose()
             }}
             disabled={isLoading || isUndoing}
-            className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50"
+            className="flex-1 py-3 bg-[var(--theme-bg-hover)] hover:bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50"
           >
             {preview ? 'Back' : 'Cancel'}
           </button>
@@ -672,7 +672,7 @@ export default function IssueCorrectionDialog({
               type="button"
               onClick={() => void handleSubmit()}
               disabled={isLoading}
-              className="flex-1 py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50"
+              className="flex-1 py-3 bg-[var(--theme-comic-accent)]/20 hover:bg-[var(--theme-comic-accent)]/30 border border-[var(--theme-comic-accent)]/50 rounded-xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50"
             >
               {isLoading ? 'Working...' : preview ? 'Confirm bulk read' : 'Review changes'}
             </button>
@@ -680,7 +680,7 @@ export default function IssueCorrectionDialog({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-sm font-black uppercase tracking-wider transition-all"
+              className="flex-1 py-3 bg-[var(--theme-comic-accent)]/20 hover:bg-[var(--theme-comic-accent)]/30 border border-[var(--theme-comic-accent)]/50 rounded-xl text-sm font-black uppercase tracking-wider transition-all"
             >
               Done
             </button>

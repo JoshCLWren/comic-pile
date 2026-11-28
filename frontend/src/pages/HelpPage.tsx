@@ -240,7 +240,7 @@ export default function HelpPage() {
   return (
     <section aria-label="Help and glossary" className="pt-4 pb-12 w-full" data-testid="glossary-list">
       <h1 className="text-2xl font-bold mb-4">Glossary</h1>
-      <p className="text-sm text-stone-600 mb-6">Definitions for every reader-facing concept in ComicPile. 1–2 sentence explanations, mobile-friendly layout.</p>
+      <p className="text-sm text-[var(--theme-text-muted)] mb-6">Definitions for every reader-facing concept in ComicPile. 1–2 sentence explanations, mobile-friendly layout.</p>
       <span aria-live="polite" data-testid="glossary-permalink-status" className="sr-only">
         {copyAnnouncement}
       </span>
@@ -253,7 +253,7 @@ export default function HelpPage() {
               key={d.id}
               id={d.id}
               aria-current={highlighted ? 'location' : undefined}
-              className={`p-4 border rounded-lg bg-white/80 shadow-sm transition-all duration-300 motion-reduce:transition-none ${
+              className={`p-4 border rounded-lg bg-[var(--theme-bg-panel)] shadow-sm transition-all duration-300 motion-reduce:transition-none ${
                 highlighted ? 'ring-2 ring-[var(--theme-focus-ring)] border-[var(--theme-focus-ring)]' : ''
               }`}
             >
@@ -261,7 +261,7 @@ export default function HelpPage() {
                 <span key={alias} id={alias} aria-hidden="true" className="sr-only" data-testid="glossary-anchor-alias" />
               ))}
               <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="min-w-0 text-sm font-semibold uppercase tracking-widest text-stone-600" data-testid="glossary-term">{d.term}</div>
+                <div className="min-w-0 text-sm font-semibold uppercase tracking-widest text-[var(--theme-text-muted)]" data-testid="glossary-term">{d.term}</div>
                 <GlossaryPermalink
                   term={d.term}
                   permalink={permalink}
@@ -269,7 +269,7 @@ export default function HelpPage() {
                   onActivate={() => copyPermalink(d.id, d.term, permalink)}
                 />
               </div>
-              <div className="text-sm text-stone-700" data-testid="glossary-definition">{d.def}</div>
+              <div className="text-sm text-[var(--theme-text-muted)]" data-testid="glossary-definition">{d.def}</div>
             </div>
           )
         })}

@@ -99,12 +99,12 @@ function ActivitySubject({ item }: { item: ActivityItem }) {
   if (item.thread_id == null) return null
   const title = item.thread_title ?? 'Deleted series'
   return (
-    <span className="text-stone-400">
+    <span className="text-[var(--theme-text-muted)]">
       {' · '}
       {item.thread_title ? (
         <Link
           to={`/thread/${item.thread_id}`}
-          className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
+          className="underline decoration-dotted underline-offset-2 hover:text-[var(--theme-text-primary)]"
         >
           {title}
         </Link>
@@ -180,7 +180,7 @@ export default function HistoryPage() {
     if (isRetrying) {
       return (
         <div className="flex flex-col items-center justify-center h-screen gap-4">
-          <p role="status" className="text-sm font-bold text-stone-400">
+          <p role="status" className="text-sm font-bold text-[var(--theme-text-muted)]">
             Still loading your history… your library is safe.
           </p>
           <RetryHistoryButton onRetry={() => void refetch()} />
@@ -207,10 +207,10 @@ export default function HistoryPage() {
         <header className="flex flex-wrap items-end justify-between gap-3 px-2">
           <div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-            <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
+            <p className="mt-2 text-base font-semibold text-[var(--theme-text-dim)]">Your reading activity</p>
           </div>
         </header>
-        <div className="text-center text-stone-500">No activity yet</div>
+        <div className="text-center text-[var(--theme-text-dim)]">No activity yet</div>
       </div>
     )
   }
@@ -220,10 +220,10 @@ export default function HistoryPage() {
       <header className="flex flex-wrap items-end justify-between gap-3 px-2">
         <div>
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-          <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
-          {restoreMessage && <p className="mt-2 text-sm text-stone-400">{restoreMessage}</p>}
+          <p className="mt-2 text-base font-semibold text-[var(--theme-text-dim)]">Your reading activity</p>
+          {restoreMessage && <p className="mt-2 text-sm text-[var(--theme-text-muted)]">{restoreMessage}</p>}
           {bulkUndoMessage && (
-            <p className="mt-2 text-sm text-stone-400" role="status">{bulkUndoMessage}</p>
+            <p className="mt-2 text-sm text-[var(--theme-text-muted)]" role="status">{bulkUndoMessage}</p>
           )}
         </div>
       </header>
@@ -269,10 +269,10 @@ export default function HistoryPage() {
           return (
             <div key={item.event_id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
-                <div className="text-xs font-bold leading-none text-stone-200">
+                <div className="text-xs font-bold leading-none text-[var(--theme-text-primary)]">
                   {formatDate(item.timestamp)}
                 </div>
-                <div className="mt-1 text-[10px] font-bold uppercase tracking-widest leading-none text-stone-500">
+                <div className="mt-1 text-[10px] font-bold uppercase tracking-widest leading-none text-[var(--theme-text-dim)]">
                   {formatTime(item.timestamp)}
                 </div>
                 {item.session_id != null && (
@@ -286,7 +286,7 @@ export default function HistoryPage() {
               </div>
 
               <div className="min-w-0 flex-1 space-y-1.5">
-                <p className="font-bold text-sm leading-tight text-stone-200 truncate">
+                <p className="font-bold text-sm leading-tight text-[var(--theme-text-primary)] truncate">
                   {activityHeadline(item)}
                   <ActivitySubject item={item} />
                 </p>
@@ -313,13 +313,13 @@ export default function HistoryPage() {
                   <div className="flex gap-3 pt-1">
                     <Link
                       to={`/thread/${item.thread_id}`}
-                      className="text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline"
+                      className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)] hover:text-[var(--theme-text-primary)] underline"
                     >
                       Open series
                     </Link>
                     <button
                       type="button"
-                      className="text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline disabled:opacity-50"
+                      className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)] hover:text-[var(--theme-text-primary)] underline disabled:opacity-50"
                       disabled={restoringThreadId === item.thread_id}
                       onClick={() => void handleRestoreUnread(item.thread_id!)}
                     >
@@ -335,7 +335,7 @@ export default function HistoryPage() {
 
       {isLoadingMore && (
         <div className="flex items-center justify-center py-8">
-          <div className="text-sm font-bold text-stone-400 animate-pulse">
+          <div className="text-sm font-bold text-[var(--theme-text-muted)] animate-pulse">
             Loading more...
           </div>
         </div>

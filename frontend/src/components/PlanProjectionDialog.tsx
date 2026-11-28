@@ -100,16 +100,16 @@ export default function PlanProjectionDialog({
       title="Project to reading order"
       onClose={onClose}
       data-testid="plan-projection-dialog"
-      overlayClassName="bg-black/70 surface-glass"
+      overlayClassName="bg-[var(--theme-bg-page)]/70 surface-glass"
     >
-      <p className="text-sm text-stone-400">
+      <p className="text-sm text-[var(--theme-text-muted)]">
         Preview how “{planName}” would appear inside a saved{' '}
         <GlossaryLink id="reading-order">reading order</GlossaryLink>, then confirm to apply it.
         Your plan is never modified (<GlossaryLink id="projection">Projection</GlossaryLink>).
       </p>
 
       <div className="mt-4">
-        <span id="projection-reading-order-label" className="text-xs font-bold uppercase tracking-wider text-stone-400">Reading order</span>
+        <span id="projection-reading-order-label" className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">Reading order</span>
         <div
           role="radiogroup"
           aria-labelledby="projection-reading-order-label"
@@ -117,9 +117,9 @@ export default function PlanProjectionDialog({
           className="mt-1 grid gap-2"
         >
           {isLoadingOrders ? (
-            <p role="status" className="rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-400">Loading reading orders…</p>
+            <p role="status" className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] px-3 py-2 text-sm text-[var(--theme-text-muted)]">Loading reading orders…</p>
           ) : readingOrders.length === 0 ? (
-            <p className="rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-400">
+            <p className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] px-3 py-2 text-sm text-[var(--theme-text-muted)]">
               No saved reading orders yet. Reading orders are legacy lists — crossovers you create appear under “Add steps” instead.
             </p>
           ) : (
@@ -141,11 +141,11 @@ export default function PlanProjectionDialog({
                   disabled={isConfirming}
                   className={`min-h-11 w-full rounded-xl border px-3 text-left text-sm disabled:opacity-50 ${
                     isSelected
-                      ? 'border-amber-500 bg-amber-950/30 font-bold text-stone-100'
-                      : 'border-stone-700 bg-stone-900 text-stone-100 hover:border-stone-500'
+                      ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-comic-accent)]/30 font-bold text-[var(--theme-text-primary)]'
+                      : 'border-[var(--theme-border)] bg-[var(--theme-bg-page)] text-[var(--theme-text-primary)] hover:border-[var(--theme-comic-accent)]'
                   }`}
                 >
-                  {order.name} <span className="text-stone-400">({order.total_items} items)</span>
+                  {order.name} <span className="text-[var(--theme-text-muted)]">({order.total_items} items)</span>
                 </button>
               )
             })
@@ -154,10 +154,10 @@ export default function PlanProjectionDialog({
       </div>
 
       <div className="mt-4 flex gap-2">
-        <button type="button" onClick={runPreview} disabled={!selectedOrder || isPreviewing || isConfirming} className="min-h-11 flex-1 rounded-xl bg-stone-800 px-4 font-bold text-stone-100 disabled:opacity-40">
+        <button type="button" onClick={runPreview} disabled={!selectedOrder || isPreviewing || isConfirming} className="min-h-11 flex-1 rounded-xl bg-[var(--theme-bg-panel)] px-4 font-bold text-[var(--theme-text-primary)] disabled:opacity-40">
           {isPreviewing ? 'Previewing…' : 'Preview projection'}
         </button>
-        <button type="button" onClick={confirmProjection} disabled={!selectedOrder || isConfirming || hasConflicts} className="min-h-11 flex-1 rounded-xl bg-amber-500 px-4 font-black text-stone-950 disabled:opacity-40">
+        <button type="button" onClick={confirmProjection} disabled={!selectedOrder || isConfirming || hasConflicts} className="min-h-11 flex-1 rounded-xl bg-[var(--theme-primary-action)] px-4 font-black text-[var(--theme-primary-action-text)] disabled:opacity-40">
           {isConfirming ? 'Projecting…' : 'Confirm projection'}
         </button>
       </div>
@@ -166,19 +166,19 @@ export default function PlanProjectionDialog({
 
       {preview && (
         <section aria-label="Projection preview" className="mt-4 space-y-3">
-          <div className="flex items-center justify-between rounded-xl border border-stone-800 bg-stone-900 p-3">
+          <div className="flex items-center justify-between rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-3">
             <div>
-              <p className="font-bold text-stone-100">{preview.reading_order_name}</p>
-              <p className="text-xs text-stone-500">{preview.total_positions} positions</p>
+              <p className="font-bold text-[var(--theme-text-primary)]">{preview.reading_order_name}</p>
+              <p className="text-xs text-[var(--theme-text-dim)]">{preview.total_positions} positions</p>
             </div>
             {preview.dropped_node_ids.length > 0 && (
-              <p className="text-right text-xs text-stone-500">{preview.dropped_node_ids.length} dropped</p>
+              <p className="text-right text-xs text-[var(--theme-text-dim)]">{preview.dropped_node_ids.length} dropped</p>
             )}
           </div>
           {hasConflicts ? (
-            <div role="alert" className="rounded-xl border border-amber-800 bg-amber-950/20 p-3">
-              <p className="font-bold text-amber-300">Resolve conflicts before projecting</p>
-              <ul className="mt-2 space-y-1 text-sm text-amber-100">
+            <div role="alert" className="rounded-xl border border-[var(--theme-comic-accent)] bg-[var(--theme-comic-accent)]/20 p-3">
+              <p className="font-bold text-[var(--theme-comic-accent)]">Resolve conflicts before projecting</p>
+              <ul className="mt-2 space-y-1 text-sm text-[var(--theme-comic-accent)]">
                 {preview.conflicts.map((conflict) => (
                   <li key={conflict.node_id}>{conflict.message}</li>
                 ))}
@@ -187,10 +187,10 @@ export default function PlanProjectionDialog({
           ) : (
             <ol className="grid gap-1.5">
               {preview.entries.map((entry) => (
-                <li key={`${entry.source_node_id ?? entry.thread_id}-${entry.position}`} className="flex items-center gap-2 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-800 text-xs font-black text-amber-300">{entry.position}</span>
-                  <span className="min-w-0 flex-1 truncate text-stone-100">{entry.thread_title ?? `Thread ${entry.thread_id}`}</span>
-                  <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-stone-500">{SOURCE_LABEL[entry.source] ?? entry.source}</span>
+                <li key={`${entry.source_node_id ?? entry.thread_id}-${entry.position}`} className="flex items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] px-3 py-2 text-sm">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--theme-bg-panel)] text-xs font-black text-[var(--theme-comic-accent)]">{entry.position}</span>
+                  <span className="min-w-0 flex-1 truncate text-[var(--theme-text-primary)]">{entry.thread_title ?? `Thread ${entry.thread_id}`}</span>
+                  <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-dim)]">{SOURCE_LABEL[entry.source] ?? entry.source}</span>
                 </li>
               ))}
             </ol>

@@ -764,7 +764,7 @@ export function TagEditor({
                       type="button"
                       onClick={() => void handleUseExisting(exactDuplicate)}
                       disabled={assign.isPending}
-                      className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+                      className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
                     >
                       Use “{exactDuplicate.name}”
                     </button>
@@ -787,7 +787,7 @@ export function TagEditor({
                       key={match.id}
                       type="button"
                       onClick={() => void handleAssignGlobal(match)}
-                      className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                      className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                     >
                       Use global “{match.name}”
                     </button>
@@ -796,7 +796,7 @@ export function TagEditor({
                     type="button"
                     onClick={() => void handleCreate(true)}
                     disabled={create.isPending || update.isPending || assign.isPending}
-                    className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-text-primary)] transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+                    className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-bg-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
                   >
                     Create private anyway
                   </button>
@@ -807,7 +807,7 @@ export function TagEditor({
                 type="button"
                 onClick={() => void handleCreate(false)}
                 disabled={create.isPending || !newName.trim()}
-                className="self-start rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+                className="self-start rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
               >
                 {create.isPending ? 'Creating…' : 'Create and add'}
               </button>
@@ -870,14 +870,14 @@ export function TagEditor({
                         type="button"
                         onClick={() => void handleDelete()}
                         disabled={remove.isPending}
-                        className="rounded-lg bg-[var(--theme-danger)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--theme-danger-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+                        className="rounded-lg bg-[var(--theme-danger)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-danger-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
                       >
                         {remove.isPending ? 'Deleting…' : 'Delete tag'}
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmingDelete(false)}
-                        className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-text-primary)] transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                        className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-bg-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                       >
                         Keep tag
                       </button>
@@ -916,14 +916,14 @@ export function TagEditor({
                     type="button"
                     onClick={() => void handleManageSave()}
                     disabled={update.isPending}
-                    className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+                    className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
                   >
                     Save changes
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirmingDelete(true)}
-                    className="rounded-lg border border-[var(--theme-danger)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-danger)] transition hover:bg-[var(--theme-danger)] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                    className="rounded-lg border border-[var(--theme-danger)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-danger)] transition hover:bg-[var(--theme-danger)] hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                   >
                     Delete…
                   </button>

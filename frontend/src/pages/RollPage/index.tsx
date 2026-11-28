@@ -396,7 +396,7 @@ export default function RollPage() {
       )
     }
     return (
-      <div className="text-center py-10 text-stone-500 font-black uppercase tracking-widest text-[10px]">
+      <div className="text-center py-10 text-[var(--theme-text-dim)] font-black uppercase tracking-widest text-[10px]">
         Loading...
       </div>
     )
@@ -409,8 +409,8 @@ export default function RollPage() {
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="text-center space-y-4">
           <div className="text-4xl">⚠️</div>
-          <h2 className="text-xl font-black text-stone-300 uppercase tracking-wider">Session Error</h2>
-          <p className="text-sm text-stone-400">{errorDetail}</p>
+          <h2 className="text-xl font-black text-[var(--theme-text-primary)] uppercase tracking-wider">Session Error</h2>
+          <p className="text-sm text-[var(--theme-text-muted)]">{errorDetail}</p>
           {status === 401 ? (
             <button
               onClick={() => navigate('/login')}
@@ -421,7 +421,7 @@ export default function RollPage() {
           ) : (
             <button
               onClick={() => refetchBootstrap()}
-              className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors"
+              className="px-4 py-2 bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/50 rounded-lg text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] hover:bg-[var(--theme-comic-accent)]/30 transition-colors"
             >
               Retry
             </button>
@@ -463,7 +463,7 @@ export default function RollPage() {
           data-testid="roll-workspace"
           className={`flex-1 flex flex-col relative ${state.isRatingView ? '' : 'md:surface-panel md:rounded-xl'}`}
         >
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 md:w-80 md:h-80 bg-amber-900/15 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 md:w-80 md:h-80 bg-[var(--theme-comic-accent)]/15 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
           <div className="flex-1 flex flex-col">
             {!state.isRatingView && hasRollableContent ? (
               <>

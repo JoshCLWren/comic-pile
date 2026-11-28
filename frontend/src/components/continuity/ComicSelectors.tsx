@@ -78,7 +78,7 @@ export function ContinuityThreadSelector({
 
   return (
     <div className="space-y-2">
-      <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-500">
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
         {label}
         <input
           type="search"
@@ -98,31 +98,31 @@ export function ContinuityThreadSelector({
       {value && (
         <div
           data-testid="selected-thread-value"
-          className="rounded-xl border border-solid border-white/10 bg-white/5 px-3 py-2"
+          className="rounded-xl border border-solid border-[var(--theme-border)] bg-[var(--theme-bg-hover)] px-3 py-2"
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
             Selected series
           </p>
           <p
             data-testid="selected-thread-title"
-            className="mt-1 break-words text-sm font-semibold leading-snug text-stone-200"
+            className="mt-1 break-words text-sm font-semibold leading-snug text-[var(--theme-text-primary)]"
           >
             {value.title}
           </p>
-          {value.format ? <p className="mt-1 text-xs text-stone-500">{value.format}</p> : null}
+          {value.format ? <p className="mt-1 text-xs text-[var(--theme-text-dim)]">{value.format}</p> : null}
         </div>
       )}
 
-      {isLoading && <p className="text-xs text-stone-500">Loading comics…</p>}
+      {isLoading && <p className="text-xs text-[var(--theme-text-dim)]">Loading comics…</p>}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
       {!isLoading && !error && !disabled && isEmptyQuery && (
-        <p className="text-xs text-stone-500">Type to search comics</p>
+        <p className="text-xs text-[var(--theme-text-dim)]">Type to search comics</p>
       )}
       {!isLoading && !error && !disabled && !isEmptyQuery && results.length === 0 && (
-        <p className="text-xs text-stone-500">No matching comics found.</p>
+        <p className="text-xs text-[var(--theme-text-dim)]">No matching comics found.</p>
       )}
       {!isLoading && !error && !disabled && results.length > 0 && (
-        <div role="listbox" aria-label={`${label} results`} className="max-h-48 overflow-auto rounded-xl border border-white/10 bg-white/5">
+        <div role="listbox" aria-label={`${label} results`} className="max-h-48 overflow-auto rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)]">
           {results.map((thread, index) => (
             <button
               key={thread.id}
@@ -131,12 +131,12 @@ export function ContinuityThreadSelector({
               role="option"
               aria-selected={value?.id === thread.id}
               onClick={() => selectThread(thread)}
-              className={`w-full border-b border-white/5 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-white/10 ${
-                value?.id === thread.id ? 'bg-white/10 text-white' : 'text-stone-300'
+              className={`w-full border-b border-[var(--theme-border)] px-3 py-2 text-left text-sm last:border-b-0 hover:bg-[var(--theme-bg-hover)] ${
+                value?.id === thread.id ? 'bg-[var(--theme-bg-hover)] text-[var(--theme-text-primary)]' : 'text-[var(--theme-text-primary)]'
               }`}
             >
               <span className="block font-semibold">{thread.title}</span>
-              <span className="block text-xs text-stone-500">
+              <span className="block text-xs text-[var(--theme-text-dim)]">
                 {[
                   thread.format,
                   isNumber(thread.issues_remaining) ? `${thread.issues_remaining} remaining` : null,
@@ -173,7 +173,7 @@ export function ContinuityIssueSelector({
 }: ContinuityIssueSelectorProps) {
   return (
     <div className="space-y-1">
-      <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-500">
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
         {label}
         <select
           value={value?.id ?? ''}
@@ -253,7 +253,7 @@ export function ContinuityIssueRangeSelector({
 
   return (
     <fieldset className="space-y-2" disabled={disabled}>
-      <legend className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{label}</legend>
+      <legend className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">{label}</legend>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <ContinuityIssueSelector
           label="First issue"
@@ -279,7 +279,7 @@ export function ContinuityIssueRangeSelector({
         />
       </div>
       {isReversed && (
-        <p role="alert" className="text-xs text-amber-300">
+        <p role="alert" className="text-xs text-[var(--theme-comic-accent)]">
           Choose a valid issue range in reading order.
         </p>
       )}

@@ -858,7 +858,7 @@ export default function CblBrowserPage() {
                 setStaleReview(false)
                 void previewQuery.refetch()
               }}
-              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
             >
               Refresh preview
             </button>
@@ -1039,7 +1039,7 @@ export default function CblBrowserPage() {
               onClick={() => setCustomizing((current) => !current)}
               disabled={isCommitting || !preview}
               aria-expanded={customizing}
-              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
             >
               {customizing ? 'Hide customization' : 'Customize'}
             </button>
@@ -1208,7 +1208,7 @@ export default function CblBrowserPage() {
                 type="button"
                 onClick={clearSearch}
                 disabled={isCommitting}
-                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
               >
                 Clear search
               </button>
@@ -1228,7 +1228,7 @@ export default function CblBrowserPage() {
                   }
                   void browseQuery.refetch()
                 }}
-                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
               >
                 {catalogError.recover === 'browse-root' ? 'Browse all CBLs' : 'Try again'}
               </button>
@@ -1282,7 +1282,7 @@ export default function CblBrowserPage() {
                           className={`min-h-9 rounded-lg px-2 font-bold disabled:opacity-50 ${
                             isCurrent
                               ? 'text-[var(--theme-text-primary)]'
-                              : 'text-[var(--theme-continuity-accent)] hover:bg-white/5'
+                              : 'text-[var(--theme-continuity-accent)] hover:bg-[var(--theme-bg-hover)]'
                           }`}
                         >
                           {crumb.name}
@@ -1301,7 +1301,7 @@ export default function CblBrowserPage() {
                         type="button"
                         disabled={isCommitting || browseQuery.isPlaceholderData}
                         onClick={() => openFolder(child.path)}
-                        className="w-full rounded-xl border border-[var(--theme-border)] p-3 text-left hover:bg-white/5 disabled:opacity-50"
+                        className="w-full rounded-xl border border-[var(--theme-border)] p-3 text-left hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
                       >
                         <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
                           {child.name}
@@ -1337,7 +1337,7 @@ export default function CblBrowserPage() {
                           type="button"
                           onClick={() => openSource(source)}
                           disabled={isCommitting || browseQuery.isPlaceholderData}
-                          className="w-full rounded-xl border border-[var(--theme-border)] p-3 text-left hover:bg-white/5 disabled:opacity-50"
+                          className="w-full rounded-xl border border-[var(--theme-border)] p-3 text-left hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
                         >
                           <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
                             {title}

@@ -78,10 +78,10 @@ function OptionalCardShell({
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-text-dim)]">
             {label}
           </h3>
-          <p className="mt-0.5 min-w-0 break-words text-[11px] leading-relaxed text-stone-400">
+          <p className="mt-0.5 min-w-0 break-words text-[11px] leading-relaxed text-[var(--theme-text-muted)]">
             {copy}
           </p>
         </div>
@@ -108,9 +108,9 @@ function OptionalLoading({ testId, label }: { testId: string; label: string }) {
   return (
     <div data-testid={testId} role="status" aria-live="polite" className="space-y-2">
       <span className="sr-only">{label}</span>
-      <div className="h-3 w-24 animate-pulse rounded bg-white/5" aria-hidden="true" />
-      <div className="h-5 w-16 animate-pulse rounded bg-white/5" aria-hidden="true" />
-      <div className="h-3 w-20 animate-pulse rounded bg-white/5" aria-hidden="true" />
+      <div className="h-3 w-24 animate-pulse rounded bg-[var(--theme-bg-hover)]" aria-hidden="true" />
+      <div className="h-5 w-16 animate-pulse rounded bg-[var(--theme-bg-hover)]" aria-hidden="true" />
+      <div className="h-3 w-20 animate-pulse rounded bg-[var(--theme-bg-hover)]" aria-hidden="true" />
     </div>
   )
 }
@@ -127,7 +127,7 @@ function OptionalError({ testId, messages }: { testId: string; messages: string[
       </p>
       <ul className="mt-1 space-y-0.5">
         {messages.map((message) => (
-          <li key={message} className="min-w-0 break-words text-[11px] text-stone-400">
+          <li key={message} className="min-w-0 break-words text-[11px] text-[var(--theme-text-muted)]">
             {message}
           </li>
         ))}
@@ -213,7 +213,7 @@ function ReadingContextContent({
 
   if (!readerContext) {
     return (
-      <p className="min-w-0 break-words text-[11px] italic leading-relaxed text-stone-400">
+      <p className="min-w-0 break-words text-[11px] italic leading-relaxed text-[var(--theme-text-muted)]">
         No additional reading context is recorded for this issue.
       </p>
     )
@@ -221,7 +221,7 @@ function ReadingContextContent({
 
   if (!hasSeriesContent && !hasLocalIssues && readingOrders.length === 0 && !hasCrossovers) {
     return (
-      <p className="min-w-0 break-words text-[11px] italic leading-relaxed text-stone-400">
+      <p className="min-w-0 break-words text-[11px] italic leading-relaxed text-[var(--theme-text-muted)]">
         No additional reading context is recorded for this issue.
       </p>
     )
@@ -235,7 +235,7 @@ function ReadingContextContent({
           aria-label="Nearby issues in this series"
           className="min-w-0 space-y-1.5 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
         >
-          <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--theme-text-dim)]">
             {seriesName ? `Nearby in ${seriesName}` : 'Nearby issues'}
           </h4>
           <ul className="min-w-0 space-y-1">
@@ -252,7 +252,7 @@ function ReadingContextContent({
                   status={issue.status === 'read' ? 'read' : 'unread'}
                   rating={issue.rating}
                 />
-                <span className="min-w-0 break-words text-stone-400">
+                <span className="min-w-0 break-words text-[var(--theme-text-muted)]">
                   {relationCopy(issue.relation, seriesName)}
                 </span>
               </li>
@@ -265,7 +265,7 @@ function ReadingContextContent({
           aria-label="Your reading plans"
           className="min-w-0 space-y-1.5 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
         >
-          <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--theme-text-dim)]">
             Your reading plans
           </h4>
           <ul className="min-w-0 space-y-1.5">
@@ -277,10 +277,10 @@ function ReadingContextContent({
               return (
                 <li key={order.id} className="min-w-0">
                   <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
-                    <span className="min-w-0 break-words text-[11px] font-bold text-stone-200">
+                    <span className="min-w-0 break-words text-[11px] font-bold text-[var(--theme-text-primary)]">
                       {order.name}
                     </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-stone-400">
+                    <span className="shrink-0 text-[11px] tabular-nums text-[var(--theme-text-muted)]">
                       {order.completed_items}/{order.total_items} · {progress}%
                     </span>
                   </div>
@@ -308,7 +308,7 @@ function ReadingContextContent({
           aria-label="Connected series"
           className="min-w-0 space-y-1.5 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
         >
-          <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--theme-text-dim)]">
             Connected series
           </h4>
           <ul className="min-w-0 space-y-1">

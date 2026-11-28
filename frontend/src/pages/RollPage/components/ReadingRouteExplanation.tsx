@@ -44,12 +44,12 @@ export function ReadingRouteExplanation({
       onClose={onClose}
       autoFocus={false}
       data-testid="reading-route-explanation"
-      overlayClassName="bg-black/70 backdrop-blur-sm surface-glass"
+      overlayClassName="bg-[var(--theme-bg-page)]/70 backdrop-blur-sm surface-glass"
     >
-      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-500">
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-comic-accent)]">
         Why this issue is next
       </p>
-      <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
+      <p className="mt-2 text-[11px] leading-relaxed text-[var(--theme-text-muted)]">
         Roll already selected this issue. The context below describes recorded reading-order and dependency relationships without running a second verification request.
       </p>
 
@@ -80,16 +80,16 @@ export function ReadingRouteExplanation({
       ) : null}
 
       {sortedReadingOrders.length > 0 ? (
-        <section className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3" aria-labelledby="routes-heading">
-          <h3 id="routes-heading" className="text-xs font-black text-stone-200">Reading-order context</h3>
-          <p className="mt-1 text-[11px] text-stone-400">
+        <section className="mt-4 rounded-2xl border border-[var(--theme-border)] bg-white/[0.04] p-3" aria-labelledby="routes-heading">
+          <h3 id="routes-heading" className="text-xs font-black text-[var(--theme-text-primary)]">Reading-order context</h3>
+          <p className="mt-1 text-[11px] text-[var(--theme-text-muted)]">
             Membership is informational here. Roll remains the source of truth for what is next.
           </p>
           <ul className="mt-2 grid gap-2" aria-label="Reading orders">
             {sortedReadingOrders.map((order) => (
-              <li key={order.id} className="rounded-xl border border-white/10 bg-black/20 p-2 text-[11px] text-stone-300">
-                <span className="font-bold text-stone-100">{order.name}</span>
-                <span className="ml-2 text-stone-500">{order.completed_items}/{order.total_items}</span>
+              <li key={order.id} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/20 p-2 text-[11px] text-[var(--theme-text-primary)]">
+                <span className="font-bold text-[var(--theme-text-primary)]">{order.name}</span>
+                <span className="ml-2 text-[var(--theme-text-dim)]">{order.completed_items}/{order.total_items}</span>
               </li>
             ))}
           </ul>

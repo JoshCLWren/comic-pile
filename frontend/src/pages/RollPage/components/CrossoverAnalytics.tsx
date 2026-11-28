@@ -24,7 +24,7 @@ export function CrossoverAnalytics({ crossovers }: CrossoverAnalyticsProps) {
     >
       <h4
         id="crossover-analytics-heading"
-        className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500"
+        className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--theme-text-dim)]"
       >
         Crossovers
       </h4>
@@ -39,7 +39,7 @@ export function CrossoverAnalytics({ crossovers }: CrossoverAnalyticsProps) {
             }}
           >
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[11px] font-black text-stone-200 truncate">
+              <span className="text-[11px] font-black text-[var(--theme-text-primary)] truncate">
                 {c.name}
               </span>
               {c.average_rating !== null ? (
@@ -51,7 +51,7 @@ export function CrossoverAnalytics({ crossovers }: CrossoverAnalyticsProps) {
                 </span>
               ) : null}
             </div>
-            <div className="mt-1 flex gap-3 text-[10px] text-stone-400">
+            <div className="mt-1 flex gap-3 text-[10px] text-[var(--theme-text-muted)]">
               {c.ratings_count > 0 ? (
                 <span>{c.ratings_count} rated</span>
               ) : null}

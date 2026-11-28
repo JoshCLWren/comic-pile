@@ -50,13 +50,13 @@ export function TasteDiscoveryCard({ discovery, onRespond, onDismiss }: TasteDis
       aria-label="ComicPile noticed something"
       aria-live="polite"
       data-testid="taste-discovery-card"
-      className="mx-auto w-full max-w-xl rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 shadow-lg"
+      className="mx-auto w-full max-w-xl rounded-2xl border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-comic-accent)]/20 p-4 shadow-lg"
     >
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500">
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">
         ComicPile noticed something
       </p>
-      <p className="mt-2 text-sm text-stone-300">{discovery.prompt}</p>
-      <p className="mt-1 text-xs text-stone-400">{evidenceLabel}</p>
+      <p className="mt-2 text-sm text-[var(--theme-text-primary)]">{discovery.prompt}</p>
+      <p className="mt-1 text-xs text-[var(--theme-text-muted)]">{evidenceLabel}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {VERDICT_ACTIONS.map(({ verdict, label }) => (
           <button
@@ -67,7 +67,7 @@ export function TasteDiscoveryCard({ discovery, onRespond, onDismiss }: TasteDis
             onClick={() => {
               void handleRespond(verdict)
             }}
-            className="rounded-lg border border-amber-600/50 bg-amber-600/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-amber-500 transition-colors hover:bg-amber-600/30 disabled:opacity-50"
+            className="rounded-lg border border-[var(--theme-comic-accent)]/50 bg-[var(--theme-comic-accent)]/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors hover:bg-[var(--theme-comic-accent)]/30 disabled:opacity-50"
           >
             {label}
           </button>
@@ -78,7 +78,7 @@ export function TasteDiscoveryCard({ discovery, onRespond, onDismiss }: TasteDis
           onClick={() => {
             void handleDismiss()
           }}
-          className="ml-auto rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
+          className="ml-auto rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] disabled:opacity-50"
         >
           Not now
         </button>

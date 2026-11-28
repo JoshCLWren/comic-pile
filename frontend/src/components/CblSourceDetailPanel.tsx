@@ -93,7 +93,7 @@ export function CblSourceDetailPanel({
         <button
           type="button"
           onClick={() => void detailQuery.refetch()}
-          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
         >
           Retry
         </button>
@@ -174,7 +174,7 @@ export function CblSourceDetailPanel({
           type="button"
           onClick={() => void detailQuery.fetchNextPage()}
           disabled={detailQuery.isFetchingNextPage}
-          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+          className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
         >
           Show more positions ({shown} of {detail?.entries_total ?? 0})
         </button>

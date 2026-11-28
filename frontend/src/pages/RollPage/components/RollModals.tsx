@@ -45,11 +45,11 @@ function SetCurrentIssueModal({ onSubmit, onClose }: SetCurrentIssueModalProps) 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-xs text-stone-400">
+      <p className="text-xs text-[var(--theme-text-muted)]">
         Enter the issue number to set as the current/next issue. All earlier issues will be marked read.
       </p>
       <div className="space-y-2">
-        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+        <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
           Issue Number
         </label>
         <input
@@ -76,7 +76,7 @@ function SetCurrentIssueModal({ onSubmit, onClose }: SetCurrentIssueModalProps) 
         <button
           type="submit"
           disabled={isSubmitting || !issueNumber.trim()}
-          className="flex-1 py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] transition-colors disabled:opacity-60"
+          className="flex-1 py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] transition-colors disabled:opacity-60"
         >
           {isSubmitting ? 'Setting...' : 'Set Current Issue'}
         </button>
@@ -236,11 +236,11 @@ export function RollModals({
         onClose={onCloseOverride}
       >
         <form className="space-y-4" onSubmit={onSubmitOverride}>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-[var(--theme-text-muted)]">
             Choose a series to read directly. This does not replace a pending Roll offer.
           </p>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               Series
             </label>
             <ManualPickerSearch
@@ -254,7 +254,7 @@ export function RollModals({
           <button
             type="submit"
             disabled={!overrideThreadId}
-            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             Open issue card
           </button>
@@ -279,7 +279,7 @@ export function RollModals({
       )}
 
       <Modal isOpen={isDieModalOpen} title="Select Die" onClose={onCloseDieModal}>
-        <p className="mb-3 text-xs text-stone-400">
+        <p className="mb-3 text-xs text-[var(--theme-text-muted)]">
           The die is currently d{currentDie}. Choosing a die replaces it until the
           next rating, snooze, or Reset Dice.
         </p>
@@ -294,7 +294,7 @@ export function RollModals({
               className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
                 die === currentDie
                   ? 'bg-[var(--theme-comic-accent)]/20 border-[var(--theme-comic-accent)] text-[var(--theme-comic-accent)]'
-                  : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-white/10'
+                  : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)]'
               }`}
             >
               d{die}
@@ -306,7 +306,7 @@ export function RollModals({
             }}
             disabled={resetDicePending}
             data-testid="reset-dice"
-            className="px-3 py-3 text-sm font-black rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] transition-colors hover:bg-white/10"
+            className="px-3 py-3 text-sm font-black rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] transition-colors hover:bg-[var(--theme-bg-hover)]"
           >
             {resetDicePending ? 'Resetting…' : 'Reset Dice'}
           </button>
@@ -327,7 +327,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('read')}
-            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-all flex items-center gap-3"
           >
             <span className="text-lg">📖</span>
             <span>Read Now</span>
@@ -335,7 +335,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('set-current-issue')}
-            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-all flex items-center gap-3"
           >
             <span className="text-lg">🎯</span>
             <span>Set Current Issue</span>
@@ -343,7 +343,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('move-front')}
-            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-all flex items-center gap-3"
           >
             <span className="text-lg">⬆️</span>
             <span>Move to Front</span>
@@ -351,7 +351,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('move-back')}
-            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-all flex items-center gap-3"
           >
             <span className="text-lg">⬇️</span>
             <span>Move to Back</span>
@@ -365,7 +365,7 @@ export function RollModals({
                 ? SNOOZE_REQUIRES_PENDING_SERIES_REASON
                 : undefined
             }
-            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[var(--theme-bg-panel)]"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[var(--theme-bg-panel)]"
           >
             <span className="text-lg">
               {actionSheetThreadIsSnoozed ? '🔔' : '😴'}
@@ -377,7 +377,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('edit')}
-            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-all flex items-center gap-3"
           >
             <span className="text-lg">✏️</span>
             <span>Edit Series</span>

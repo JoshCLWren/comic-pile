@@ -13,12 +13,12 @@ export function CreatorName({ creator }: { creator: ComicVineCreator }) {
   const key = creatorKeyFor(creator)
   const roles =
     creator.roles.length > 0 ? (
-      <span className="text-stone-500"> · {creator.roles.join(', ')}</span>
+      <span className="text-[var(--theme-text-dim)]"> · {creator.roles.join(', ')}</span>
     ) : null
 
   if (!key) {
     return (
-      <p className="text-xs text-stone-300">
+      <p className="text-xs text-[var(--theme-text-primary)]">
         <span className="font-bold">{creator.name}</span>
         {roles}
       </p>
@@ -26,10 +26,10 @@ export function CreatorName({ creator }: { creator: ComicVineCreator }) {
   }
 
   return (
-    <p className="text-xs text-stone-300">
+    <p className="text-xs text-[var(--theme-text-primary)]">
       <Link
         to={creatorRoutePath(key)}
-        className="font-bold text-amber-500 hover:text-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded"
+        className="font-bold text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
         aria-label={`View creator ${creator.name}`}
       >
         {creator.name}

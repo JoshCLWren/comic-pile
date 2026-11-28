@@ -179,13 +179,13 @@ export function ComicPillar({
                 showStatus={false}
               />
               {storyTitle ? (
-                <p data-testid="comic-story-title" className="text-sm font-semibold leading-snug text-stone-300 break-words">
+                <p data-testid="comic-story-title" className="text-sm font-semibold leading-snug text-[var(--theme-text-primary)] break-words">
                   {storyTitle}
                 </p>
               ) : null}
               <p
                 data-testid="comic-progress-line"
-                className="text-[11px] font-bold text-stone-500"
+                className="text-[11px] font-bold text-[var(--theme-text-dim)]"
               >
                 {progressItems.map((item, index) => (
                   <span key={item} className="whitespace-nowrap">

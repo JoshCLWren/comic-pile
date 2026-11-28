@@ -41,7 +41,7 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
         <section className="space-y-4" aria-labelledby="finished-series-heading">
           <h2
             id="finished-series-heading"
-            className="text-lg md:text-xl font-black uppercase text-stone-300"
+            className="text-lg md:text-xl font-black uppercase text-[var(--theme-text-primary)]"
           >
             Finished Series
           </h2>
@@ -70,11 +70,11 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
         <div className="min-w-0">
           <h2
             id="finished-series-heading"
-            className="text-lg md:text-xl font-black uppercase text-stone-300"
+            className="text-lg md:text-xl font-black uppercase text-[var(--theme-text-primary)]"
           >
             Finished Series
           </h2>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+          <p className="text-[10px] font-bold text-[var(--theme-text-dim)] uppercase tracking-widest">
             {threads.length} finished series loaded{hasNextPage ? ', more available' : ''}
           </p>
         </div>
@@ -84,7 +84,7 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
               <button
                 type="button"
                 onClick={() => handleReactivate(null)}
-                className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+                className="h-8 md:h-10 px-3 md:px-4 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
               >
                 Add back to queue
               </button>
@@ -93,7 +93,7 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
                 onClick={() => setIsExpanded((expanded) => !expanded)}
                 aria-expanded={isExpanded}
                 aria-controls="completed-thread-list"
-                className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+                className="h-8 md:h-10 px-3 md:px-4 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
               >
                 {isExpanded ? 'Hide Finished' : `Show Finished (${loadedCount})`}
               </button>
@@ -123,8 +123,8 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
             <div key={thread.id} className="surface-panel p-4 space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
-                  <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
+                  <p className="text-sm font-black text-[var(--theme-text-primary)] truncate">{thread.title}</p>
+                  <p className="text-[8px] font-black text-[var(--theme-text-dim)] uppercase tracking-widest">
                     {thread.format}
                   </p>
                 </div>
@@ -132,12 +132,12 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
                   type="button"
                   onClick={() => handleReactivate(thread)}
                   aria-label={`Add ${thread.title} back to queue`}
-                  className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+                  className="px-3 py-1 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-lg text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
                 >
                   Add back to queue
                 </button>
               </div>
-              {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
+              {thread.notes && <p className="text-xs text-[var(--theme-text-dim)]">{thread.notes}</p>}
             </div>
           ))}
         </div>
@@ -146,7 +146,7 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
             type="button"
             disabled={isLoadingMore}
             onClick={() => { void onLoadMore() }}
-            className="mx-auto block rounded-md bg-white/5 border border-white/10 px-4 py-2 text-sm font-semibold text-stone-300 hover:bg-white/10 disabled:opacity-50"
+            className="mx-auto block rounded-md bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] px-4 py-2 text-sm font-semibold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
           >
             {isLoadingMore ? 'Loading more finished series...' : 'Load more finished series'}
           </button>

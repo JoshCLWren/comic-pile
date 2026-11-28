@@ -29,7 +29,7 @@ export function IssuePreviewErrorModal({
         <p className="text-sm text-[var(--theme-text-muted)]" role="alert">
           Could not preview <span className="font-bold">{range}</span>: {message}
         </p>
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-[var(--theme-text-muted)]">
           Nothing was changed. You can retry the preview or cancel.
         </p>
         <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
@@ -44,7 +44,7 @@ export function IssuePreviewErrorModal({
             type="button"
             onClick={onRetry}
             disabled={isPreviewing || !range.trim()}
-            className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+            className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
             data-testid="retry-preview-add"
           >
             Retry preview

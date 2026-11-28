@@ -49,7 +49,7 @@ export function IssueCreatePreviewModal({
         </p>
 
         <div className="space-y-2">
-          <div className={`rounded-xl border p-3 ${state.selectedStrategy === 'safe_default' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
+          <div className={`rounded-xl border p-3 ${state.selectedStrategy === 'safe_default' ? 'border-[var(--theme-primary-action)]' : 'border-[var(--theme-border)]'}`}>
             <label className="flex items-start gap-2 cursor-pointer">
               <input
                 type="radio"
@@ -60,7 +60,7 @@ export function IssueCreatePreviewModal({
               />
               <div className="text-sm">
                 <div className="font-bold">Safe default</div>
-                <div className="text-xs text-stone-400">
+                <div className="text-xs text-[var(--theme-text-muted)]">
                   {response.default_outcome.preserves_existing_relative_order
                     ? 'Preserves existing relative issue order.'
                     : 'May change existing relative issue order.'}
@@ -71,7 +71,7 @@ export function IssueCreatePreviewModal({
                   </div>
                 )}
                 {response.default_outcome.graph.cycles.length > 0 && (
-                  <div className="text-xs text-stone-400 mt-1 space-y-1" data-testid="safe-default-cycle-path">
+                  <div className="text-xs text-[var(--theme-text-muted)] mt-1 space-y-1" data-testid="safe-default-cycle-path">
                     {response.default_outcome.graph.cycles.map((cycle, idx) => (
                       <div key={idx}>
                         {cycle.edges.map((e, i) => (
@@ -89,7 +89,7 @@ export function IssueCreatePreviewModal({
           </div>
 
           {response.numeric_resort_outcome && (
-            <div className={`rounded-xl border p-3 ${state.selectedStrategy === 'numeric_resort' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
+            <div className={`rounded-xl border p-3 ${state.selectedStrategy === 'numeric_resort' ? 'border-[var(--theme-primary-action)]' : 'border-[var(--theme-border)]'}`}>
               <label className="flex items-start gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -100,7 +100,7 @@ export function IssueCreatePreviewModal({
                 />
                 <div className="text-sm">
                   <div className="font-bold">Numeric resort (explicit)</div>
-                  <div className="text-xs text-stone-400">
+                  <div className="text-xs text-[var(--theme-text-muted)]">
                     Re-seats ordinary numeric issues in numeric order. Review before saving.
                   </div>
                   {!response.numeric_resort_outcome.can_commit && (
@@ -109,7 +109,7 @@ export function IssueCreatePreviewModal({
                     </div>
                   )}
                   {response.numeric_resort_outcome.graph.cycles.length > 0 && (
-                    <div className="text-xs text-stone-400 mt-1 space-y-1" data-testid="numeric-resort-cycle-path">
+                    <div className="text-xs text-[var(--theme-text-muted)] mt-1 space-y-1" data-testid="numeric-resort-cycle-path">
                       {response.numeric_resort_outcome.graph.cycles.map((cycle, idx) => (
                         <div key={idx}>
                           {cycle.edges.map((e, i) => (
@@ -136,16 +136,16 @@ export function IssueCreatePreviewModal({
 
         <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2" data-testid="preview-before-after">
           <div>
-            <div className="font-bold text-stone-400 mb-1">Before</div>
-            <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
+            <div className="font-bold text-[var(--theme-text-muted)] mb-1">Before</div>
+            <div className="max-h-40 overflow-auto rounded-lg border border-[var(--theme-border)] p-2 space-y-1">
               {(state.selectedStrategy === 'numeric_resort' ? response.numeric_resort_outcome?.before : response.default_outcome.before)?.map((item, idx) => (
                 <PreviewIssueRow key={`${item.issue_id}-${item.issue_number}-${idx}`} item={item} />
               ))}
             </div>
           </div>
           <div>
-            <div className="font-bold text-stone-400 mb-1">After</div>
-            <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
+            <div className="font-bold text-[var(--theme-text-muted)] mb-1">After</div>
+            <div className="max-h-40 overflow-auto rounded-lg border border-[var(--theme-border)] p-2 space-y-1">
               {(state.selectedStrategy === 'numeric_resort' ? response.numeric_resort_outcome?.after : response.default_outcome.after)?.map((item, idx) => (
                 <PreviewIssueRow key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} item={item} />
               ))}
@@ -169,7 +169,7 @@ export function IssueCreatePreviewModal({
               : response.default_outcome.can_commit)
               || isPreviewing
               || hasUnacceptedAlias}
-            className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+            className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
             data-testid="confirm-preview-add"
           >
             Add issues

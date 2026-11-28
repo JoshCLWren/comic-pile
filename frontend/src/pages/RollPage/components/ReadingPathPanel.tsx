@@ -56,7 +56,7 @@ function StepStateMark({ status }: { status: string | null }) {
   }
   if (status === 'unread') {
     return (
-      <span className="whitespace-nowrap font-bold text-amber-300" style={readingContextType('metaLabel')}>
+      <span className="whitespace-nowrap font-bold text-[var(--theme-comic-accent)]" style={readingContextType('metaLabel')}>
         Not read yet
       </span>
     )

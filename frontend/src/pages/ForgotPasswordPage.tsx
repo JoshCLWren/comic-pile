@@ -108,7 +108,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+              className="w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold text-[var(--theme-primary-action-text)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
             >
               {isLoading ? 'Sending...' : 'Send Reset Link'}
             </button>
@@ -133,7 +133,7 @@ export default function ForgotPasswordPage() {
             <div className="space-y-3 pt-4 border-t border-[var(--theme-border)]">
               <Link
                 to="/login"
-                className="block w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] rounded-xl text-sm font-bold text-stone-900 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+                className="block w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] rounded-xl text-sm font-bold text-[var(--theme-primary-action-text)] transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
               >
                 Back to Sign In
               </Link>

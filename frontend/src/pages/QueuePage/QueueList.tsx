@@ -83,18 +83,18 @@ export function QueueList({
   if (isSearching && filteredThreads.length === 0) {
     const hasOtherMatches = completedMatches.length > 0 || excludedMatches.length > 0
     return (
-      <div className="text-center text-stone-500 space-y-4" data-testid="queue-search-empty">
+      <div className="text-center text-[var(--theme-text-dim)] space-y-4" data-testid="queue-search-empty">
         <p>No active series match your search.</p>
         {hasOtherMatches ? (
           <div className="space-y-3 text-left max-w-xl mx-auto">
-            <p className="text-sm text-stone-400">
+            <p className="text-sm text-[var(--theme-text-muted)]">
               Found in completed or removed series:
             </p>
             {completedMatches.map((match) => (
               <div key={`completed-${match.id}`} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2">
                 <div>
-                  <p className="text-sm font-semibold text-stone-200">{match.title}</p>
-                  <p className="text-xs text-stone-500">Completed</p>
+                  <p className="text-sm font-semibold text-[var(--theme-text-primary)]">{match.title}</p>
+                  <p className="text-xs text-[var(--theme-text-dim)]">Completed</p>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -117,8 +117,8 @@ export function QueueList({
             {excludedMatches.map((match) => (
               <div key={`excluded-${match.id}`} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2">
                 <div>
-                  <p className="text-sm font-semibold text-stone-200">{match.title}</p>
-                  <p className="text-xs text-stone-500">Removed</p>
+                  <p className="text-sm font-semibold text-[var(--theme-text-primary)]">{match.title}</p>
+                  <p className="text-xs text-[var(--theme-text-dim)]">Removed</p>
                 </div>
                 <button
                   type="button"
@@ -131,7 +131,7 @@ export function QueueList({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-stone-400">
+          <p className="text-sm text-[var(--theme-text-muted)]">
             No completed or removed series match this search either.
           </p>
         )}
@@ -149,10 +149,10 @@ export function QueueList({
           🎲
         </div>
         <div className="mt-4 space-y-1">
-          <p className="text-base font-bold text-stone-300">
+          <p className="text-base font-bold text-[var(--theme-text-primary)]">
             Nothing to roll yet
           </p>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-[var(--theme-text-dim)]">
             Your reading queue is empty — add some comic series to get started.
           </p>
         </div>
@@ -161,7 +161,7 @@ export function QueueList({
             type="button"
             onClick={onAddSeries}
             data-testid="queue-empty-add-series"
-            className="mt-4 h-11 min-h-[44px] w-full sm:w-auto sm:min-w-52 px-5 rounded-xl bg-[var(--theme-primary-action)] text-sm font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-bg-page)]"
+            className="mt-4 h-11 min-h-[44px] w-full sm:w-auto sm:min-w-52 px-5 rounded-xl bg-[var(--theme-primary-action)] text-sm font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-bg-page)]"
           >
             Add Series
           </button>

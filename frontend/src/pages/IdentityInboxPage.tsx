@@ -159,7 +159,7 @@ function CandidateCard({
             type="button"
             onClick={() => onConfirm(candidate.external_identity_id)}
             disabled={isConfirming || candidate.status === 'confirmed'}
-            className="px-2.5 py-1 text-xs font-semibold rounded-md bg-[var(--theme-primary-action)] text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-2.5 py-1 text-xs font-semibold rounded-md bg-[var(--theme-primary-action)] text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {candidate.status === 'confirmed'
               ? 'Confirmed'

@@ -151,7 +151,7 @@ export function CreatorMetricDrilldownModal({
                 onClick={() => handleRoleChange(role)}
                 className={`px-3 py-1 text-xs rounded-full transition-colors ${
                   currentParams.role === role
-                    ? 'bg-[var(--theme-personal-accent)] text-white'
+                    ? 'bg-[var(--theme-personal-accent)] text-[var(--theme-text-primary)]'
                     : 'bg-[var(--theme-bg-panel)] text-[var(--theme-text-primary)] border border-[var(--theme-border)]'
                 }`}
               >
@@ -172,7 +172,7 @@ export function CreatorMetricDrilldownModal({
                 onClick={() => handleRatingValueChange(rating)}
                 className={`px-3 py-1 text-xs rounded-full transition-colors ${
                   currentParams.ratingValue === rating
-                    ? 'bg-[var(--theme-personal-accent)] text-white'
+                    ? 'bg-[var(--theme-personal-accent)] text-[var(--theme-text-primary)]'
                     : 'bg-[var(--theme-bg-panel)] text-[var(--theme-text-primary)] border border-[var(--theme-border)]'
                 }`}
               >

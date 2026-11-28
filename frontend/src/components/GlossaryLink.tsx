@@ -21,7 +21,7 @@ export default function GlossaryLink({ id, children }: GlossaryLinkProps) {
   return (
     <Link
       to={`/glossary#${id}`}
-      className="font-bold text-amber-400 underline underline-offset-2 hover:text-amber-300"
+      className="font-bold text-[var(--theme-comic-accent)] underline underline-offset-2 hover:text-[var(--theme-comic-accent)]"
     >
       {children}
     </Link>

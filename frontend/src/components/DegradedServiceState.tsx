@@ -59,7 +59,7 @@ export function DegradedServiceState({
             <button
               onClick={onRetry}
               disabled={isRetrying}
-              className="inline-flex items-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--theme-primary-action-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-medium text-[var(--theme-text-primary)] transition-colors hover:bg-[var(--theme-primary-action-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ArrowPathIcon
                 className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`}

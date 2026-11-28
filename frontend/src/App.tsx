@@ -444,7 +444,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   const location = useLocation()
   
   if (authState.isLoading) {
-    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
+    return <div className="flex min-h-screen items-center justify-center text-center text-[var(--theme-text-dim)]" data-app-shell-ready>Checking authentication...</div>
   }
   
   if (authState.status === 'unauthenticated') {
@@ -464,7 +464,7 @@ function PublicRoute({ children }: { children: ReactNode }) {
   const location = useLocation()
   
   if (authState.isLoading) {
-    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Loading...</div>
+    return <div className="flex min-h-screen items-center justify-center text-center text-[var(--theme-text-dim)]" data-app-shell-ready>Loading...</div>
   }
   
   if (authState.status === 'authenticated') {
@@ -478,7 +478,7 @@ function NotFoundRoute({ children }: { children: ReactNode }) {
   const { authState } = useAuth()
   
   if (authState.isLoading) {
-    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Loading...</div>
+    return <div className="flex min-h-screen items-center justify-center text-center text-[var(--theme-text-dim)]" data-app-shell-ready>Loading...</div>
   }
   
   // For both authenticated and unauthenticated users, show the NotFoundPage
@@ -503,7 +503,7 @@ function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }
   const { authState } = useAuth()
 
   if (authState.isLoading) {
-    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
+    return <div className="flex min-h-screen items-center justify-center text-center text-[var(--theme-text-dim)]" data-app-shell-ready>Checking authentication...</div>
   }
 
   // Only a definitively unauthenticated visitor sees the logged-out landing page.
@@ -561,7 +561,7 @@ function AppRoutes() {
   const isAuthenticated = authState.status === 'authenticated'
 
   return (
-    <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
+    <Suspense fallback={<div className="text-center text-[var(--theme-text-dim)]">Loading page...</div>}>
       <Seo />
       <RouteChunkPrefetcher enabled={isAuthenticated} />
       <Routes>

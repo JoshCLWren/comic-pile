@@ -558,9 +558,9 @@ export default function ComicVineSearchDialog({
 
         {step === 'search' && (
           <>
-            <p className="text-sm text-stone-400">
+            <p className="text-sm text-[var(--theme-text-muted)]">
               Search for the correct ComicVine series for{' '}
-              <span className="font-bold text-stone-200">
+              <span className="font-bold text-[var(--theme-text-primary)]">
                 {threadTitle}
                 {targetIssueLabel ? ` ${targetIssueLabel}` : ''}
               </span>
@@ -573,15 +573,15 @@ export default function ComicVineSearchDialog({
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search series title or paste a ComicVine URL"
-                className="w-full min-h-11 rounded-xl px-4 pr-10 text-sm text-stone-100 bg-stone-800 border border-stone-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+                className="w-full min-h-11 rounded-xl px-4 pr-10 text-sm text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] focus:border-[var(--theme-comic-accent)] focus:ring-1 focus:ring-[var(--theme-focus-ring)] outline-none transition"
               />
               {searchLoading && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-[var(--theme-comic-accent)]/30 border-t-amber-500 rounded-full animate-spin" />
                 </div>
               )}
             </div>
-            <p className="text-xs text-stone-500" data-testid="comicvine-resolve-hint">
+            <p className="text-xs text-[var(--theme-text-dim)]" data-testid="comicvine-resolve-hint">
               You can also paste a ComicVine issue or volume URL (comicvine.gamespot.com) to skip searching.
             </p>
             {seriesResults.length > 0 && (
@@ -592,7 +592,7 @@ export default function ComicVineSearchDialog({
                     type="button"
                     onClick={() => handleSelectSeries(series)}
                     aria-label={seriesAccessibleName(series)}
-                    className="w-full text-left p-3 rounded-xl bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition group"
+                    className="w-full text-left p-3 rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 hover:border-[var(--theme-comic-accent)]/50 hover:bg-[var(--theme-bg-hover)] transition group"
                   >
                     <div className="flex items-start gap-3">
                       {series.image_url && (
@@ -603,10 +603,10 @@ export default function ComicVineSearchDialog({
                         />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-stone-100 group-hover:text-amber-300 transition truncate">
+                        <p className="text-sm font-bold text-[var(--theme-text-primary)] group-hover:text-[var(--theme-comic-accent)] transition truncate">
                           {series.name}
                         </p>
-                        <p className="text-sm font-medium text-stone-300">
+                        <p className="text-sm font-medium text-[var(--theme-text-primary)]">
                           {seriesMetaText(series)}
                         </p>
                       </div>
@@ -619,7 +619,7 @@ export default function ComicVineSearchDialog({
                     onClick={handleLoadMore}
                     disabled={searchLoading}
                     data-testid="comicvine-load-more"
-                    className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
+                    className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 hover:border-[var(--theme-comic-accent)]/50 hover:bg-[var(--theme-bg-hover)] transition disabled:opacity-50"
                   >
                     {searchLoading ? 'Loading...' : 'Load more'}
                   </button>
@@ -627,17 +627,17 @@ export default function ComicVineSearchDialog({
               </div>
             )}
             {!query.trim() && (
-              <p className="text-sm text-stone-400 text-center py-4">
+              <p className="text-sm text-[var(--theme-text-muted)] text-center py-4">
                 Type a series name to search ComicVine
               </p>
             )}
             {query.trim() && seriesResults.length === 0 && searchPhase === 'idle' && (
-              <p className="text-sm text-stone-400 text-center py-4">
+              <p className="text-sm text-[var(--theme-text-muted)] text-center py-4">
                 Search ComicVine for the correct series
               </p>
             )}
             {query.trim() && seriesResults.length === 0 && searchPhase === 'ready' && (
-              <p className="text-sm text-stone-300 text-center py-4">
+              <p className="text-sm text-[var(--theme-text-primary)] text-center py-4">
                 No series found. Try a different search term.
               </p>
             )}
@@ -662,28 +662,28 @@ export default function ComicVineSearchDialog({
                   setError(null)
                   setSearchPhase(seriesResults.length > 0 ? 'ready' : 'idle')
                 }}
-                className="text-sm text-amber-500 hover:text-amber-400 font-bold"
+                className="text-sm text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] font-bold"
               >
                 ← Back to search
               </button>
-              <span className="text-xs text-stone-500">·</span>
-              <span className="text-sm text-stone-300 truncate">
+              <span className="text-xs text-[var(--theme-text-dim)]">·</span>
+              <span className="text-sm text-[var(--theme-text-primary)] truncate">
                 {selectedSeries.name}
                 {seriesMetaText(selectedSeries) && ` (${seriesMetaText(selectedSeries)})`}
               </span>
             </div>
             {issueNumber && (
               <p
-                className="text-sm text-stone-300 bg-stone-800/40 border border-stone-700/40 rounded-lg px-3 py-2"
+                className="text-sm text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)]/40 border border-[var(--theme-border)]/40 rounded-lg px-3 py-2"
                 data-testid="rematch-issue-context"
               >
-                Looking for <span className="font-bold text-stone-100">{targetIssueLabel}</span> — select the
+                Looking for <span className="font-bold text-[var(--theme-text-primary)]">{targetIssueLabel}</span> — select the
                 matching issue below to confirm.
               </p>
             )}
             {issuesLoading ? (
               <div className="flex justify-center py-8">
-                <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-[var(--theme-comic-accent)]/30 border-t-amber-500 rounded-full animate-spin" />
               </div>
             ) : issueCandidates.length > 0 ? (
               <div className="space-y-2 max-h-96 overflow-y-auto overscroll-contain">
@@ -692,7 +692,7 @@ export default function ComicVineSearchDialog({
                     key={issue.comicvine_issue_id}
                     type="button"
                     onClick={() => handleSelectIssue(issue)}
-                    className="w-full text-left p-3 rounded-xl bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition group"
+                    className="w-full text-left p-3 rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 hover:border-[var(--theme-comic-accent)]/50 hover:bg-[var(--theme-bg-hover)] transition group"
                   >
                     <div className="flex items-center gap-3">
                       {issue.image_url && (
@@ -703,12 +703,12 @@ export default function ComicVineSearchDialog({
                         />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-stone-100 group-hover:text-amber-300 transition">
+                        <p className="text-sm font-bold text-[var(--theme-text-primary)] group-hover:text-[var(--theme-comic-accent)] transition">
                           {issue.issue_number ? `#${issue.issue_number}` : 'Unknown'}
-                          {issue.name && <span className="font-normal text-stone-300 ml-2">{issue.name}</span>}
+                          {issue.name && <span className="font-normal text-[var(--theme-text-primary)] ml-2">{issue.name}</span>}
                         </p>
                         {issue.cover_date && (
-                          <p className="text-xs text-stone-400">{issue.cover_date}</p>
+                          <p className="text-xs text-[var(--theme-text-muted)]">{issue.cover_date}</p>
                         )}
                       </div>
                     </div>
@@ -716,7 +716,7 @@ export default function ComicVineSearchDialog({
                 ))}
               </div>
             ) : issuesPhase === 'ready' ? (
-              <p className="text-sm text-stone-400 text-center py-4">
+              <p className="text-sm text-[var(--theme-text-muted)] text-center py-4">
                 {issueNumber
                   ? `No match for ${targetIssueLabel} in this series.`
                   : 'No issues found in this series.'}
@@ -738,12 +738,12 @@ export default function ComicVineSearchDialog({
                   setSelectedIssue(null)
                 }
               }}
-              className="text-sm text-amber-500 hover:text-amber-400 font-bold"
+              className="text-sm text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] font-bold"
             >
               {directIssue ? '← Back to search' : '← Back to issues'}
             </button>
-            <div className="p-4 rounded-xl bg-stone-800/50 border border-stone-700/50 space-y-3" data-testid="comicvine-confirm-card">
-              <p className="text-xs font-black uppercase tracking-wider text-stone-400">Selected match</p>
+            <div className="p-4 rounded-xl bg-[var(--theme-bg-panel)]/50 border border-[var(--theme-border)]/50 space-y-3" data-testid="comicvine-confirm-card">
+              <p className="text-xs font-black uppercase tracking-wider text-[var(--theme-text-muted)]">Selected match</p>
               <div className="flex items-start gap-3">
                 {confirmIssue.image_url && (
                   <ImageWithLoading
@@ -753,17 +753,17 @@ export default function ComicVineSearchDialog({
                   />
                 )}
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-stone-100">{confirmSeriesName}</p>
-                  <p className="text-sm text-stone-300">
+                  <p className="text-sm font-bold text-[var(--theme-text-primary)]">{confirmSeriesName}</p>
+                  <p className="text-sm text-[var(--theme-text-primary)]">
                     {confirmIssue.issue_number ? `#${confirmIssue.issue_number}` : ''}
                     {confirmIssue.name && ` — ${confirmIssue.name}`}
                   </p>
                   {confirmIssue.cover_date && (
-                    <p className="text-xs text-stone-400 mt-1">{confirmIssue.cover_date}</p>
+                    <p className="text-xs text-[var(--theme-text-muted)] mt-1">{confirmIssue.cover_date}</p>
                   )}
                 </div>
               </div>
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-[var(--theme-text-muted)]">
                 {directIssue
                   ? `You pasted the ComicVine URL for this issue. Confirming will map ${threadTitle} ${targetIssueLabel} to it.`
                   : `This will confirm ${threadTitle} ${targetIssueLabel} maps to this ComicVine issue.`}
@@ -773,7 +773,7 @@ export default function ComicVineSearchDialog({
               type="button"
               onClick={handleConfirm}
               disabled={isConfirming}
-              className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
+              className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-[var(--theme-primary-action-text)] bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] transition disabled:opacity-50"
             >
               {isConfirming ? 'Confirming...' : 'Confirm Identity'}
             </button>

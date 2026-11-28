@@ -62,7 +62,7 @@ function LookupError({
       <button
         type="button"
         onClick={retry}
-        className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+        className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
       >
         Retry
       </button>
@@ -242,7 +242,7 @@ export function CblComicFinder({
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid={`${testIdPrefix}-open`}
-        className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+        className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
       >
         Find CBLs
       </button>
@@ -358,7 +358,7 @@ export function CblReadingListFinder({
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         data-testid={`${testIdPrefix}-open`}
-        className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+        className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
       >
         Find CBLs
       </button>

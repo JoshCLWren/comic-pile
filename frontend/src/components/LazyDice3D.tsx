@@ -13,7 +13,7 @@ const Dice3D = lazy(async () => ({
  */
 export default function LazyDice3D(props: Dice3DProps) {
   return (
-    <Suspense fallback={<div className="w-full h-full rounded-full bg-white/5 animate-pulse"></div>}>
+    <Suspense fallback={<div className="w-full h-full rounded-full bg-[var(--theme-bg-hover)] animate-pulse"></div>}>
       <Dice3D {...props} />
     </Suspense>
   )

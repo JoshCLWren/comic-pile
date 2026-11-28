@@ -59,10 +59,10 @@ export function RollRecoveryCard({
       <section
         aria-label="Blocked roll recovery"
         aria-busy="true"
-        className="mx-auto w-full max-w-xl rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 shadow-lg"
+        className="mx-auto w-full max-w-xl rounded-2xl border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-comic-accent)]/20 p-4 shadow-lg"
       >
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500">Roll blocked</p>
-        <p className="mt-2 text-sm text-stone-300">Checking what needs to be read first…</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">Roll blocked</p>
+        <p className="mt-2 text-sm text-[var(--theme-text-primary)]">Checking what needs to be read first…</p>
       </section>
     )
   }
@@ -75,8 +75,8 @@ export function RollRecoveryCard({
         className="mx-auto w-full max-w-xl rounded-2xl border border-red-500/30 bg-red-950/20 p-4 shadow-lg"
       >
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400">Recovery unavailable</p>
-        <p className="mt-2 text-sm text-stone-300">{errorMessage}</p>
-        <p className="mt-2 text-xs text-stone-400">Your original roll is still preserved.</p>
+        <p className="mt-2 text-sm text-[var(--theme-text-primary)]">{errorMessage}</p>
+        <p className="mt-2 text-xs text-[var(--theme-text-muted)]">Your original roll is still preserved.</p>
       </section>
     )
   }
@@ -92,19 +92,19 @@ export function RollRecoveryCard({
   return (
     <section
       aria-label="Blocked roll recovery"
-      className="mx-auto w-full max-w-xl rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 shadow-lg"
+      className="mx-auto w-full max-w-xl rounded-2xl border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-comic-accent)]/20 p-4 shadow-lg"
     >
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500">Roll blocked</p>
-      <h2 className="mt-1 text-lg font-black text-stone-100">{recovery.original_thread_title}</h2>
-      <p className="mt-2 text-sm text-stone-300">
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">Roll blocked</p>
+      <h2 className="mt-1 text-lg font-black text-[var(--theme-text-primary)]">{recovery.original_thread_title}</h2>
+      <p className="mt-2 text-sm text-[var(--theme-text-primary)]">
         Your original roll is still waiting. {primaryBlocker
           ? <><strong>{primaryBlocker.source_label}</strong> has to be read first.</>
           : <>A continuity prerequisite has to be completed first.</>}
       </p>
 
       {chains.length > 0 && (
-        <details className="mt-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-          <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-stone-300">
+        <details className="mt-4 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/20 px-3 py-2">
+          <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-[var(--theme-text-primary)]">
             Why is this blocked? ({chains.length} {chains.length === 1 ? 'path' : 'paths'})
           </summary>
           <div className="mt-3 space-y-3">
@@ -114,16 +114,16 @@ export function RollRecoveryCard({
                 aria-label={`Dependency path ${chainIndex + 1}`}
                 className="space-y-1"
               >
-                <li className="text-xs font-bold text-stone-400">{recovery.original_thread_title}</li>
+                <li className="text-xs font-bold text-[var(--theme-text-muted)]">{recovery.original_thread_title}</li>
                 {chain.map((node, index) => (
                   <li
                     key={`${node.node_type}-${node.node_id}-${index}`}
-                    className="flex items-center gap-2 pl-2 text-sm text-stone-200"
+                    className="flex items-center gap-2 pl-2 text-sm text-[var(--theme-text-primary)]"
                   >
-                    <span aria-hidden="true" className="text-stone-600">↳</span>
+                    <span aria-hidden="true" className="text-[var(--theme-text-muted)]">↳</span>
                     <span className="min-w-0 flex-1">
                       {node.label}
-                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">
                         {node.node_type}
                       </span>
                     </span>
@@ -143,7 +143,7 @@ export function RollRecoveryCard({
       {diagnostics.length > 0 && (
         <div role="alert" className="mt-3 rounded-xl border border-red-500/30 bg-red-950/20 px-3 py-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Continuity warning</p>
-          <ul className="mt-1 space-y-1 text-xs text-stone-300">
+          <ul className="mt-1 space-y-1 text-xs text-[var(--theme-text-primary)]">
             {diagnostics.map((diagnostic) => (
               <li key={`${diagnostic.code}-${diagnostic.node_type}-${diagnostic.node_id}`}>
                 {diagnosticMessages[diagnostic.code]}
@@ -155,7 +155,7 @@ export function RollRecoveryCard({
 
       {recommendations.length > 0 ? (
         <div className="mt-4 space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">
+          <p className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
             {primaryBlocker?.source_type === 'issue' || recommendations.length === 1
               ? 'Read this first'
               : 'Readable prerequisites'}
@@ -167,26 +167,26 @@ export function RollRecoveryCard({
             const content = (
               <>
                 <span className="min-w-0">
-                  <span className="block text-sm font-black text-stone-100">{prerequisite.label}</span>
+                  <span className="block text-sm font-black text-[var(--theme-text-primary)]">{prerequisite.label}</span>
                   {isRecommendedFirst && (
-                    <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                    <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wider text-[var(--theme-comic-accent)]">
                       Recommended first
                     </span>
                   )}
                 </span>
                 {readable ? (
-                  <span className="shrink-0 text-xs font-black uppercase tracking-widest text-amber-400">
+                  <span className="shrink-0 text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)]">
                     Read now
                   </span>
                 ) : (
-                  <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-stone-500">
+                  <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
                     Blocked
                   </span>
                 )}
               </>
             )
             const rowClass =
-              'flex w-full flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
+              'flex w-full flex-col gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
 
             const canonicalIssueId = canonicalPrerequisiteIssueId(
               prerequisite.node_type,
@@ -200,7 +200,7 @@ export function RollRecoveryCard({
                     type="button"
                     onClick={() => onReadNow?.(prerequisite)}
                     disabled={isPending}
-                    className={`${rowClass} transition-colors hover:bg-white/10 disabled:opacity-60`}
+                    className={`${rowClass} transition-colors hover:bg-[var(--theme-bg-hover)] disabled:opacity-60`}
                   >
                     {content}
                   </button>
@@ -228,7 +228,7 @@ export function RollRecoveryCard({
           })}
         </div>
       ) : (
-        <p className="mt-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-stone-400">
+        <p className="mt-4 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/20 px-3 py-2 text-xs text-[var(--theme-text-muted)]">
           No readable prerequisite is available yet. Your original roll will stay preserved while the dependency is blocked.
         </p>
       )}

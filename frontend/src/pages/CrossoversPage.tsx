@@ -351,7 +351,7 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
           <label htmlFor="crossover-name" className="block text-sm font-medium text-[var(--theme-text-primary)]">New crossover</label>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input id="crossover-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2.5 text-[var(--theme-text-primary)]" placeholder="Age of Apocalypse" disabled={createMutation.isPending || isLoadingGroups} />
-            <button type="submit" disabled={createMutation.isPending || isLoadingGroups} className="rounded-xl bg-[var(--theme-primary-action)] px-4 py-2.5 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{createMutation.isPending ? 'Creating…' : 'Create crossover'}</button>
+            <button type="submit" disabled={createMutation.isPending || isLoadingGroups} className="rounded-xl bg-[var(--theme-primary-action)] px-4 py-2.5 font-bold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{createMutation.isPending ? 'Creating…' : 'Create crossover'}</button>
           </div>
           {createError && <p role="alert" className="text-sm text-[var(--theme-danger)]">{createError}</p>}
         </form>
@@ -385,7 +385,7 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
                       </span>
                     </button>
                     <div className="flex gap-2">
-                      <Link to={`/crossovers/${group.id}`} className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1 text-sm font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)]">View</Link>
+                      <Link to={`/crossovers/${group.id}`} className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1 text-sm font-bold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)]">View</Link>
                       {isExpanded && (
                         <>
                           <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={isAnyMutationPending}>Rename</button>
@@ -431,7 +431,7 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
                         <ContinuityThreadSelector threads={threads} value={memberThread} onChange={setMemberThread} label="Current thread of series" placeholder="Search comics by title" isLoading={isLoadingThreads} error={threadLoadError} disabled={isAnyMutationPending} />
                         <p className="mt-1 text-xs text-[var(--theme-text-dim)]">Adds one thread membership for the series. Use the issue range form below to add specific issues.</p>
                       </div>
-                      <button type="submit" disabled={isAnyMutationPending || !memberThread} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{addMemberMutation.isPending ? 'Saving…' : 'Add thread'}</button>
+                      <button type="submit" disabled={isAnyMutationPending || !memberThread} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{addMemberMutation.isPending ? 'Saving…' : 'Add thread'}</button>
                     </form>
 
                     <form onSubmit={(event) => void addRange(event, group.id)} aria-label={`Add issue range to ${group.name}`} className="grid gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
@@ -439,7 +439,7 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
                       <div className="min-w-0">
                         {rangeThread ? <ContinuityIssueRangeSelector thread={rangeThread} issues={rangeIssues} value={rangeSelection} onChange={setRangeSelection} label={`Issues from ${rangeThread.title}`} isLoading={isLoadingRangeIssues} error={rangeLoadError} disabled={isAnyMutationPending} /> : <p className="text-xs text-[var(--theme-text-dim)]">Choose a comic series, then choose the first and last issue by comic issue number.</p>}
                       </div>
-                      <button type="submit" disabled={isAnyMutationPending || isLoadingRangeIssues || !rangeSelection} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{addRangeMutation.isPending ? 'Adding…' : 'Add range'}</button>
+                      <button type="submit" disabled={isAnyMutationPending || isLoadingRangeIssues || !rangeSelection} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{addRangeMutation.isPending ? 'Adding…' : 'Add range'}</button>
                     </form>
                     {membershipMessage && <p role="status" className="text-[var(--theme-personal-accent)]">{membershipMessage}</p>}
                   </div>

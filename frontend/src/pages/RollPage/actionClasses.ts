@@ -18,12 +18,12 @@
 /**
  * The dominant affirmative action for a Roll decision area. This is the only
  * element in the rating card allowed to keep uppercase letter-spaced type; the
- * muted gold fill plus the `text-stone-900` label match the die-view Roll CTA's
+ * muted gold fill plus the `text-[var(--theme-primary-action-text)]` label match the die-view Roll CTA's
  * established on-primary treatment so the whole screen has one primary look.
  */
 export const rollPrimaryActionClass = [
   'w-full min-h-11 rounded-xl border border-transparent bg-[var(--theme-primary-action)]',
-  'px-4 py-2.5 text-xs font-black uppercase tracking-[0.15em] text-stone-900',
+  'px-4 py-2.5 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-primary-action-text)]',
   'transition hover:bg-[var(--theme-primary-action-hover)] active:scale-[0.98]',
   'focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50',
 ].join(' ')
@@ -44,7 +44,7 @@ export const rollSecondaryActionClass = [
   'min-h-11 min-w-28 flex-1 rounded-xl border border-[var(--theme-border)]',
   'bg-[var(--theme-bg-panel)] px-4 py-3 text-sm font-semibold',
   'text-[var(--theme-text-primary)]',
-  'transition hover:bg-white/10',
+  'transition hover:bg-[var(--theme-bg-hover)]',
   'focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50',
 ].join(' ')
 
@@ -89,7 +89,7 @@ export function rollUtilityActionClass(status: 'idle' | 'copied' | 'failed' = 'i
 export const rollDialogSecondaryActionClass = [
   'rounded-lg border border-[var(--theme-border)] px-4 py-2 text-sm font-semibold',
   'text-[var(--theme-text-primary)]',
-  'transition-colors hover:bg-white/5 disabled:opacity-50',
+  'transition-colors hover:bg-[var(--theme-bg-hover)] disabled:opacity-50',
 ].join(' ')
 
 /**
@@ -97,7 +97,7 @@ export const rollDialogSecondaryActionClass = [
  * danger semantics; only its typography is demoted to ordinary sentence case.
  */
 export const rollDangerActionClass = [
-  'rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-semibold text-white',
+  'rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-semibold text-[var(--theme-text-primary)]',
   'transition-colors hover:bg-[var(--theme-danger-hover)] disabled:opacity-50',
 ].join(' ')
 

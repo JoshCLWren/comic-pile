@@ -46,7 +46,7 @@ export default function PlannerFooter({ editor, planId }: PlannerFooterProps) {
             type="button"
             onClick={() => void editor.save()}
             disabled={!editor.isDirty || editor.isSaving}
-            className="min-h-11 min-w-[11rem] rounded-xl bg-[var(--theme-primary-action)] px-8 font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-40 sm:flex-none"
+            className="min-h-11 min-w-[11rem] rounded-xl bg-[var(--theme-primary-action)] px-8 font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-40 sm:flex-none"
           >
             {editor.isSaving ? 'Saving…' : 'Save plan'}
           </button>

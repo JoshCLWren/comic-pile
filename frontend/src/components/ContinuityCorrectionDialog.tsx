@@ -170,15 +170,15 @@ export default function ContinuityCorrectionDialog({
       title="Correct Continuity"
       onClose={onClose}
       data-testid="continuity-correction-dialog"
-      overlayClassName="bg-black/70 surface-glass"
+      overlayClassName="bg-[var(--theme-bg-page)]/70 surface-glass"
     >
-      <section aria-labelledby="continuity-current-heading" className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-        <h3 id="continuity-current-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+      <section aria-labelledby="continuity-current-heading" className="rounded-2xl border border-[var(--theme-border)] bg-white/[0.04] p-3">
+        <h3 id="continuity-current-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-text-dim)]">
           Current Comic
         </h3>
-        <p className="mt-1 text-sm text-stone-200">
+        <p className="mt-1 text-sm text-[var(--theme-text-primary)]">
           {threadTitle}
-          {issueNumber != null ? <span className="text-amber-400"> #{issueNumber}</span> : null}
+          {issueNumber != null ? <span className="text-[var(--theme-comic-accent)]"> #{issueNumber}</span> : null}
         </p>
       </section>
 
@@ -188,11 +188,11 @@ export default function ContinuityCorrectionDialog({
             Verified connections
           </h3>
           {isResolvingConnected ? (
-            <p className="mt-2 text-[11px] text-stone-400" role="status">
+            <p className="mt-2 text-[11px] text-[var(--theme-text-muted)]" role="status">
               Resolving connected series…
             </p>
           ) : resolvedConnectedData?.length === 0 ? (
-            <p className="mt-2 text-[11px] text-stone-400" role="status">
+            <p className="mt-2 text-[11px] text-[var(--theme-text-muted)]" role="status">
               No connected series found.
             </p>
           ) : (
@@ -208,7 +208,7 @@ export default function ContinuityCorrectionDialog({
             </ul>
           )}
           {!isResolvingConnected && resolvedConnectedData && resolvedConnectedData.length > 0 && (
-            <p className="mt-2 text-[10px] font-bold text-stone-500">
+            <p className="mt-2 text-[10px] font-bold text-[var(--theme-text-dim)]">
               These will be added to the chosen crossover without re-searching.
             </p>
           )}
@@ -216,7 +216,7 @@ export default function ContinuityCorrectionDialog({
       ) : null}
 
       <fieldset className="space-y-3" disabled={isSaving}>
-        <legend className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">Crossover membership</legend>
+        <legend className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-text-dim)]">Crossover membership</legend>
         <div className="flex gap-2">
           {(['none', 'existing', 'new'] as const).map((option) => (
             <button
@@ -225,8 +225,8 @@ export default function ContinuityCorrectionDialog({
               onClick={() => setMode(option)}
               className={`flex-1 rounded-lg border py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
                 mode === option
-                  ? 'border-amber-600 bg-amber-600/20 text-amber-200'
-                  : 'border-white/10 bg-white/5 text-stone-400'
+                  ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-comic-accent)]/20 text-[var(--theme-comic-accent)]'
+                  : 'border-[var(--theme-border)] bg-[var(--theme-bg-hover)] text-[var(--theme-text-muted)]'
               }`}
               aria-pressed={mode === option}
             >
@@ -236,7 +236,7 @@ export default function ContinuityCorrectionDialog({
 
           {mode === 'existing' ? (
             <label className="block">
-              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">Existing crossover</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-text-dim)]">Existing crossover</span>
               <select
                 value={selectedGroupId ?? ''}
                 onChange={(event) => setSelectedGroupId(event.target.value ? Number(event.target.value) : null)}
@@ -255,7 +255,7 @@ export default function ContinuityCorrectionDialog({
 
           {mode === 'new' ? (
             <label className="block">
-              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">Crossover name</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-text-dim)]">Crossover name</span>
               <input
                 type="text"
                 value={newName}
@@ -268,7 +268,7 @@ export default function ContinuityCorrectionDialog({
             </label>
           ) : null}
 
-          <p className="text-[11px] font-bold text-stone-500">
+          <p className="text-[11px] font-bold text-[var(--theme-text-dim)]">
             {canSaveCurrentIssue
               ? `Adds issue ${issueNumber ?? '?'} to the chosen crossover.`
               : 'No specific issue is available to add.'}
@@ -300,7 +300,7 @@ export default function ContinuityCorrectionDialog({
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-wider text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500"
+            className="flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] py-3 text-xs font-black uppercase tracking-wider text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-bg-hover)] focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
           >
             Cancel
           </button>
@@ -308,7 +308,7 @@ export default function ContinuityCorrectionDialog({
             type="button"
             onClick={handleSaveMemberships}
             disabled={isSaving || !hasSomethingToAdd}
-            className="flex-1 rounded-xl border border-amber-600/50 bg-amber-600/20 py-3 text-xs font-black uppercase tracking-wider text-amber-200 transition hover:bg-amber-600/30 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+            className="flex-1 rounded-xl border border-[var(--theme-comic-accent)]/50 bg-[var(--theme-comic-accent)]/20 py-3 text-xs font-black uppercase tracking-wider text-[var(--theme-comic-accent)] transition hover:bg-[var(--theme-comic-accent)]/30 focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
             {isSaving ? 'Saving…' : 'Save Changes'}
           </button>

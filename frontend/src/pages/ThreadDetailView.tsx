@@ -496,11 +496,11 @@ export default function ThreadDetailView() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
             Thread Details
           </h1>
-          <p className="text-base font-semibold text-stone-500">
+          <p className="text-base font-semibold text-[var(--theme-text-dim)]">
             View thread information
           </p>
         </header>
-        <div className="text-center text-stone-500">
+        <div className="text-center text-[var(--theme-text-dim)]">
           {threadError ? getApiErrorDetail(threadError) : 'Thread not found'}
         </div>
       </div>
@@ -525,7 +525,7 @@ export default function ThreadDetailView() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase truncate">
             {thread.title}
           </h1>
-          <p className="text-sm font-medium text-stone-500">
+          <p className="text-sm font-medium text-[var(--theme-text-dim)]">
             {thread.format}
             {thread.last_rating != null && (
               <span className="ml-2 text-[var(--theme-personal-accent)]">
@@ -577,11 +577,11 @@ export default function ThreadDetailView() {
         {showReadingProgress && (
           <div className="surface-panel p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+              <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
                 Reading Progress
               </span>
               {progress.status === 'known' ? (
-                <span className="text-sm font-black text-amber-400">{progress.percentage}%</span>
+                <span className="text-sm font-black text-[var(--theme-comic-accent)]">{progress.percentage}%</span>
               ) : (
                 <span className="text-sm font-black text-[var(--theme-warning)]">
                   Unknown/inconsistent progress
@@ -590,13 +590,13 @@ export default function ThreadDetailView() {
             </div>
             {progress.status === 'known' ? (
               <>
-                <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-[var(--theme-bg-hover)] rounded-full h-2 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-[var(--theme-comic-accent)] to-[var(--theme-primary-action-hover)] transition-all duration-300"
                     style={{ width: `${progress.percentage}%` }}
                   />
                 </div>
-                <p className="text-xs text-stone-400">
+                <p className="text-xs text-[var(--theme-text-muted)]">
                   {progress.readCount} of {formatIssueCount(progress.totalIssues)} read
                 </p>
               </>
@@ -610,25 +610,25 @@ export default function ThreadDetailView() {
 
         {thread.notes && (
           <div className="surface-panel p-3 md:p-4 space-y-2">
-            <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+            <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
               Notes
             </span>
-            <p className="text-sm text-stone-300 whitespace-pre-wrap">{thread.notes}</p>
+            <p className="text-sm text-[var(--theme-text-primary)] whitespace-pre-wrap">{thread.notes}</p>
           </div>
         )}
 
         <div className="surface-panel p-3 md:p-4 space-y-2">
-          <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+          <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
             Dependencies
           </span>
           {connectedError && (
             <p className="text-xs text-red-400" role="alert">Unable to load dependencies.</p>
           )}
           {!connectedError && connectedPending && (
-            <p className="text-xs text-stone-500">Loading dependencies...</p>
+            <p className="text-xs text-[var(--theme-text-dim)]">Loading dependencies...</p>
           )}
           {!connectedError && !connectedPending && connectedThreads.length === 0 && (
-            <p className="text-xs text-stone-500">No recorded series prerequisites</p>
+            <p className="text-xs text-[var(--theme-text-dim)]">No recorded series prerequisites</p>
           )}
           {!connectedError && !connectedPending && connectedThreads.length > 0 && (
             <div className="space-y-3">
@@ -671,7 +671,7 @@ export default function ThreadDetailView() {
                     )}
 
                     <div className="space-y-1">
-                      <h3 className="text-base font-bold text-stone-400">Recorded incoming prerequisites</h3>
+                      <h3 className="text-base font-bold text-[var(--theme-text-muted)]">Recorded incoming prerequisites</h3>
                       {blockedBy.length === 0 && (() => {
                         const circularBlockers = circular.filter((t) => t.connection_type.includes('blocked_by'))
                         const readingBoundary = boundaryQuery.data?.threads[thread.id]
@@ -685,34 +685,34 @@ export default function ThreadDetailView() {
                             </p>
                           )
                         }
-                        return <p className="text-xs text-stone-500">No recorded incoming prerequisites</p>
+                        return <p className="text-xs text-[var(--theme-text-dim)]">No recorded incoming prerequisites</p>
                       })()}
                       {blockedBy.map((t) => (
                         <Link
                           key={`${t.dependency_id}-blocked-by`}
                           to={`/thread/${t.thread_id}`}
-                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                          className="flex items-center gap-2 p-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] hover:bg-[var(--theme-bg-hover)] transition-colors"
                           aria-label={`Open ${t.title}`}
                         >
                           <span aria-hidden="true">🔒</span>
-                          <span className="text-sm text-stone-300 truncate">
+                          <span className="text-sm text-[var(--theme-text-primary)] truncate">
                             {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
                           </span>
                         </Link>
                       ))}
                     </div>
                     <div className="space-y-1">
-                      <h3 className="text-base font-bold text-stone-400">Recorded outgoing prerequisites</h3>
-                      {blocking.length === 0 && <p className="text-xs text-stone-500">No recorded outgoing prerequisites</p>}
+                      <h3 className="text-base font-bold text-[var(--theme-text-muted)]">Recorded outgoing prerequisites</h3>
+                      {blocking.length === 0 && <p className="text-xs text-[var(--theme-text-dim)]">No recorded outgoing prerequisites</p>}
                       {blocking.map((t) => (
                         <Link
                           key={`${t.dependency_id}-blocking`}
                           to={`/thread/${t.thread_id}`}
-                          className="flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                          className="flex items-center gap-2 p-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] hover:bg-[var(--theme-bg-hover)] transition-colors"
                           aria-label={`Open ${t.title}`}
                         >
                           <span aria-hidden="true">🔓</span>
-                          <span className="text-sm text-stone-300 truncate">
+                          <span className="text-sm text-[var(--theme-text-primary)] truncate">
                             {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
                           </span>
                         </Link>
@@ -726,15 +726,15 @@ export default function ThreadDetailView() {
         </div>
 
         <div className="surface-panel p-3 md:p-4 space-y-2">
-          <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+          <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
             Crossovers
           </span>
-          {crossoversPending && <p className="text-xs text-stone-500">Loading crossovers...</p>}
+          {crossoversPending && <p className="text-xs text-[var(--theme-text-dim)]">Loading crossovers...</p>}
           {!crossoversPending && crossoversError && (
             <p className="text-xs text-red-400">Unable to load crossover memberships.</p>
           )}
           {!crossoversPending && !crossoversError && crossoverGroups.length === 0 && (
-            <p className="text-xs text-stone-500">No crossover memberships</p>
+            <p className="text-xs text-[var(--theme-text-dim)]">No crossover memberships</p>
           )}
           {!crossoversPending && !crossoversError && (
             <CrossoverTags groups={crossoverGroups} label={`${thread.title} crossovers`} />
@@ -752,7 +752,7 @@ export default function ThreadDetailView() {
         </div>
 
         {deepLinkNotice && (
-          <p role="status" className="text-sm text-stone-400">
+          <p role="status" className="text-sm text-[var(--theme-text-muted)]">
             {deepLinkNotice}
           </p>
         )}
@@ -760,7 +760,7 @@ export default function ThreadDetailView() {
         {isMigrated && (
           <div className="surface-panel p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+              <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
                 Issues ({issuesTotal > 0 ? issuesTotal : (thread.total_issues ?? issues.length)})
               </span>
               <div className="flex items-center gap-3">
@@ -768,14 +768,14 @@ export default function ThreadDetailView() {
                   type="button"
                   onClick={handleToggleBulkSelect}
                   aria-pressed={bulkSelectMode}
-                  className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
+                  className="text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]"
                 >
                   {bulkSelectMode ? 'Done' : 'Select'}
                 </button>
                 <button
                   type="button"
                   onClick={handleToggleIssues}
-                  className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
+                  className="text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]"
                 >
                   {issuesExpanded ? 'Collapse' : 'Expand'}
                 </button>
@@ -783,7 +783,7 @@ export default function ThreadDetailView() {
             </div>
 
             {!issuesExpanded && (
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-[var(--theme-text-dim)]">
                 {thread.next_unread_issue_number
                   ? `Next up: #${thread.next_unread_issue_number}`
                   : 'All issues read'}
@@ -793,7 +793,7 @@ export default function ThreadDetailView() {
               {issuesExpanded && (
                 <div className="space-y-2 mt-3">
                 {bulkNotice && (
-                  <p role="status" className="text-xs text-stone-400">
+                  <p role="status" className="text-xs text-[var(--theme-text-muted)]">
                     {bulkNotice}
                   </p>
                 )}
@@ -805,7 +805,7 @@ export default function ThreadDetailView() {
                   />
                 )}
                 {issuesLoading && issues.length === 0 && (
-                  <p className="text-xs text-stone-500">Loading issues...</p>
+                  <p className="text-xs text-[var(--theme-text-dim)]">Loading issues...</p>
                 )}
 
                 {issuesError && !issuesLoading && (
@@ -816,7 +816,7 @@ export default function ThreadDetailView() {
                       onClick={() => {
                         void issuesQuery.refetch()
                       }}
-                      className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
+                      className="text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]"
                     >
                       Retry
                     </button>
@@ -824,7 +824,7 @@ export default function ThreadDetailView() {
                 )}
 
                 {issuesLoaded && !issuesLoading && !issuesError && issues.length === 0 && (
-                  <p className="text-xs text-stone-500">No issues yet</p>
+                  <p className="text-xs text-[var(--theme-text-dim)]">No issues yet</p>
                 )}
 
                 {issuesLoaded && issues.length > 0 && (
@@ -846,7 +846,7 @@ export default function ThreadDetailView() {
                           className={`space-y-1.5 p-2 rounded-lg border ${
                             issue.status === 'read'
                               ? 'bg-green-500/10 border-green-500/20'
-                              : 'bg-white/5 border-white/10'
+                              : 'bg-[var(--theme-bg-hover)] border-[var(--theme-border)]'
                           }${deepLinkedIssueId === issue.id ? ' issue-deep-link-target' : ''}`}
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -857,10 +857,10 @@ export default function ThreadDetailView() {
                                   checked={selectedIssueIds.has(issue.id)}
                                   onChange={() => handleToggleIssueSelection(issue.id)}
                                   aria-label={`Select issue #${issue.issue_number}`}
-                                  className="h-4 w-4 shrink-0 accent-amber-400"
+                                  className="h-4 w-4 shrink-0 accent-[var(--theme-comic-accent)]"
                                 />
                               )}
-                              <span className="text-sm font-medium text-stone-300">
+                              <span className="text-sm font-medium text-[var(--theme-text-primary)]">
                                 #{issue.issue_number}
                               </span>
                               <IssueCreator
@@ -886,7 +886,7 @@ export default function ThreadDetailView() {
                                 }
                                 aria-label={`Edit tags for issue #${issue.issue_number}`}
                                 title={`Edit tags for issue #${issue.issue_number}`}
-                                className="text-xs font-black uppercase tracking-widest text-stone-500 hover:text-amber-300"
+                                className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)] hover:text-[var(--theme-comic-accent)]"
                               >
                                 Tags
                               </button>
@@ -894,7 +894,7 @@ export default function ThreadDetailView() {
                                 {issue.status === 'read' ? (
                                   <span className="text-green-400">Read</span>
                                 ) : (
-                                  <span className="text-stone-500">Unread</span>
+                                  <span className="text-[var(--theme-text-dim)]">Unread</span>
                                 )}
                               </span>
 
@@ -924,14 +924,14 @@ export default function ThreadDetailView() {
                   <button
                     type="button"
                     onClick={handleLoadMore}
-                    className="w-full py-2 rounded-lg border border-white/10 text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 hover:border-white/20"
+                    className="w-full py-2 rounded-lg border border-[var(--theme-border)] text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)] hover:border-[var(--theme-border)]"
                   >
                     Load more
                   </button>
                 )}
 
                 {issuesLoading && issues.length > 0 && (
-                  <p className="text-xs text-stone-500">Loading more...</p>
+                  <p className="text-xs text-[var(--theme-text-dim)]">Loading more...</p>
                 )}
               </div>
             )}
@@ -940,24 +940,24 @@ export default function ThreadDetailView() {
 
         {!isMigrated && (
           <div className="surface-panel p-3 md:p-4 space-y-2">
-            <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+            <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
               Issues Remaining
             </span>
-            <p className="text-sm text-stone-300">{thread.issues_remaining} issues</p>
+            <p className="text-sm text-[var(--theme-text-primary)]">{thread.issues_remaining} issues</p>
           </div>
         )}
 
         {thread.status === 'active' && (
           <div className="surface-panel p-3 md:p-4 space-y-2">
-            <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+            <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
               Queue Position
             </span>
-            <p className="text-sm text-stone-300">Position #{thread.queue_position}</p>
+            <p className="text-sm text-[var(--theme-text-primary)]">Position #{thread.queue_position}</p>
           </div>
         )}
 
         <div className="surface-panel p-3 md:p-4 space-y-2">
-          <span className="text-xs font-black uppercase tracking-widest text-stone-500">
+          <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-dim)]">
             Status
           </span>
           <p className="text-sm font-black uppercase">{thread.status}</p>
@@ -973,7 +973,7 @@ export default function ThreadDetailView() {
         <div className="space-y-4">
           <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-stone-500">
+              <label className="text-sm font-medium text-[var(--theme-text-dim)]">
                 Title
               </label>
               <input
@@ -985,7 +985,7 @@ export default function ThreadDetailView() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-stone-500">
+              <label className="text-sm font-medium text-[var(--theme-text-dim)]">
                 Format
               </label>
               <FormatSelect
@@ -997,7 +997,7 @@ export default function ThreadDetailView() {
 
             {thread.total_issues === null && (
               <div className="space-y-2">
-                <label className="text-sm font-medium text-stone-500">
+                <label className="text-sm font-medium text-[var(--theme-text-dim)]">
                   Issues Remaining
                 </label>
                 <input
@@ -1016,7 +1016,7 @@ export default function ThreadDetailView() {
             )}
 
             <div className="space-y-2">
-              <label htmlFor={editNotesId} className="text-sm font-medium text-stone-500">
+              <label htmlFor={editNotesId} className="text-sm font-medium text-[var(--theme-text-dim)]">
                 Notes
               </label>
               <textarea
@@ -1051,7 +1051,7 @@ export default function ThreadDetailView() {
             type="submit"
             form="edit-thread-form"
             disabled={updateMutation.isPending}
-            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
           </button>
@@ -1082,7 +1082,7 @@ export default function ThreadDetailView() {
                 setShowDiscardPrompt(false)
                 setIsEditOpen(false)
               }}
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-danger-hover)] transition-colors"
             >
               Discard changes
             </button>

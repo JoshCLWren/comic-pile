@@ -303,7 +303,7 @@ export function ReadingContextPillar({
                       >
                         {relationLabel(issue.relation, seriesName)}
                       </p>
-                      <p className="text-[10px] text-stone-400">
+                      <p className="text-[10px] text-[var(--theme-text-muted)]">
                         Issue {issue.issue_number} · {issue.status === 'read' ? 'Already read' : 'Not read yet'}
                         {isPrevious && issue.rating !== null ? ` · Your rating: ${ratingToStars(issue.rating)}` : ''}
                       </p>
@@ -313,7 +313,7 @@ export function ReadingContextPillar({
                             <button
                               key={membership.id}
                               type="button"
-                              className="inline-flex min-h-6 items-center rounded-full px-2 font-bold transition focus:ring-2 focus:ring-amber-500"
+                              className="inline-flex min-h-6 items-center rounded-full px-2 font-bold transition focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
                               style={{
                                 ...readingContextType('chipLabel'),
                                 border: '1px solid rgba(212,137,14,0.4)',
@@ -477,12 +477,12 @@ export function ReadingContextPillar({
                 <article key={order.id} className="rounded-xl p-3" style={{ border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.04)' }}>
                   <div className="flex items-center justify-between gap-3">
                     <h4
-                      className="min-w-0 break-words font-black text-stone-200"
+                      className="min-w-0 break-words font-black text-[var(--theme-text-primary)]"
                       style={readingContextType('primaryValue')}
                     >
                       {order.name}
                     </h4>
-                    <span className="shrink-0 font-bold text-stone-400" style={readingContextType('metaLabel')}>
+                    <span className="shrink-0 font-bold text-[var(--theme-text-muted)]" style={readingContextType('metaLabel')}>
                       {order.completed_items}/{order.total_items}
                     </span>
                   </div>
@@ -490,7 +490,7 @@ export function ReadingContextPillar({
                     <div className="h-full rounded-full" style={{ backgroundColor: 'var(--theme-primary-action)', width: `${routeProgress}%` }} />
                   </div>
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-bold text-stone-400" style={readingContextType('metaLabel')}>{routeProgress}% complete</p>
+                    <p className="font-bold text-[var(--theme-text-muted)]" style={readingContextType('metaLabel')}>{routeProgress}% complete</p>
                     <button
                       type="button"
                       onClick={() => setIsRouteExplanationOpen(true)}

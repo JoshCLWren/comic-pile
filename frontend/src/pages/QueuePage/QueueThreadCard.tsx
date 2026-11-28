@@ -183,7 +183,7 @@ export default function QueueThreadCard({
         <div
           data-testid="queue-thread-drag-over"
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-amber-500/10"
+          className="pointer-events-none absolute inset-0 bg-[var(--theme-comic-accent)]/10"
         />
       )}
       <div className="relative flex min-w-0 flex-1 items-start gap-2 @2xl:gap-3">
@@ -192,7 +192,7 @@ export default function QueueThreadCard({
             <Tooltip content="Drag to reorder within the queue.">
               <button
                 type="button"
-                className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--theme-text-dim)] hover:bg-white/5 hover:text-[var(--theme-text-muted)] transition-colors text-lg @2xl:h-8 @2xl:w-8"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--theme-text-dim)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-muted)] transition-colors text-lg @2xl:h-8 @2xl:w-8"
                 draggable
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}

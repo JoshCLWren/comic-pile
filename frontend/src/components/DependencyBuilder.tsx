@@ -428,7 +428,7 @@ export default function DependencyBuilder({
           </button>
 
             {showReadingOrder && (
-              <div className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-3">
+              <div className="space-y-3 rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/20 p-3">
                 <div
                   className="flex gap-2 text-[11px] font-black uppercase tracking-widest"
                   role="tablist"
@@ -467,8 +467,8 @@ export default function DependencyBuilder({
                     onClick={() => handleSelectReadingView('timeline')}
                     className={`flex-1 rounded-2xl border px-3 py-3 ${
                       readingView === 'timeline'
-                        ? 'border-white text-white'
-                        : 'border-white/20 text-stone-400'
+                        ? 'border-white text-[var(--theme-text-primary)]'
+                        : 'border-[var(--theme-border)] text-[var(--theme-text-muted)]'
                     }`}
                   >
                     Timeline
@@ -482,8 +482,8 @@ export default function DependencyBuilder({
                     onClick={() => handleSelectReadingView('graph')}
                     className={`flex-1 rounded-2xl border px-3 py-3 ${
                       readingView === 'graph'
-                        ? 'border-white text-white'
-                        : 'border-white/20 text-stone-400'
+                        ? 'border-white text-[var(--theme-text-primary)]'
+                        : 'border-[var(--theme-border)] text-[var(--theme-text-muted)]'
                     }`}
                   >
                     Flowchart
@@ -506,7 +506,7 @@ export default function DependencyBuilder({
                     hidden={readingView !== 'graph'}
                   >
                     {isGraphLoading ? (
-                      <p className="text-center text-xs text-stone-400">Loading flowchart…</p>
+                      <p className="text-center text-xs text-[var(--theme-text-muted)]">Loading flowchart…</p>
                     ) : (
                       <DependencyFlowchart
                         threads={flowchartThreads}
@@ -523,16 +523,16 @@ export default function DependencyBuilder({
         )}
 
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
             Dependency type
           </p>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-[var(--theme-text-dim)]">
             Issue-level: blocks only when the target issue becomes next unread.
           </p>
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="search-prereq-thread" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+          <label htmlFor="search-prereq-thread" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
             Search prerequisite series
           </label>
           <input
@@ -543,22 +543,22 @@ export default function DependencyBuilder({
             placeholder="Type at least 2 characters"
             className="w-full rounded-xl px-3 py-2 text-sm form-control"
           />
-          {isSearching && <p className="text-xs text-stone-500">Searching…</p>}
+          {isSearching && <p className="text-xs text-[var(--theme-text-dim)]">Searching…</p>}
           {!isSearching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-            <p className="text-xs text-stone-500">No matching series found.</p>
+            <p className="text-xs text-[var(--theme-text-dim)]">No matching series found.</p>
           )}
           {searchResults.length > 0 && (
-            <div className="max-h-40 overflow-auto border border-white/10 rounded-xl bg-white/5">
+            <div className="max-h-40 overflow-auto border border-[var(--theme-border)] rounded-xl bg-[var(--theme-bg-hover)]">
               {searchResults.map((candidate) => (
                 <button
                   key={candidate.id}
                   type="button"
                   onClick={() => setSelectedThreadId(candidate.id)}
-                  className={`w-full text-left px-3 py-2 text-sm border-b last:border-b-0 border-white/5 hover:bg-white/10 ${
-                    selectedThreadId === candidate.id ? 'bg-white/10 text-white' : 'text-stone-300'
+                  className={`w-full text-left px-3 py-2 text-sm border-b last:border-b-0 border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)] ${
+                    selectedThreadId === candidate.id ? 'bg-[var(--theme-bg-hover)] text-[var(--theme-text-primary)]' : 'text-[var(--theme-text-primary)]'
                   }`}
                 >
-                  {candidate.title} <span className="text-xs text-stone-500">({candidate.format})</span>
+                  {candidate.title} <span className="text-xs text-[var(--theme-text-dim)]">({candidate.format})</span>
                 </button>
               ))}
             </div>
@@ -566,15 +566,15 @@ export default function DependencyBuilder({
 
           {/* Inline migration prompt */}
            {selectedThread && selectedThreadNeedsMigration && (
-             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2">
-               <p className="text-xs text-amber-300 font-bold">
+             <div className="bg-[var(--theme-comic-accent)]/10 border border-[var(--theme-comic-accent)]/30 rounded-xl p-3 space-y-2">
+               <p className="text-xs text-[var(--theme-comic-accent)] font-bold">
                  {selectedThread.title} isn&apos;t tracking issues yet.
                </p>
                {!showInlineMigration ? (
                  <button
                    type="button"
                    onClick={() => setShowInlineMigration(true)}
-                   className="text-xs font-black uppercase tracking-widest text-amber-200 hover:text-amber-100"
+                   className="text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]"
                  >
                    Migrate Now
                  </button>
@@ -582,7 +582,7 @@ export default function DependencyBuilder({
                   <form onSubmit={handleInlineMigration} className="space-y-2">
                     <div className="flex flex-col md:flex-row gap-2">
                       <div className="flex-1">
-                        <label htmlFor="migration-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read</label>
+                        <label htmlFor="migration-last-read" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Last issue read</label>
                         <input
                           id="migration-last-read"
                           type="number"
@@ -594,7 +594,7 @@ export default function DependencyBuilder({
                         />
                       </div>
                       <div className="flex-1">
-                        <label htmlFor="migration-total" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Total issues</label>
+                        <label htmlFor="migration-total" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Total issues</label>
                         <input
                           id="migration-total"
                           type="number"
@@ -609,7 +609,7 @@ export default function DependencyBuilder({
                     <button
                       type="submit"
                       disabled={isMigrating}
-                      className="w-full py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-lg text-xs font-black uppercase tracking-widest text-amber-200 disabled:opacity-50"
+                      className="w-full py-1.5 bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/30 rounded-lg text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] disabled:opacity-50"
                     >
                       {isMigrating ? 'Migrating…' : 'Migrate'}
                     </button>
@@ -621,11 +621,11 @@ export default function DependencyBuilder({
            {selectedThread && !selectedThreadNeedsMigration && (
              <div className="space-y-2">
                {(isLoadingSourceIssues || isLoadingTargetIssues) ? (
-                 <p className="text-xs text-stone-500">Loading issues…</p>
+                 <p className="text-xs text-[var(--theme-text-dim)]">Loading issues…</p>
                ) : (
                  <div className="flex flex-col md:flex-row gap-2 min-w-0">
                    <div className="min-w-0 w-full">
-                     <label htmlFor="source-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                     <label htmlFor="source-issue" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
                        Prerequisite issue
                      </label>
                      <select
@@ -650,7 +650,7 @@ export default function DependencyBuilder({
                       </select>
                     </div>
                     <div className="min-w-0 w-full">
-                      <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                      <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
                         Target issue
                       </label>
                       <select
@@ -694,7 +694,7 @@ export default function DependencyBuilder({
               disabled={
                 !selectedThread || selectedThreadNeedsMigration || !sourceIssueId || !targetIssueId || isSaving || isDuplicateDependency()
               }
-              className="w-full py-2 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 whitespace-normal break-words text-left"
+              className="w-full py-2 rounded-xl bg-[var(--theme-primary-action)] font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 whitespace-normal break-words text-left"
             >
               {isSaving
                 ? 'Adding dependency…'
@@ -707,15 +707,15 @@ export default function DependencyBuilder({
          </div>
 
          <div className="space-y-2">
-           <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series is blocked by</h3>
+           <h3 className="text-sm font-black uppercase tracking-widest text-[var(--theme-text-primary)]">This series is blocked by</h3>
            {isLoadingDeps ? (
-             <p className="text-xs text-stone-500">Loading dependencies…</p>
+             <p className="text-xs text-[var(--theme-text-dim)]">Loading dependencies…</p>
            ) : dependencies.blocked_by.length === 0 ? (
-             <p className="text-xs text-stone-500">No prerequisites yet.</p>
+             <p className="text-xs text-[var(--theme-text-dim)]">No prerequisites yet.</p>
            ) : (
              Array.from(groupByThread(dependencies.blocked_by, 'source_label')).map(([threadName, deps]) => (
                <div key={threadName} className="space-y-1">
-                 <p className="text-xs font-bold text-stone-400 break-words min-w-0">{threadName}</p>
+                 <p className="text-xs font-bold text-[var(--theme-text-muted)] break-words min-w-0">{threadName}</p>
                {deps.map((dep) => {
                  const title = dep.is_issue_level && dep.source_label && dep.target_label
                    ? `${dep.source_label} → ${dep.target_label}`
@@ -743,15 +743,15 @@ export default function DependencyBuilder({
          </div>
 
          <div className="space-y-2">
-           <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series blocks</h3>
+           <h3 className="text-sm font-black uppercase tracking-widest text-[var(--theme-text-primary)]">This series blocks</h3>
            {isLoadingDeps ? (
-             <p className="text-xs text-stone-500">Loading dependencies…</p>
+             <p className="text-xs text-[var(--theme-text-dim)]">Loading dependencies…</p>
            ) : dependencies.blocking.length === 0 ? (
-             <p className="text-xs text-stone-500">No dependent series yet.</p>
+             <p className="text-xs text-[var(--theme-text-dim)]">No dependent series yet.</p>
            ) : (
              Array.from(groupByThread(dependencies.blocking, 'target_label')).map(([threadName, deps]) => (
                <div key={threadName} className="space-y-1">
-                 <p className="text-xs font-bold text-stone-400 break-words min-w-0">{threadName}</p>
+                 <p className="text-xs font-bold text-[var(--theme-text-muted)] break-words min-w-0">{threadName}</p>
                {deps.map((dep) => {
                  const title = dep.is_issue_level && dep.source_label && dep.target_label
                    ? `${dep.source_label} → ${dep.target_label}`
@@ -818,11 +818,11 @@ function DependencyRow({
   const isEditing = editingNoteId === dependency.id
 
   return (
-    <div className="flex flex-col gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+    <div className="flex flex-col gap-2 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl px-3 py-2">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm text-stone-300 truncate">{title}</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{subtitle}</p>
+          <p className="text-sm text-[var(--theme-text-primary)] truncate">{title}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">{subtitle}</p>
         </div>
         <button
           type="button"
@@ -846,25 +846,25 @@ function DependencyRow({
             type="button"
             onClick={() => onSaveNote(dependency.id)}
             disabled={isSavingNote || noteText.length > 255}
-            className="min-h-[44px] px-3 bg-amber-600/20 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-black uppercase tracking-widest disabled:opacity-50"
+            className="min-h-[44px] px-3 bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/40 text-[var(--theme-comic-accent)] rounded-lg text-xs font-black uppercase tracking-widest disabled:opacity-50"
           >
             {isSavingNote ? 'Saving...' : 'Save'}
           </button>
           <button
             type="button"
             onClick={onCancelNote}
-            className="min-h-[44px] px-3 text-stone-400 hover:text-stone-300 text-xs font-black uppercase tracking-widest"
+            className="min-h-[44px] px-3 text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] text-xs font-black uppercase tracking-widest"
           >
             Cancel
           </button>
         </div>
       ) : dependency.note ? (
         <div className="flex items-center gap-2">
-          <p className="text-xs text-stone-400 italic flex-1">{dependency.note}</p>
+          <p className="text-xs text-[var(--theme-text-muted)] italic flex-1">{dependency.note}</p>
           <button
             type="button"
             onClick={() => onEditNote(dependency)}
-            className="text-stone-500 hover:text-stone-300 text-[10px] font-black uppercase tracking-widest"
+            className="text-[var(--theme-text-dim)] hover:text-[var(--theme-text-primary)] text-[10px] font-black uppercase tracking-widest"
           >
             Edit note
           </button>
@@ -873,7 +873,7 @@ function DependencyRow({
         <button
           type="button"
           onClick={() => onEditNote(dependency)}
-          className="text-stone-600 hover:text-stone-400 text-[10px] font-black uppercase tracking-widest text-left"
+          className="text-[var(--theme-text-muted)] hover:text-[var(--theme-text-muted)] text-[10px] font-black uppercase tracking-widest text-left"
         >
           + Add note
         </button>

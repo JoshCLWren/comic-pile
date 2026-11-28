@@ -123,7 +123,7 @@ export function DecisionCard({
           <p id="rating-value" className={`text-5xl font-black ${getRatingColorClass(rating)}`}>
             {rating.toFixed(1)}
           </p>
-          <p className="text-[11px] font-bold text-stone-400">
+          <p className="text-[11px] font-bold text-[var(--theme-text-muted)]">
             <GlossaryLink id="die-size">d{currentDie} → d{predictedDie}</GlossaryLink>
           </p>
         </div>
@@ -138,7 +138,7 @@ export function DecisionCard({
         showValue={false}
       />
 
-      <p id="queue-effect" className="text-[11px] font-bold leading-relaxed text-stone-400">
+      <p id="queue-effect" className="text-[11px] font-bold leading-relaxed text-[var(--theme-text-muted)]">
         {rating >= RATING_THRESHOLD
           ? 'Moves this series to the front of the queue.'
           : 'Moves this series beyond the next roll range.'}

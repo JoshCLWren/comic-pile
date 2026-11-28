@@ -904,7 +904,7 @@ export default function CustomCBLBuilder({
               {searchResults.length > 0 && (
                 <div ref={issueSearchResults} className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
                   {searchResults.map((candidate) => (
-                    <button key={candidate.issue_id} onKeyDown={(event) => focusSearchResult(event)} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} aria-label={`${candidate.series_name} #${candidate.issue_number} Series ID ${candidate.thread_id} Add`} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)] disabled:opacity-50">
+                    <button key={candidate.issue_id} onKeyDown={(event) => focusSearchResult(event)} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} aria-label={`${candidate.series_name} #${candidate.issue_number} Series ID ${candidate.thread_id} Add`} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)] disabled:opacity-50">
                       <ComicIssueCover
                         coverImageUrl={candidate.cover_image_url ?? searchResultCardsById.get(candidate.issue_id)?.cover_image_url ?? null}
                         threadTitle={candidate.series_name}
@@ -1117,7 +1117,7 @@ export default function CustomCBLBuilder({
                               cblSource?.id === source.id
                                 ? 'border-[var(--theme-continuity-accent)]'
                                 : 'border-[var(--theme-border)]'
-                            } hover:bg-white/5`}
+                            } hover:bg-[var(--theme-bg-hover)]`}
                           >
                             <span className="block text-sm font-bold text-[var(--theme-text-primary)]">
                               {source.name || source.source_path}

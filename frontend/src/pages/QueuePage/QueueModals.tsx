@@ -84,7 +84,7 @@ export function CreatorInput({
 
   return (
     <div className="space-y-2">
-      <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+      <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
         {label}
       </label>
       {creators.map((creator, index) => (
@@ -113,8 +113,8 @@ export function CreatorInput({
                     onClick={() => handleRoleToggle(role)}
                     className={`text-xs px-2 py-1 rounded-full transition-colors ${
                       editRoles.includes(role)
-                        ? 'bg-[var(--theme-primary-action)] text-stone-950'
-                        : 'bg-[var(--theme-bg-hover)] text-stone-300 hover:bg-[var(--theme-bg-hover)]/80'
+                        ? 'bg-[var(--theme-primary-action)] text-[var(--theme-primary-action-text)]'
+                        : 'bg-[var(--theme-bg-hover)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]/80'
                     }`}
                   >
                     {role}
@@ -154,7 +154,7 @@ export function CreatorInput({
                 {creator.roles.length > 0 && (
                   <span className="flex flex-wrap gap-1">
                     {creator.roles.map((role) => (
-                      <span key={role} className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                      <span key={role} className="text-xs px-2 py-0.5 rounded-full bg-[var(--theme-comic-accent)]/20 text-[var(--theme-comic-accent)]">
                         {role}
                       </span>
                     ))}
@@ -164,7 +164,7 @@ export function CreatorInput({
               <button
                 type="button"
                 onClick={() => handleStartEdit(index, creator)}
-                className="text-xs px-2 py-1 rounded-lg bg-[var(--theme-bg-hover)] text-stone-300 hover:bg-[var(--theme-bg-hover)]/80 transition-colors"
+                className="text-xs px-2 py-1 rounded-lg bg-[var(--theme-bg-hover)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]/80 transition-colors"
               >
                 Edit
               </button>
@@ -180,12 +180,12 @@ export function CreatorInput({
         </div>
       ))}
       {creators.length === 0 && (
-        <p className="text-xs text-stone-400">No creators added yet.</p>
+        <p className="text-xs text-[var(--theme-text-muted)]">No creators added yet.</p>
       )}
       <button
         type="button"
         onClick={handleAdd}
-        className="w-full py-2 px-3 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-300 hover:bg-[var(--theme-bg-hover)] transition-colors text-sm font-medium"
+        className="w-full py-2 px-3 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-colors text-sm font-medium"
       >
         + Add Creator
       </button>
@@ -436,7 +436,7 @@ export function QueueModals({
           <div className="space-y-2">
             <label
               htmlFor="create-thread-title"
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+              className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
             >
               Title
             </label>
@@ -464,7 +464,7 @@ export function QueueModals({
           <div className="space-y-2">
             <label
               htmlFor="create-thread-format"
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+              className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
             >
               Format
             </label>
@@ -479,7 +479,7 @@ export function QueueModals({
           <div className="space-y-2">
             <label
               htmlFor="create-thread-issues"
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+              className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
             >
               Issues
             </label>
@@ -494,7 +494,7 @@ export function QueueModals({
             />
             {issuePreview !== null && (
               <div className="space-y-1">
-                <p className="text-xs text-stone-400">
+                <p className="text-xs text-[var(--theme-text-muted)]">
                   Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
                 </p>
                 {issueParseWarnings.length > 0 && (
@@ -509,7 +509,7 @@ export function QueueModals({
                 )}
                 {issueParseBreakdown.length > 0 && (
                   <details className="group" data-testid="issue-parse-breakdown">
-                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-400 flex items-center gap-1 select-none">
+                    <summary className="text-xs text-[var(--theme-text-dim)] cursor-pointer hover:text-[var(--theme-text-muted)] flex items-center gap-1 select-none">
                       <span
                         aria-hidden="true"
                         className="transition-transform motion-reduce:transition-none group-open:rotate-90"
@@ -521,15 +521,15 @@ export function QueueModals({
                     <div className="mt-1 ml-4 space-y-0.5 border-l border-[var(--theme-border)] pl-2">
                       {issueParseBreakdown.map((item, idx) => (
                         <div key={idx} className="text-xs flex items-start gap-1">
-                          <span className="text-stone-500 break-all">{item.token}:</span>
-                          <span className="text-stone-400 flex flex-wrap gap-1">
+                          <span className="text-[var(--theme-text-dim)] break-all">{item.token}:</span>
+                          <span className="text-[var(--theme-text-muted)] flex flex-wrap gap-1">
                             {item.parsedIssues.map((issue, i) => (
                               <span
                                 key={i}
                                 className={`px-1.5 py-0.5 rounded text-xs ${
                                   item.type === 'unrecognized-literal'
                                     ? 'bg-[var(--theme-warning)]/15 text-[var(--theme-warning)]'
-                                    : 'text-stone-300'
+                                    : 'text-[var(--theme-text-primary)]'
                                 }`}
                               >
                                 {issue}
@@ -543,7 +543,7 @@ export function QueueModals({
                 )}
               </div>
             )}
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-[var(--theme-text-muted)]">
               Enter the exact issues you want to track, such as 71. You do not need to add earlier
               issues.
             </p>
@@ -552,7 +552,7 @@ export function QueueModals({
           <div className="space-y-2">
             <label
               htmlFor="create-thread-last-read"
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+              className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
             >
               Issues already read (optional)
             </label>
@@ -594,12 +594,12 @@ export function QueueModals({
                 {lastReadError}
               </p>
             ) : (
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-[var(--theme-text-muted)]">
                 Enter a count from the issue list above, not an issue number.
               </p>
             )}
             {lastReadError === null && lastReadCount !== null && lastReadCount > 0 && issuePreview !== null && (
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-[var(--theme-text-muted)]">
                 First {lastReadCount} issues (in creation order) of {issuePreview} will
                 be marked as read
               </p>
@@ -609,7 +609,7 @@ export function QueueModals({
           <div className="space-y-2">
             <label
               htmlFor="create-thread-notes"
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+              className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
             >
               Notes
             </label>
@@ -638,7 +638,7 @@ export function QueueModals({
             disabled={
               isPendingCreate || issueParseError !== null || createTitleError || lastReadError !== null
             }
-            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isPendingCreate ? 'Adding...' : 'Create Series'}
           </button>
@@ -656,7 +656,7 @@ export function QueueModals({
             <div className="space-y-2">
               <label
                 htmlFor="edit-thread-title"
-                className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+                className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
               >
                 Title
               </label>
@@ -685,7 +685,7 @@ export function QueueModals({
             <div className="space-y-2">
               <label
                 htmlFor="edit-thread-format"
-                className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+                className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
               >
                 Format
               </label>
@@ -701,7 +701,7 @@ export function QueueModals({
               <div className="space-y-2">
                 <label
                   htmlFor="edit-thread-issues-remaining"
-                  className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+                  className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
                 >
                   Issues Remaining
                 </label>
@@ -724,7 +724,7 @@ export function QueueModals({
             <div className="space-y-2">
               <label
                 htmlFor="edit-thread-notes"
-                className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
+                className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
               >
                 Notes
               </label>
@@ -741,16 +741,16 @@ export function QueueModals({
             />
 
             {editingThread != null && editingThread.total_issues == null && (
-              <div className="space-y-2 pt-2 border-t border-white/10">
+              <div className="space-y-2 pt-2 border-t border-[var(--theme-border)]">
                 <button
                   type="button"
                   onClick={() => onOpenMigrationDialog(editingThread)}
-                  className="edit-modal__migration-button w-full py-3 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left text-xs font-black text-amber-300 hover:bg-amber-500/20 transition-all flex items-center gap-3"
+                  className="edit-modal__migration-button w-full py-3 px-4 bg-[var(--theme-comic-accent)]/10 border border-[var(--theme-comic-accent)]/30 rounded-xl text-left text-xs font-black text-[var(--theme-comic-accent)] hover:bg-[var(--theme-comic-accent)]/20 transition-all flex items-center gap-3"
                 >
                   <span className="text-lg">📊</span>
                   <div className="flex-1">
                     <div className="font-bold">Migrate to Issue Tracking</div>
-                    <div className="font-normal text-stone-400 mt-0.5">
+                    <div className="font-normal text-[var(--theme-text-muted)] mt-0.5">
                       Track individual issues instead of remaining count
                     </div>
                   </div>
@@ -783,7 +783,7 @@ export function QueueModals({
               type="submit"
               form="edit-thread-form"
               disabled={isPendingEdit || isIssuesLoading || editTitleError}
-              className="flex-1 py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
+              className="flex-1 py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
             >
               {isIssuesLoading ? 'Loading issues...' : isPendingEdit ? 'Saving...' : 'Save Changes'}
             </button>
@@ -819,7 +819,7 @@ export function QueueModals({
                 if (target === 'create') onCloseCreate()
                 else onCloseEdit()
               }}
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-danger-hover)] transition-colors"
             >
               Discard changes
             </button>
@@ -834,7 +834,7 @@ export function QueueModals({
       >
         <form className="space-y-4" onSubmit={onReactivateSubmit}>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               Finished Series
             </label>
             <select
@@ -852,7 +852,7 @@ export function QueueModals({
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               Issues to Add
             </label>
             <input
@@ -867,7 +867,7 @@ export function QueueModals({
           <button
             type="submit"
             disabled={isPendingReactivate}
-            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isPendingReactivate ? 'Adding to queue...' : 'Add to Queue'}
           </button>
@@ -917,21 +917,21 @@ export function QueueModals({
           data-testid="roll-nudge-modal"
         >
           <div className="space-y-4">
-            <p className="text-stone-200">
+            <p className="text-[var(--theme-text-primary)]">
               You've created your first series! Ready to start reading?
             </p>
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={onRollNudgeNavigate}
-                className="flex-1 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-stone-950 font-semibold py-3 px-4 rounded-lg transition-colors"
+                className="flex-1 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-[var(--theme-primary-action-text)] font-semibold py-3 px-4 rounded-lg transition-colors"
               >
                 Let's Roll!
               </button>
               <button
                 type="button"
                 onClick={onDismissRollNudge}
-                className="flex-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 font-semibold py-3 px-4 rounded-lg transition-colors hover:bg-[var(--theme-bg-hover)]"
+                className="flex-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] font-semibold py-3 px-4 rounded-lg transition-colors hover:bg-[var(--theme-bg-hover)]"
               >
                 Maybe Later
               </button>

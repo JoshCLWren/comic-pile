@@ -18,9 +18,9 @@ interface YourContextPillarProps {
 function ReaderContextLoading() {
   return (
     <div className="space-y-2 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.1)', backgroundColor: 'var(--theme-bg-panel)' }}>
-      <div className="h-3 w-24 animate-pulse rounded bg-white/5" />
-      <div className="h-5 w-16 animate-pulse rounded bg-white/5" />
-      <div className="h-3 w-20 animate-pulse rounded bg-white/5" />
+      <div className="h-3 w-24 animate-pulse rounded bg-[var(--theme-bg-hover)]" />
+      <div className="h-5 w-16 animate-pulse rounded bg-[var(--theme-bg-hover)]" />
+      <div className="h-3 w-20 animate-pulse rounded bg-[var(--theme-bg-hover)]" />
     </div>
   )
 }
@@ -57,7 +57,7 @@ export function YourContextPillar({
       <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
         <div className="flex items-end justify-between gap-3">
           <div>
-            <h3 id="rating-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
+            <h3 id="rating-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-text-dim)]">
               Your rating
             </h3>
             <p id="rating-value" className={`mt-1 text-4xl font-black ${getRatingColorClass(rating)}`}>
@@ -65,7 +65,7 @@ export function YourContextPillar({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-black text-stone-200">
+            <p className="text-sm font-black text-[var(--theme-text-primary)]">
               <GlossaryLink id="die-size">d{currentDie} → d{predictedDie}</GlossaryLink>
             </p>
           </div>
@@ -83,7 +83,7 @@ export function YourContextPillar({
           aria-describedby="rating-value queue-effect"
           onChange={(event) => onUpdateRating(event.target.value)}
         />
-        <p id="queue-effect" className="text-[11px] font-bold leading-relaxed text-stone-400">
+        <p id="queue-effect" className="text-[11px] font-bold leading-relaxed text-[var(--theme-text-muted)]">
           {rating >= RATING_THRESHOLD
             ? 'Moves this series to the front of the queue.'
             : 'Moves this series beyond the next roll range.'}
@@ -91,8 +91,8 @@ export function YourContextPillar({
       </section>
 
       {isLastIssue ? (
-        <div className="rounded-xl border border-amber-600/20 bg-amber-600/10 p-3 text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-500">
+        <div className="rounded-xl border border-[var(--theme-comic-accent)]/20 bg-[var(--theme-comic-accent)]/10 p-3 text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--theme-comic-accent)]">
             This is the last issue in the series
           </p>
         </div>

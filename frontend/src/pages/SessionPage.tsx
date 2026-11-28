@@ -190,31 +190,31 @@ function EventRecord({
   const hasRecordedDescription = Boolean(event.description?.trim())
 
   return (
-    <article className="min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
+    <article className="min-w-0 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl px-3 md:px-4 py-2.5 md:py-3">
       <div className="flex items-center gap-2 flex-wrap mb-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
           {formatDateTimeWithSeconds(event.timestamp)}
         </span>
-        <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-comic-accent)]">
           {eventLabel(event.type)}
         </span>
       </div>
-      <p className="min-w-0 break-words text-sm font-bold text-stone-200">
+      <p className="min-w-0 break-words text-sm font-bold text-[var(--theme-text-primary)]">
         {event.thread_title ? (
           <>
             {event.thread_title}
             {event.issue_number ? (
-              <span className="text-stone-400"> · #{event.issue_number}</span>
+              <span className="text-[var(--theme-text-muted)]"> · #{event.issue_number}</span>
             ) : null}
             {event.thread_deleted ? (
-              <span className="text-stone-400"> (deleted)</span>
+              <span className="text-[var(--theme-text-muted)]"> (deleted)</span>
             ) : null}
           </>
         ) : event.thread_deleted ? (
           <>
             Deleted thread
             {event.issue_number ? (
-              <span className="text-stone-400"> · #{event.issue_number}</span>
+              <span className="text-[var(--theme-text-muted)]"> · #{event.issue_number}</span>
             ) : null}
           </>
         ) : isThreadlessEvent(event) ? (
@@ -224,7 +224,7 @@ function EventRecord({
         )}
       </p>
       {metadata.length > 0 ? (
-        <ul className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-stone-400" aria-label="Event details">
+        <ul className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--theme-text-muted)]" aria-label="Event details">
           {metadata.map((item) => (
             <li key={item} className="break-words">{item}</li>
           ))}
@@ -232,7 +232,7 @@ function EventRecord({
       ) : !isThreadlessEvent(event) && detail ? (
         <p className="mt-1 text-xs text-[var(--theme-text-dim)] break-words">{detail}</p>
       ) : !isThreadlessEvent(event) && !hasRecordedDescription ? (
-        <p className="mt-1 text-xs text-stone-500">No additional event details recorded.</p>
+        <p className="mt-1 text-xs text-[var(--theme-text-dim)]">No additional event details recorded.</p>
       ) : null}
       {metadata.length > 0 &&
       (event.type === 'undo' || event.type === 'restore') &&
@@ -240,7 +240,7 @@ function EventRecord({
         <p className="mt-1 text-xs text-[var(--theme-text-dim)] break-words">{detail}</p>
       ) : null}
       {event.queue_move && (
-        <p className="mt-1 break-words text-xs text-stone-500">Queue move: {event.queue_move}</p>
+        <p className="mt-1 break-words text-xs text-[var(--theme-text-dim)]">Queue move: {event.queue_move}</p>
       )}
       {/* A legacy session event carries only a title/number hint, which is not
           an owned issue identity. Mount the shared card only when the owner
@@ -294,7 +294,7 @@ export default function SessionPage() {
   }
 
   if (!details) {
-    return <div className="text-center text-stone-500">Session not found</div>
+    return <div className="text-center text-[var(--theme-text-dim)]">Session not found</div>
   }
 
   const isEmptySession = details.events.length === 0
@@ -326,20 +326,20 @@ export default function SessionPage() {
           ]}
         />
         <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Session Details</h1>
-        <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Session #{details.session_id}</p>
+        <p className="text-[10px] font-bold text-[var(--theme-text-dim)] uppercase tracking-widest">Session #{details.session_id}</p>
       </header>
 
       <div className="surface-panel p-4 md:p-6 space-y-4 md:space-y-6">
         <div className="grid gap-3 md:gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Started</p>
-            <p className="text-sm font-black text-stone-200">{formatDateTime(details.started_at)}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Started</p>
+            <p className="text-sm font-black text-[var(--theme-text-primary)]">{formatDateTime(details.started_at)}</p>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
               {details.ended_at ? 'Ended' : 'Status'}
             </p>
-            <p className="text-sm font-black text-stone-200">
+            <p className="text-sm font-black text-[var(--theme-text-primary)]">
               {details.ended_at
                 ? formatDateTime(details.ended_at)
                 : isEmptySession
@@ -348,17 +348,17 @@ export default function SessionPage() {
             </p>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Start Die</p>
-            <p className="text-sm font-black text-stone-200">d{details.start_die}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Start Die</p>
+            <p className="text-sm font-black text-[var(--theme-text-primary)]">d{details.start_die}</p>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Current Die</p>
-            <p className="text-sm font-black text-stone-200">d{details.current_die}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Current Die</p>
+            <p className="text-sm font-black text-[var(--theme-text-primary)]">d{details.current_die}</p>
           </div>
         </div>
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Ladder Path</p>
-          <p className="text-sm font-bold text-stone-300">{formatLadderPath(details.ladder_path)}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Ladder Path</p>
+          <p className="text-sm font-bold text-[var(--theme-text-primary)]">{formatLadderPath(details.ladder_path)}</p>
         </div>
         {isEmptySession && (
           <p className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-text-muted)]">
@@ -368,15 +368,15 @@ export default function SessionPage() {
         <div className="grid gap-3 md:gap-4 md:grid-cols-3">
           {Object.entries(details.narrative_summary || {}).map(([key, values]) => (
             <div key={key} className="space-y-2 min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{narrativeSectionLabel(key)}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">{narrativeSectionLabel(key)}</p>
               {values && values.length > 0 ? (
-                <ul className="space-y-1 text-xs text-stone-300">
+                <ul className="space-y-1 text-xs text-[var(--theme-text-primary)]">
                   {values.map((value) => (
                     <li key={value} className="break-words">{value}</li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-stone-600">None</p>
+                <p className="text-xs text-[var(--theme-text-muted)]">None</p>
               )}
             </div>
           ))}
@@ -385,37 +385,37 @@ export default function SessionPage() {
 
       <div className="surface-panel p-4 md:p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-black uppercase text-stone-200">Snapshots</h2>
+          <h2 className="text-lg font-black uppercase text-[var(--theme-text-primary)]">Snapshots</h2>
         </div>
         <p className="text-xs text-[var(--theme-text-dim)]">
-          <span className="font-bold text-stone-300">Undo Latest</span> reverses only the newest
+          <span className="font-bold text-[var(--theme-text-primary)]">Undo Latest</span> reverses only the newest
           change, and it stays on the newest snapshot until it has been used once. Your reading
           history stays intact.
         </p>
         {snapshots.length === 0 ? (
-          <p className="text-xs text-stone-500">No snapshots available.</p>
+          <p className="text-xs text-[var(--theme-text-dim)]">No snapshots available.</p>
         ) : (
           <div className="space-y-3">
             {snapshots.map((snapshot, index) => {
               const canUndo = index === 0 && snapshot.description !== 'Session start'
 
               return (
-                <div key={snapshot.id} className="flex items-center justify-between gap-2 md:gap-4 bg-white/5 border border-white/10 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
+                <div key={snapshot.id} className="flex items-center justify-between gap-2 md:gap-4 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl px-3 md:px-4 py-2.5 md:py-3">
                   <div className="min-w-0">
-                    <p className="break-words text-xs md:text-sm font-bold text-stone-300">{snapshot.description || 'Snapshot'}</p>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{formatDateTime(snapshot.created_at)}</p>
+                    <p className="break-words text-xs md:text-sm font-bold text-[var(--theme-text-primary)]">{snapshot.description || 'Snapshot'}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">{formatDateTime(snapshot.created_at)}</p>
                   </div>
                   {canUndo ? (
                     <button
                       type="button"
                       onClick={() => handleUndoLatest(snapshot.id)}
                       disabled={undoMutation.isPending}
-                      className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60 shrink-0"
+                      className="h-8 md:h-10 px-3 md:px-4 bg-[var(--theme-bg-hover)] border border-[var(--theme-border)] rounded-xl text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-60 shrink-0"
                     >
                       Undo Latest
                     </button>
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-600 shrink-0">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] shrink-0">
                       History
                     </span>
                   )}
@@ -427,9 +427,9 @@ export default function SessionPage() {
       </div>
 
       <div className="surface-panel p-4 md:p-6 space-y-4 min-w-0">
-        <h2 className="text-lg font-black uppercase text-stone-200">Event Timeline</h2>
+        <h2 className="text-lg font-black uppercase text-[var(--theme-text-primary)]">Event Timeline</h2>
         {details.events.length === 0 ? (
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-[var(--theme-text-dim)]">
             No events to show. No reading activity was recorded for this roll.
           </p>
         ) : (

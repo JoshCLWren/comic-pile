@@ -268,7 +268,7 @@ export default function ReadingPlanAddMaterial({
           type="button"
           onClick={toggleOpen}
           disabled={isCommitting}
-          className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+          className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
           aria-expanded={open}
         >
           {open ? 'Close' : 'Add from CBL'}
@@ -318,7 +318,7 @@ export default function ReadingPlanAddMaterial({
                       type="button"
                       onClick={() => loadPreview(source)}
                       disabled={isCommitting}
-                      className={`w-full rounded-xl border p-3 text-left disabled:opacity-50 ${selectedSource?.id === source.id ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'} hover:bg-white/5`}
+                      className={`w-full rounded-xl border p-3 text-left disabled:opacity-50 ${selectedSource?.id === source.id ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'} hover:bg-[var(--theme-bg-hover)]`}
                     >
                       <span className="block text-sm font-bold text-[var(--theme-text-primary)]">{sourceTitle}</span>{' '}
                       {meta.length > 0 && (
@@ -349,7 +349,7 @@ export default function ReadingPlanAddMaterial({
                 setAmbiguousCommit(false)
                 void previewQuery.refetch()
               }}
-              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
             >
               Refresh preview
             </button>

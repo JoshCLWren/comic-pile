@@ -93,7 +93,7 @@ export function RollHeader({
       {isRatingView ? (
         <span
           data-testid="roll-header-subtitle"
-          className="block text-[10px] font-bold uppercase tracking-widest text-stone-500"
+          className="block text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]"
         >
           A random comic from your library
         </span>
@@ -101,7 +101,7 @@ export function RollHeader({
         <>
           {snoozedThreads.length > 0 && effectiveDie >= maxLadderDie && (
             <div className="mt-1 flex items-center gap-2">
-              <span className="text-[9px] uppercase tracking-wider text-stone-500">
+              <span className="text-[9px] uppercase tracking-wider text-[var(--theme-text-dim)]">
                 pool at max size (d{dieSize}) - snoozing won&apos;t increase it further
               </span>
             </div>
@@ -109,12 +109,12 @@ export function RollHeader({
           {snoozedThreads.length > 0 && pool.length + snoozedThreads.length > dieSize && (
             <div className="mt-1 flex items-center gap-2">
               <Tooltip content="Snoozed offset">
-                <span className="modifier-badge cursor-help border-b border-dashed border-stone-600 text-[10px] font-black text-amber-500">
+                <span className="modifier-badge cursor-help border-b border-dashed border-[var(--theme-border)] text-[10px] font-black text-[var(--theme-comic-accent)]">
                   +{snoozedThreads.length}
                 </span>
               </Tooltip>
               <Tooltip content="Snoozed offset active">
-                <span className="cursor-help border-b border-dashed border-stone-600 text-[9px] uppercase tracking-wider text-stone-500">
+                <span className="cursor-help border-b border-dashed border-[var(--theme-border)] text-[9px] uppercase tracking-wider text-[var(--theme-text-dim)]">
                   offset active
                 </span>
               </Tooltip>
@@ -151,7 +151,7 @@ export function RollHeader({
                 type="button"
                 onClick={onBackToQueue}
                 data-testid="roll-back-to-queue"
-                className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-stone-400 transition-colors hover:border-stone-500 hover:text-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] transition-colors hover:border-[var(--theme-comic-accent)] hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               >
                 <span aria-hidden="true" className="text-xs">
                   &larr;
@@ -182,7 +182,7 @@ export function RollHeader({
                       aria-pressed={selected}
                       className={`die-btn min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${selected
                         ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
-                        : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
+                        : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)]'}`}
                     >
                       d{die}
                     </button>
@@ -195,7 +195,7 @@ export function RollHeader({
                   onClick={onOpenDieModal}
                   aria-haspopup="dialog"
                   aria-label={`Current die d${effectiveDie}`}
-                  className="min-h-11 rounded-xl border border-transparent bg-[var(--theme-primary-action)] px-3 py-1 text-stone-900 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                  className="min-h-11 rounded-xl border border-transparent bg-[var(--theme-primary-action)] px-3 py-1 text-[var(--theme-primary-action-text)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 >
                   <span className="block text-[11px] font-black">d{effectiveDie}</span>
                 </button>
@@ -215,7 +215,7 @@ export function RollHeader({
                 <div className="text-right">
                   <Tooltip content="The die picks randomly from the series in play. Sizes run d2→d4→d6→d8→d10→d12→d20 — a larger die means more series in the roll.">
                     <GlossaryLink id="die-size">
-                      <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-black uppercase tracking-wider text-stone-500">
+                      <span className="cursor-help border-b border-dashed border-[var(--theme-border)] text-[8px] font-black uppercase tracking-wider text-[var(--theme-text-dim)]">
                         Die
                       </span>
                     </GlossaryLink>

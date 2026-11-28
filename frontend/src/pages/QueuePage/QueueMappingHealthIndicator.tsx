@@ -54,7 +54,7 @@ export default function QueueMappingHealthIndicator({
 
   return (
     <span
-      className="inline-flex items-center gap-2 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border-stone-400/30 bg-stone-800/50 text-stone-300"
+      className="inline-flex items-center gap-2 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border-[var(--theme-border)]/30 bg-[var(--theme-bg-panel)]/50 text-[var(--theme-text-primary)]"
       aria-label={label}
       data-testid="queue-mapping-health-indicator"
     >

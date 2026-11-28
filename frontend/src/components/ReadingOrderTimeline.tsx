@@ -30,7 +30,7 @@ const STATUS_STYLES: Record<GateStatus, { label: string; classes: string; descri
   dormant: {
     label: 'Dormant',
     description: 'Future gate',
-    classes: 'bg-amber-500/10 text-amber-200 border-amber-500/40',
+    classes: 'bg-[var(--theme-comic-accent)]/10 text-[var(--theme-comic-accent)] border-[var(--theme-comic-accent)]/40',
   },
 }
 
@@ -48,7 +48,7 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
 
   if (!thread) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-stone-400">
+      <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] p-4 text-sm text-[var(--theme-text-muted)]">
         Select a thread to see its reading order.
       </div>
     )
@@ -61,13 +61,13 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
       : 'Unknown'
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 surface-panel p-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-black uppercase tracking-widest text-stone-400">
+    <div className="rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] surface-panel p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
         <span>Reading Position</span>
-        <span className="text-white">{nextIssueLabel}</span>
+        <span className="text-[var(--theme-text-primary)]">{nextIssueLabel}</span>
       </div>
       {thread.total_issues == null && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] font-semibold uppercase tracking-widest text-amber-200">
+        <div className="rounded-2xl border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-comic-accent)]/10 p-3 text-[11px] font-semibold uppercase tracking-widest text-[var(--theme-comic-accent)]">
           Reading order will be more precise after migrating this thread to per-issue tracking.
         </div>
       )}
@@ -88,7 +88,7 @@ function GateCard({ gate, card }: { gate: TimelineGateEntry; card?: IssueCard })
   const statusMeta = STATUS_STYLES[gate.status]
   const prerequisiteCount = gate.prerequisiteLabels.length
   return (
-    <div className="rounded-2xl border border-white/10 bg-stone-950/40 p-3 text-sm text-stone-200 shadow-inner">
+    <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/40 p-3 text-sm text-[var(--theme-text-primary)] shadow-inner">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           {card ? (
@@ -100,10 +100,10 @@ function GateCard({ gate, card }: { gate: TimelineGateEntry; card?: IssueCard })
             />
           ) : (
             <>
-              <p className="text-base font-semibold text-white">
+              <p className="text-base font-semibold text-[var(--theme-text-primary)]">
                 Issue #{gate.issueNumberText ?? gate.targetIssueId}
               </p>
-              <p className="text-xs text-stone-400">{gate.targetLabel}</p>
+              <p className="text-xs text-[var(--theme-text-muted)]">{gate.targetLabel}</p>
             </>
           )}
         </div>
@@ -111,15 +111,15 @@ function GateCard({ gate, card }: { gate: TimelineGateEntry; card?: IssueCard })
           {statusMeta.label}
         </span>
       </div>
-      <p className="mt-3 text-xs text-stone-300">
-        <span className="font-semibold text-white">
+      <p className="mt-3 text-xs text-[var(--theme-text-primary)]">
+        <span className="font-semibold text-[var(--theme-text-primary)]">
           {prerequisiteCount === 1 ? 'Prerequisite:' : 'Prerequisites:'}
         </span>{' '}
         {prerequisiteCount === 1
           ? gate.prerequisiteLabels[0]
           : `${prerequisiteCount} required`}
       </p>
-      <p className="mt-1 text-[11px] uppercase tracking-widest text-stone-500">{statusMeta.description}</p>
+      <p className="mt-1 text-[11px] uppercase tracking-widest text-[var(--theme-text-dim)]">{statusMeta.description}</p>
       {gate.isCurrent && (
         <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-blue-300">
           <span aria-hidden="true">📍</span>
@@ -132,11 +132,11 @@ function GateCard({ gate, card }: { gate: TimelineGateEntry; card?: IssueCard })
 
 function SpanCard({ span }: { span: TimelineSpanEntry }) {
   return (
-    <div className="rounded-2xl border border-white/5 bg-white/5 p-3 text-sm text-stone-200">
+    <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] p-3 text-sm text-[var(--theme-text-primary)]">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-base font-semibold text-white">{span.label}</p>
-          <p className="text-xs text-stone-400">No dependency gates in this range</p>
+          <p className="text-base font-semibold text-[var(--theme-text-primary)]">{span.label}</p>
+          <p className="text-xs text-[var(--theme-text-muted)]">No dependency gates in this range</p>
         </div>
         {span.isCurrent && (
           <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-blue-300">

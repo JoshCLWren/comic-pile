@@ -20,7 +20,7 @@ export function RollCta({ isRolling, hasRolled, onRoll }: RollCtaProps) {
       data-roll-primary-action="roll"
       data-testid="roll-primary-action"
       aria-busy={isRolling}
-      className="relative z-10 mx-auto mb-1 md:mb-2 min-h-12 px-6 md:px-8 rounded-xl bg-[var(--theme-primary-action)] text-sm font-black uppercase tracking-widest text-stone-900 shadow-lg shadow-black/20 hover:bg-[var(--theme-primary-action-hover)] active:scale-[0.98] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-60 disabled:cursor-wait disabled:active:scale-100"
+      className="relative z-10 mx-auto mb-1 md:mb-2 min-h-12 px-6 md:px-8 rounded-xl bg-[var(--theme-primary-action)] text-sm font-black uppercase tracking-widest text-[var(--theme-primary-action-text)] shadow-lg shadow-black/20 hover:bg-[var(--theme-primary-action-hover)] active:scale-[0.98] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-60 disabled:cursor-wait disabled:active:scale-100"
     >
       {label}
     </button>

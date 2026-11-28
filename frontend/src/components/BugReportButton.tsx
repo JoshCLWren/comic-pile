@@ -45,12 +45,12 @@ export default function BugReportButton({
   const isFloating = variant === 'floating'
   const isSidebar = variant === 'sidebar'
   const buttonClassName = isFloating
-    ? 'fixed bottom-8 right-4 z-50 flex items-center justify-center w-8 h-8 bg-[var(--theme-bg-panel)] border-[var(--theme-border)] text-stone-400 hover:text-stone-900 rounded-full shadow-sm transition-all surface-panel'
+    ? 'fixed bottom-8 right-4 z-50 flex items-center justify-center w-8 h-8 bg-[var(--theme-bg-panel)] border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-primary-action-text)] rounded-full shadow-sm transition-all surface-panel'
     : isSidebar
       ? collapsed
-        ? 'flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]'
-        : 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]'
-      : 'nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none hover:bg-white/5'
+        ? 'flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]'
+        : 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]'
+      : 'nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none hover:bg-[var(--theme-bg-hover)]'
 
   return (
     <>

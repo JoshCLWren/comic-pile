@@ -55,7 +55,7 @@ export default function DemoRollPage({ api = demoApi }: DemoRollPageProps) {
             <button
               type="button"
               onClick={() => refetch()}
-              className="h-12 inline-flex items-center gap-2 rounded-xl px-6 text-sm font-black bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+              className="h-12 inline-flex items-center gap-2 rounded-xl px-6 text-sm font-black bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-[var(--theme-primary-action-text)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
               data-testid="demo-retry"
             >
               Try again
@@ -174,7 +174,7 @@ export default function DemoRollPage({ api = demoApi }: DemoRollPageProps) {
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link
               to="/register"
-              className="h-12 inline-flex items-center gap-2 rounded-xl px-6 text-sm font-black bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
+              className="h-12 inline-flex items-center gap-2 rounded-xl px-6 text-sm font-black bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-[var(--theme-primary-action-text)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
               data-testid="demo-signup-cta"
             >
               <UserIcon className="h-4 w-4" aria-hidden="true" /> Create your queue
