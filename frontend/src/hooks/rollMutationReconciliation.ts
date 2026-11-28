@@ -121,7 +121,7 @@ export async function recoverProtectedRollMutation<T>(
 
     let state: RollBootstrapResponse
     try {
-      state = await mutationApi.bootstrap()
+      state = await mutationApi.bootstrap(userId)
     } catch (error: unknown) {
       if (isRetryableRollRecoveryFailure(error) && attempt < AUTH_RECOVERY_DELAYS_MS.length) {
         continue
