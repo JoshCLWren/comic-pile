@@ -21,6 +21,14 @@ describe('rollResourcesApi', () => {
     expect(transport.get).toHaveBeenCalledWith('/v2/roll/last-read')
   })
 
+  it('reads canonical recovery for one exact issue and browser snoozes', async () => {
+    const { transport, api } = apiWithTransport()
+    await api.recovery(1200, [20, 30])
+    expect(transport.get).toHaveBeenCalledWith('/v2/roll/recovery', {
+      params: { issue_id: 1200, snoozed: '20,30' },
+    })
+  })
+
   it('reads eligible issue ids, defaulting to no snoozes', async () => {
     const { transport, api } = apiWithTransport()
     await api.eligibleIssueIds()

@@ -36,6 +36,7 @@ function api(eligible: number[] = [101, 102]): RollResourcesApi {
     ),
     issueCards: vi.fn(async (): Promise<IssueCardsResponse> => ({ items: [] })),
     lastRead: vi.fn(async () => null),
+    recovery: vi.fn(async () => null),
   }
 }
 

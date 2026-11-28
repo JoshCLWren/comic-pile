@@ -465,6 +465,7 @@ async function setupRealResetHarness(emptyPool: boolean) {
     })),
     issueCards: vi.fn(async () => ({ items: [] })),
     lastRead: vi.fn(async () => null),
+    recovery: vi.fn(async () => null),
   }
   const realRollHooks = await vi.importActual<typeof import('../hooks/useRoll')>('../hooks/useRoll')
   const realResources = await vi.importActual<typeof import('../hooks/useRollResources')>(

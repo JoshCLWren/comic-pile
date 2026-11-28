@@ -45,6 +45,7 @@ describe('scoped Roll composition service', () => {
       if (url === '/v2/roll/eligible-issue-ids') {
         return { issue_ids: [10], thread_ids: [3], pool_reason: 'ready' }
       }
+      if (url === '/v2/roll/last-read') return null
       throw new Error(`Unexpected GET ${url}`)
     })
     client.post.mockImplementation(async (url: string) => {
@@ -65,34 +66,45 @@ describe('scoped Roll composition service', () => {
     expect(state.session_id).toBeUndefined()
   })
 
-  it('composes recovery from one owner-scoped issue-edge read for a blocked pending issue', async () => {
+  it('composes canonical scoped recovery for a blocked pending issue', async () => {
     const client = createHttpClientStub()
     client.get.mockImplementation(async (url: string) => {
       if (url === '/v2/roll/eligible-issue-ids') {
         return { issue_ids: [20], thread_ids: [4], pool_reason: 'ready' }
       }
-      if (url === '/v2/issues/10/dependencies') {
+      if (url === '/v2/roll/last-read') return null
+      if (url === '/v2/roll/recovery') {
         return {
-          issue_id: 10,
-          incoming: [{
-            dependency_id: 55,
-            source_issue_id: 9,
-            source_issue_number: '3',
-            source_thread_id: 7,
-            source_thread_title: 'Earlier Series',
+          original_thread_id: 3,
+          original_thread_title: 'Current Series',
+          direct_blockers: [{
+            rule_id: null,
+            source_type: 'issue',
+            source_id: 9,
+            source_label: 'Earlier Series #3',
+            satisfaction_type: 'item_read',
+            satisfied: false,
+            causing_issue_ids: [9],
+            causing_member_issue_ids: [],
+            note: 'reader',
           }],
-          outgoing: [],
+          readable_prerequisites: [
+            { node_type: 'issue', node_id: 9, label: 'Earlier Series #3', is_readable: true },
+          ],
+          chains: [[
+            { node_type: 'issue', node_id: 3, label: 'Current Series #10', is_readable: false },
+            { node_type: 'issue', node_id: 9, label: 'Earlier Series #3', is_readable: true },
+          ]],
+          diagnostics: [],
         }
       }
       throw new Error(`Unexpected GET ${url}`)
     })
     client.post.mockImplementation(async (url: string, body?: { issue_ids: number[] }) => {
       if (url === '/v2/issues/cards') {
-        return {
-          items: body?.issue_ids.includes(9)
-            ? [card(9, 7, 'unread')]
-            : [card(20, 4, 'unread')],
-        }
+        if (body?.issue_ids.includes(10)) return { items: [card(10, 3, 'unread')] }
+        if (body?.issue_ids.includes(9)) return { items: [card(9, 7, 'unread')] }
+        return { items: [card(20, 4, 'unread')] }
       }
       throw new Error(`Unexpected POST ${url}`)
     })
