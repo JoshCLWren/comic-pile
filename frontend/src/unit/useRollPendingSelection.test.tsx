@@ -18,7 +18,7 @@ const OFFER = {
 
 /** A resolved auth value so the hook reads the signed-in reader's partition. */
 function authValue(userId: number): AuthContextValue {
-  const user = { id: userId, username: `reader-${userId}` }
+  const user = { id: userId, username: `reader-${userId}`, is_admin: false }
   return {
     authState: {
       status: 'authenticated',

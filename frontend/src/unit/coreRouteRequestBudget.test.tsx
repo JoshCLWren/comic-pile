@@ -506,6 +506,19 @@ describe('core route request budgets', () => {
     expect(countRequests(calls, 'POST', '/v2/issues/cards')).toBe(1)
     expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
     expect(countRequests(calls, 'POST', '/v2/readingSessions')).toBe(0)
+
+    // The three scoped reads are the complete Roll request budget: neither a
+    // hidden fourth scoped read nor either retired operation may ride along.
+    // The previous aggregate flow issued die-state + eligible ids + bootstrap +
+    // session init on a cold load, so the new flow makes no additional request.
+    const rollRequests = calls.filter((call) => [
+      '/v2/roll/die-state',
+      '/v2/roll/eligible-issue-ids',
+      '/v2/issues/cards',
+      '/v2/roll/bootstrap',
+      '/v2/readingSessions',
+    ].includes(call.url))
+    expect(rollRequests).toHaveLength(3)
   })
 
   it('Queue cold-loads each bounded batch once and reuses the cache on warm remount', async () => {
