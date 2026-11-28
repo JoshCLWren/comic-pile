@@ -101,27 +101,12 @@ export function createRollStateApi(client: HttpClient) {
       return {
         pending_thread_id: pending?.thread_id ?? null,
         last_rolled_result: pending?.result ?? null,
-        session_mode: {
-          active_bandwidth: null,
-          predicted_bandwidth: null,
-          bandwidth_confidence: null,
-          bandwidth_source: null,
-          bandwidth_version: null,
-          active_intent: null,
-          predicted_intent: null,
-          intent_confidence: null,
-          intent_source: null,
-          intent_version: null,
-          session_mode_correction_guidance: null,
-        },
         active_thread: null,
         roll_recovery: recovery != null ? parseRollRecovery(recovery) : null,
         roll_pool: rollPool,
         snoozed_threads: snoozedThreads,
         snoozed_count: snoozes.length,
         snoozed_thread_ids: snoozes,
-        skipped_thread_ids: [],
-        skipped_threads: [],
         pool_reason: eligible.pool_reason,
         last_read: lastRead ?? rate?.roll_reconciliation?.last_read ?? null,
       }
@@ -130,14 +115,8 @@ export function createRollStateApi(client: HttpClient) {
       nativeV2.switchPrerequisite({
         body: { node_type: request.node_type, node_id: request.node_id },
       }),
-    /** Retained test hook: browser-owned pending has no client-lifetime dedupe. */
-    resetSessionState: (): void => undefined,
   }
 }
 
 export const rollStateApi = createRollStateApi(defaultHttpClient())
 
-/** Retained compatibility hook; there is no session-resolution state to clear. */
-export function resetRollStateSessionState(): void {
-  rollStateApi.resetSessionState()
-}

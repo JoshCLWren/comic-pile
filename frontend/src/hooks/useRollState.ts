@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { skipToken, useQuery } from '@tanstack/react-query'
 import type { RollState, RollThreadSummary } from '../types/rollState'
-import type { RateResponsePayload, SessionMode } from '../types'
+import type { RateResponsePayload } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { readRollSnoozes } from '../services/api-roll'
@@ -17,15 +17,6 @@ import {
 import { useRollPendingSelection } from './useRollPendingSelection'
 import { publishRollState } from './rollMutationReconciliation'
 
-/** Best-effort browser IANA timezone, retained for callers that display it. */
-export function resolveBrowserTimezone(): string | undefined {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
-  } catch {
-    return undefined
-  }
-}
-
 export interface UseRollStateResult {
   data: RollState | null
   isPending: boolean
@@ -37,20 +28,6 @@ export interface UseRollStateResult {
   recoveryIsPending: boolean
   recoveryError: unknown
   refetch: () => Promise<RollState>
-}
-
-const EMPTY_SESSION_MODE: SessionMode = {
-  active_bandwidth: null,
-  predicted_bandwidth: null,
-  bandwidth_confidence: null,
-  bandwidth_source: null,
-  bandwidth_version: null,
-  active_intent: null,
-  predicted_intent: null,
-  intent_confidence: null,
-  intent_source: null,
-  intent_version: null,
-  session_mode_correction_guidance: null,
 }
 
 /**
@@ -183,15 +160,12 @@ export function useRollState(): UseRollStateResult {
     return {
       pending_thread_id: pending?.thread_id ?? null,
       last_rolled_result: pending?.result ?? null,
-      session_mode: EMPTY_SESSION_MODE,
       active_thread: activeThread,
       roll_recovery: recovery,
       roll_pool: rollPool,
       snoozed_threads: snoozedThreads,
       snoozed_count: snoozedIds.length,
       snoozed_thread_ids: snoozedIds,
-      skipped_thread_ids: [],
-      skipped_threads: [],
       pool_reason: eligible.data?.pool_reason ?? 'ready',
       last_read: lastReadRecord.data ?? rateQuery.data?.roll_reconciliation?.last_read ?? null,
     }

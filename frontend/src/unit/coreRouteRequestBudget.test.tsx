@@ -24,9 +24,7 @@ import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { dependenciesApi } from '../services/api-dependencies'
 import { createAppQueryClient, queryClient as sharedQueryClient } from '../query/queryClient'
-import { resetRollStateSessionState } from '../services/rollStateApi'
 import { queryKeys } from '../query/queryKeys'
-import { adaptRollV2Bootstrap } from '../services/adaptRollV2Bootstrap'
 import api from '../services/api'
 import { AuthContext } from '../contexts/AuthContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
@@ -47,7 +45,7 @@ import RollPage from '../pages/RollPage'
 import HistoryPage from '../pages/HistoryPage'
 import SessionPage from '../pages/SessionPage'
 import QueuePage from '../pages/QueuePage/QueuePage'
-import type { RollThreadSummary } from '../types/rollState'
+import type { RollState, RollThreadSummary } from '../types/rollState'
 import type { ThreadListItem, RollResponse } from '../types'
 import {
   createRequestRecorder,
@@ -251,84 +249,29 @@ function QueueSnoozeBudgetProbe() {
   return null
 }
 
-const bootstrap = {
-  session_id: 1,
-  user_id: 1,
-  current_die: 6,
-  manual_die: null,
+const idleRollState: RollState = {
   pending_thread_id: null,
   last_rolled_result: null,
-  session_mode: {
-    active_bandwidth: null,
-    predicted_bandwidth: null,
-    bandwidth_confidence: null,
-    bandwidth_source: null,
-    bandwidth_version: null,
-    active_intent: null,
-    predicted_intent: null,
-    intent_confidence: null,
-    intent_source: null,
-    intent_version: null,
-    session_mode_correction_guidance: null,
-  },
   active_thread: null,
   roll_pool: [],
   snoozed_threads: [],
   snoozed_count: 0,
-  skipped_thread_ids: [],
-  skipped_threads: [],
+  pool_reason: 'ready',
   last_read: null,
 }
 
-// One rollable pooled series for the Roll move-action budget probe (#4276).
-// Deliberately untyped JSON literals so the request recorder can return them
-// directly through the `JsonValue` Responder contract. The enum literals use
-// the frozen v2 vocabulary so `adaptRollV2Bootstrap` accepts the fixture as a
-// faithful payload.
-const pooledV2Item = {
-  thread: { id: 44, title: 'Pooled Saga', format: 'Comic', tags: [] },
-  issue: { id: 401, number: '1' },
-  identity: {
-    source: 'unavailable' as const,
-    canonical_series_id: null,
-    state: 'unresolved' as const,
-    series_mapping_state: 'unresolved' as const,
-  },
-  reader: {
-    latest_rating: null,
-    average_rating: null,
-    rating_count: null,
-    read_count: null,
-    issue_count: null,
-    progress_scope: 'thread' as const,
-  },
-  routes: [{ kind: 'group' as const, name: 'Read next' }],
-  overflow_routes_count: 0,
-}
-
-/**
- * Faithful native Rust v2 rollback payload: the real shape
- * `adaptRollV2Bootstrap` turns into the retained Roll projection, so a
- * bootstrap refresh in a budget probe exists (and settles) exactly as it
- * would against the lane's real backend.
- */
-const rollV2Bootstrap = {
-  ...bootstrap,
-  bandwidth: {
-    predicted_bandwidth: null,
-    active_bandwidth: null,
-    confidence: null,
-    source: null,
-    mode_version: null,
-  },
-  rollable: [pooledV2Item],
-  pool_reason: 'ready' as const,
-}
-
-/** Pool-less v2 sibling for probes with no mounted Roll page. */
-const rollV2BootstrapIdle = {
-  ...rollV2Bootstrap,
-  rollable: [],
+const pooledRollState: RollState = {
+  ...idleRollState,
+  roll_pool: [{
+    id: 44,
+    title: 'Pooled Saga',
+    format: 'Comic',
+    issue_id: 401,
+    issue_number: '1',
+    tags: [],
+    route_labels: ['Read next'],
+    overflow_routes_count: 0,
+  }],
 }
 
 const authState: AuthState = {
@@ -427,10 +370,6 @@ beforeEach(() => {
   // A per-test client keeps these budgets independent of the process-wide
   // singleton that other unit files populate.
   sharedQueryClient.clear()
-  // The singleton bootstrap service resolves the reading session once per
-  // client lifetime; without this reset a later budget would skip the cold
-  // session POST its cold-load assertion counts (#4276).
-  resetRollStateSessionState()
   routeQueryClient = createAppQueryClient()
   const defaults = routeQueryClient.getDefaultOptions()
   routeQueryClient.setDefaultOptions({
@@ -685,12 +624,12 @@ describe('core route request budgets', () => {
 
     // SAFETY: the fixture is a faithful native-v2 payload; the adapter turns
     // it into the retained projection the Roll page holds (pool row id 44).
-    const poolThread = adaptRollV2Bootstrap(rollV2Bootstrap).roll_pool[0]
+    const poolThread = pooledRollState.roll_pool[0]
     if (!poolThread) throw new Error('fixture adapter produced no pool row')
 
     // Seed the shared client as a roll:active page would hold it, so this
     // budget counts only the refresh the move action owns.
-    sharedQueryClient.setQueryData(queryKeys.roll.state(), adaptRollV2Bootstrap(rollV2Bootstrap))
+    sharedQueryClient.setQueryData(queryKeys.roll.state(), pooledRollState)
 
     render(renderSharedProbe(<RollMoveBudgetProbe />))
     await waitFor(() => expect(rollMoveHandle).not.toBeNull())
@@ -724,7 +663,7 @@ describe('core route request budgets', () => {
       }
       if (call.url === '/v2/roll/offer') return { ...stubRollResponse }
       if (call.url === '/v2/readingSessions') return { session_id: 1, created: false }
-      if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
+      if (call.url === '/v2/roll/bootstrap') return idleRollState
       return {}
     })
     setDefaultHttpClient(client)
