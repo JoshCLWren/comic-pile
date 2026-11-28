@@ -57,7 +57,7 @@ async fn register_and_login(state: &Arc<AppState>, username: &str) -> (String, S
         state,
         Request::builder()
             .method("POST")
-            .uri("/api/v1/auth/register")
+            .uri("/api/v2/auth/register")
             .header(header::CONTENT_TYPE, "application/json")
             .header("x-forwarded-for", format!("198.51.100.{ip}"))
             .body(Body::from(

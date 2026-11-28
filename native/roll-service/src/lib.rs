@@ -693,20 +693,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
             post(issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler),
         )
-        .route("/api/auth/register", post(auth::handlers::register))
-        .route("/api/auth/login", post(auth::handlers::login))
-        .route("/api/auth/refresh", post(auth::handlers::refresh))
-        .route("/api/auth/logout", post(auth::handlers::logout))
-        .route("/api/auth/csrf", get(auth::handlers::csrf))
-        .route("/api/auth/me", get(auth::handlers::me))
-        .route(
-            "/api/auth/forgot-password",
-            post(auth::handlers::forgot_password),
-        )
-        .route(
-            "/api/auth/reset-password",
-            post(auth::handlers::reset_password),
-        )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
         .route("/api/metrics", get(metrics::get_metrics))

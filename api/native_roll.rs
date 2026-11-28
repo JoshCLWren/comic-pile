@@ -951,6 +951,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v2_auth_ingress_is_canonical_and_retired_auth_aliases_are_404() {
+        // #4549: the eight canonical auth operations stay mounted at the
+        // Vercel ingress. Each former v1/bare alias must terminate at the Rust
+        // JSON 404 fallback instead of reaching any auth handler.
+        for (method, path) in [
+            ("GET", "/api/v2/auth/csrf"),
+            ("GET", "/api/v2/auth/me"),
+            ("POST", "/api/v2/auth/register"),
+            ("POST", "/api/v2/auth/login"),
+            ("POST", "/api/v2/auth/refresh"),
+            ("POST", "/api/v2/auth/logout"),
+            ("POST", "/api/v2/auth/forgot-password"),
+            ("POST", "/api/v2/auth/reset-password"),
+        ] {
+            let response = app()
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("v2 auth ingress response");
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {path} must resolve at the Rust ingress"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::METHOD_NOT_ALLOWED,
+                "{method} {path}"
+            );
+            assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+        }
+
+        for (method, path) in [
+            ("GET", "/api/v1/auth/csrf"),
+            ("GET", "/api/v1/auth/me"),
+            ("POST", "/api/v1/auth/register"),
+            ("POST", "/api/v1/auth/login"),
+            ("POST", "/api/v1/auth/refresh"),
+            ("POST", "/api/v1/auth/logout"),
+            ("POST", "/api/v1/auth/forgot-password"),
+            ("POST", "/api/v1/auth/reset-password"),
+            ("GET", "/api/auth/csrf"),
+            ("GET", "/api/auth/me"),
+            ("POST", "/api/auth/register"),
+            ("POST", "/api/auth/login"),
+            ("POST", "/api/auth/refresh"),
+            ("POST", "/api/auth/logout"),
+            ("POST", "/api/auth/forgot-password"),
+            ("POST", "/api/auth/reset-password"),
+        ] {
+            let response = app()
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("retired auth alias response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "retired {method} {path} must not be mounted at the ingress"
+            );
+            assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+            let bytes = to_bytes(response.into_body(), 1024)
+                .await
+                .expect("body bytes");
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "retired {method} {path} must hit native_not_found"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn guest_demo_ingress_needs_no_auth_or_database_state() {
         let mut router = app();
         let response = router
