@@ -2877,7 +2877,7 @@ async fn series_mapping_preview_validation_auth_and_unavailable_scope() {
     let (state, token, csrf, _guard) = setup().await;
     let user_id = me_id(&state, &token).await;
     seed_overlap_scenario(&state, user_id).await;
-    let uri = "/api/v1/catalog/series-mappings/preview";
+    let uri = "/api/v2/seriesMappings:preview";
 
     let (status, _) = raw_request(&state, "POST", uri, None, &csrf, "{}").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -3025,7 +3025,7 @@ async fn project_preview_projects_plan_and_enforces_ownership() {
     .await
     .unwrap();
     drop(conn);
-    let uri = "/api/v1/continuity-plans/700/reading-orders/project-preview";
+    let uri = "/api/v2/continuityPlans/700:previewReadingOrderProjection";
 
     let (status, _) = raw_request(&state, "POST", uri, None, &csrf, "{}").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -3051,7 +3051,7 @@ async fn project_preview_projects_plan_and_enforces_ownership() {
         &state,
         &token,
         &csrf,
-        "/api/v1/continuity-plans/701/reading-orders/project-preview",
+        "/api/v2/continuityPlans/701:previewReadingOrderProjection",
         json!({"reading_order_id": 800}),
     )
     .await;
@@ -3090,7 +3090,7 @@ async fn project_preview_projects_plan_and_enforces_ownership() {
         &state,
         &token,
         &csrf,
-        "/api/v1/continuity-plans/9999/reading-orders/project-preview",
+        "/api/v2/continuityPlans/9999:previewReadingOrderProjection",
         json!({"reading_order_id": 800}),
     )
     .await;
@@ -3109,7 +3109,7 @@ async fn project_preview_projects_plan_and_enforces_ownership() {
         &state,
         &token,
         &csrf,
-        "/api/v1/continuity-plans/abc/reading-orders/project-preview",
+        "/api/v2/continuityPlans/abc:previewReadingOrderProjection",
         json!({"reading_order_id": 800}),
     )
     .await;

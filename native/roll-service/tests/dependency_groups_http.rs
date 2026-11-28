@@ -240,7 +240,9 @@ async fn reading_order_group_routes_round_trip_over_http() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
+    // #5958: the v1 group-order writer is retired; v2 membership/range
+    // resources own ordering.
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
 
     let path = format!("/api/v2/reading-order-groups/{group_id}/reading-plans");
     let (status, body) = send(&state, authed("GET", &path, &token, &csrf, None)).await;
@@ -399,8 +401,9 @@ async fn reading_order_group_validation_uses_python_422_body() {
     ] {
         let path = format!("/api/v1/reading-order-groups/{group_id}/order");
         let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(payload))).await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
-        assert_eq!(body, json!({"detail": "Validation failed"}));
+        // The retired writer must not validate a payload it no longer serves.
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+        assert_eq!(body["detail"], "Not Found");
     }
 }
 
@@ -809,68 +812,9 @@ async fn remove_member_serializes_with_sibling_issue_write() {
     assert_eq!(r_status, StatusCode::NO_CONTENT, "{r_status} {r_body:?}");
 }
 
-#[tokio::test]
-async fn set_group_order_serializes_with_sibling_issue_write() {
-    let (state, token, csrf, user_id, _guard) = setup_user_pool8("rog-race-order").await;
-    let mut holder = state.pool.get().await.unwrap();
-    let conn = state.pool.get().await.unwrap();
-
-    let thread_id: i32 = conn.query_one("INSERT INTO threads (user_id, title, format, issues_remaining, status, queue_position, total_issues, reading_progress) VALUES ($1, 'Series', 'Comic', 2, 'active', 1, 2, 'not_started') RETURNING id", &[&user_id]).await.unwrap().get(0);
-    let issue1: i32 = conn.query_one("INSERT INTO issues (thread_id, issue_number, position, status, created_at) VALUES ($1, '1', 1, 'unread', now()) RETURNING id", &[&thread_id]).await.unwrap().get(0);
-    let issue2: i32 = conn.query_one("INSERT INTO issues (thread_id, issue_number, position, status, created_at) VALUES ($1, '2', 2, 'unread', now()) RETURNING id", &[&thread_id]).await.unwrap().get(0);
-    let group_id: i32 = conn.query_one("INSERT INTO dependency_groups (user_id, name, created_at) VALUES ($1, 'Crossover', now()) RETURNING id", &[&user_id]).await.unwrap().get(0);
-    conn.execute("INSERT INTO dependency_group_memberships (group_id, issue_id, sequence_order) VALUES ($1, $2, 1)", &[&group_id, &issue1]).await.unwrap();
-    conn.execute("INSERT INTO dependency_group_memberships (group_id, issue_id, sequence_order) VALUES ($1, $2, 2)", &[&group_id, &issue2]).await.unwrap();
-
-    let hold = holder.transaction().await.unwrap();
-    hold.execute(
-        "SELECT pg_advisory_xact_lock($1, $2)",
-        &[&QUEUE_LOCK_NAMESPACE, &user_id],
-    )
-    .await
-    .unwrap();
-
-    let sibling_issue = {
-        let state = state.clone();
-        let token = token.clone();
-        let csrf = csrf.clone();
-        tokio::spawn(async move {
-            send(
-                &state,
-                authed(
-                    "POST",
-                    &format!("/api/v2/issues/{issue1}/read-markers"),
-                    &token,
-                    &csrf,
-                    None,
-                ),
-            )
-            .await
-        })
-    };
-    wait_for_queue_lock_waiters(&conn, user_id, 1).await;
-
-    let reorder = {
-        let state = state.clone();
-        let token = token.clone();
-        let csrf = csrf.clone();
-        let path = format!("/api/v1/reading-order-groups/{group_id}/order");
-        tokio::spawn(async move {
-            send(&state, authed("PUT", &path, &token, &csrf, Some(json!({"items": [{"issue_id": issue1, "sequence_order": 2}, {"issue_id": issue2, "sequence_order": 1}]})))).await
-        })
-    };
-    wait_for_queue_lock_waiters(&conn, user_id, 2).await;
-    hold.commit().await.unwrap();
-
-    let (s, r) = tokio::join!(sibling_issue, reorder);
-    let (s_status, s_body) = s.expect("sibling issue");
-    let (r_status, r_body) = r.expect("set order");
-    assert!(
-        matches!(s_status, StatusCode::NO_CONTENT | StatusCode::OK),
-        "{s_status} {s_body:?}"
-    );
-    assert_eq!(r_status, StatusCode::OK, "{r_status} {r_body:?}");
-}
+// #5958: `set_group_order_serializes_with_sibling_issue_write` was removed
+// with the retired v1 group-order writer. The sibling-writer lock-order
+// coverage remains in `delete_group_serializes_with_sibling_issue_write`.
 
 #[tokio::test]
 async fn delete_group_serializes_with_sibling_issue_write() {
