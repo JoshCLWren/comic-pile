@@ -5,8 +5,9 @@
 //! real local mirror fixtures. They prove that a pinned revision is applied
 //! idempotently, that a changed revision only replaces changed lists, that
 //! removed paths are deactivated without deleting their rows, that malformed
-//! paths retain their last-known-good lists, and that a legacy repository alias
-//! is reconciled in place.
+//! paths retain their last-known-good lists, that concurrent first applies
+//! serialize with truthful counts, and that a legacy repository alias is
+//! reconciled in place.
 
 use chrono::{TimeZone, Utc};
 use comicpile_roll_service::{
