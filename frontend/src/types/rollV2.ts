@@ -25,7 +25,6 @@ export type RollV2IdentitySource = 'comicvine' | 'unavailable'
 export interface RollV2Thread {
   id: number
   title: string
-  format: string
   last_activity_at?: string | null
   tags: Tag[]
 }
@@ -123,7 +122,6 @@ export interface RollV2BootstrapResponse {
 export interface RollV2RateResponse {
   id: number
   title: string
-  format: string
   issues_remaining: number
   queue_position: number
   status: string

@@ -171,7 +171,6 @@ export interface ThreadPatchPayload {
   /** Stale-client precondition; 409 with current values on mismatch. */
   expected?: {
     title?: string;
-    format?: string;
     notes?: string | null;
     manual_creator_credits?: ManualCreatorCredit[];
   };
@@ -189,7 +188,6 @@ export type PotentialDuplicateMatchType = 'same_comicvine_volume' | 'similar_tit
 export interface PotentialDuplicateMatch {
   thread_id: number;
   title: string;
-  format: string;
   status: string;
   issues_remaining: number;
   total_issues: number | null;
@@ -202,7 +200,6 @@ export interface PotentialDuplicateMatch {
 
 export interface CheckPotentialDuplicatesRequest {
   title: string;
-  format: string;
   comicvine_volume_id?: number;
   exclude_thread_id?: number;
 }
@@ -249,7 +246,6 @@ export interface ReactivateThreadPayload {
 export interface SessionThread {
   id: number;
   title: string;
-  format: string;
   notes?: string | null;
   issues_remaining?: number;
   queue_position?: number;
@@ -537,8 +533,6 @@ export interface RollResponse {
   thread_id: number;
   /** Title of the selected thread */
   title: string;
-  /** Format of the comic (e.g., 'issue', 'trade', 'omnibus') */
-  format: string;
   /** Number of issues remaining to read in the thread */
   issues_remaining: number;
   /** Position in the reading queue */
@@ -575,7 +569,6 @@ export interface RollResponse {
 export interface SetCurrentIssueResponse {
   thread_id: number;
   title: string;
-  format: string;
   issues_remaining: number;
   queue_position: number;
   issue_id: number | null;
