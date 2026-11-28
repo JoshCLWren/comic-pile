@@ -2,7 +2,11 @@ import { render, renderHook, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useRollBootstrapSync } from '../pages/RollPage/useRollBootstrapSync'
 import { useRollPendingSession } from '../pages/RollPage/useRollPendingSession'
-import { RollCta } from '../pages/RollPage/components/RollCta'
+import { RollDiceButton } from '../pages/RollPage/components/RollDiceButton'
+
+vi.mock('../components/LazyDice3D', () => ({
+  default: () => <div data-testid="dice" />,
+}))
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useRollPageState'
 
@@ -110,8 +114,8 @@ describe('useRollBootstrapSync redirect-only (#4352)', () => {
 
 describe('derived rolled state (#4352)', () => {
   // Mirrors the page derivation `hasRolled = rolledResult != null` and the
-  // die class mapping in RollPage index.tsx. RollCta is production code, so
-  // the label assertions exercise the real Begin / Roll again contract.
+  // die class mapping in RollPage index.tsx. The die is now the only Roll
+  // action (#5981), so its tooltip and accessible name are the real contract.
   it('pending (rolledResult present) -> rolled die class and Roll again, Begin off', () => {
     const rolledResult: number | null = 3
     const hasRolled = rolledResult != null
@@ -119,10 +123,21 @@ describe('derived rolled state (#4352)', () => {
     const dieClass = hasRolled ? 'dice-state-rolled' : 'dice-state-idle'
     expect(dieClass).toBe('dice-state-rolled')
 
-    render(<RollCta isRolling={false} hasRolled={hasRolled} onRoll={vi.fn()} />)
+    render(
+      <RollDiceButton
+        sides={6}
+        value={3}
+        isRolling={false}
+        hasRolled={hasRolled}
+        onRoll={vi.fn()}
+      />,
+    )
 
-    expect(screen.getByTestId('roll-primary-action')).toHaveTextContent('Roll again')
-    expect(screen.queryByText('Begin')).not.toBeInTheDocument()
+    const die = screen.getByTestId('main-die-3d')
+    expect(die).toHaveClass('dice-state-rolled')
+    expect(die).toHaveAttribute('title', 'Click to roll')
+    expect(die).toHaveAccessibleName('Roll the dice')
+    expect(screen.queryByRole('button', { name: /begin/i })).not.toBeInTheDocument()
   })
 
   it('cleared (rolledResult null after rate/cancel/snooze) -> idle die class and Begin', () => {
@@ -132,9 +147,19 @@ describe('derived rolled state (#4352)', () => {
     const dieClass = hasRolled ? 'dice-state-rolled' : 'dice-state-idle'
     expect(dieClass).toBe('dice-state-idle')
 
-    render(<RollCta isRolling={false} hasRolled={hasRolled} onRoll={vi.fn()} />)
+    render(
+      <RollDiceButton
+        sides={6}
+        value={1}
+        isRolling={false}
+        hasRolled={hasRolled}
+        onRoll={vi.fn()}
+      />,
+    )
 
-    expect(screen.getByTestId('roll-primary-action')).toHaveTextContent('Begin')
+    const die = screen.getByTestId('main-die-3d')
+    expect(die).toHaveClass('dice-state-idle')
+    expect(die).toBeEnabled()
   })
 })
 

@@ -143,7 +143,7 @@ test.describe('ROLL-001: Roll selection', () => {
     })
 
     await gotoRollPage(page)
-    const poolRows = page.locator('[data-roll-pool] > div[role="button"]')
+    const poolRows = page.locator('[data-roll-pool] [data-roll-face][role="button"]')
     await expect(poolRows).toHaveCount(2)
 
     // Baselines before the user action, so the cold-load and any die warm-up
@@ -193,7 +193,7 @@ test.describe('ROLL-001: Roll selection', () => {
     })
 
     await gotoRollPage(page)
-    const poolRows = page.locator('[data-roll-pool] > div[role="button"]')
+    const poolRows = page.locator('[data-roll-pool] [data-roll-face][role="button"]')
     await expect(poolRows).toHaveCount(2)
 
     const before = {

@@ -3,6 +3,7 @@ import { threadsApi } from '../services/api-threads';
 import { dependenciesApi } from '../services/api-dependencies';
 import { migrationApi } from '../services/api-migration';
 import { issuesApi, type IssueListParams } from '../services/api-issues';
+import { collectAllPages } from '../pagination/collectAllPages';
 import type { Dependency, Issue, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types';
 import { queryClient } from '../query/queryClient';
 import { queryKeys } from '../query/queryKeys';
@@ -37,29 +38,25 @@ export interface DependencyBuilderApiDeps {
   migration?: DependencyMigrationApi;
 }
 
+const ISSUE_PAGE_SIZE = 100;
+// native/roll-service/src/thread_issues.rs caps a thread at 10,000 issues.
+const MAX_ISSUE_COLLECTION_PAGES = 100;
+
 async function fetchAllUnreadIssues(threadId: number, issues: DependencyIssuesApi = issuesApi): Promise<Issue[]> {
-  const allIssues: Issue[] = [];
-  const seenPageTokens = new Set<string>();
-  let nextPageToken: string | null = null;
-
-  while (true) {
-    const params: IssueListParams = {
-      status: 'unread',
-      page_size: 100,
-    };
-    if (nextPageToken) {
-      params.page_token = nextPageToken;
-    }
-    const data = await issues.list(threadId, params);
-    allIssues.push(...data.issues);
-
-    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
-      return allIssues;
-    }
-
-    seenPageTokens.add(data.next_page_token);
-    nextPageToken = data.next_page_token;
+  const result = await collectAllPages({
+    fetchPage: (token) => {
+      const params: IssueListParams = { status: 'unread', page_size: ISSUE_PAGE_SIZE };
+      if (token) params.page_token = token;
+      return issues.list(threadId, params);
+    },
+    maxPages: MAX_ISSUE_COLLECTION_PAGES,
+    selectItems: (page) => page.issues,
+    selectNextToken: (page) => page.next_page_token || null,
+  });
+  if (result.stopReason === 'max-pages') {
+    throw new Error('Unable to load the complete unread issue list for this series.');
   }
+  return result.items;
 }
 
 export function useThreadDependencies(

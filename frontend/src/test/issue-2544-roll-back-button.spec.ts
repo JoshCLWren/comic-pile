@@ -149,7 +149,7 @@ test.describe('Issue #2544: Roll Page Back Button', () => {
 
     // 1. Roll once to enter the rating view (the in-flight read).
     await gotoRollPage(page)
-    await page.getByTestId('roll-primary-action').click()
+    await page.locator('#main-die-3d').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
     expect(rollPosts).toBe(1)
 

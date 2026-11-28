@@ -1,11 +1,20 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
-import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
-import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
 import type { IssueCardsResponse } from '../../../generated/nativeV2Client'
+import { useResponsive } from '../../../utils/responsive'
+import { CoverBoard } from './CoverBoard'
+import { MobileGallery } from './MobileGallery'
+
+/** Presentation-only state for the Night Shift Roll surfaces (#5981). */
+export interface RollPresentationProps {
+  /** The real die renderer, placed between the middle-row covers or above the gallery. */
+  dieSlot: ReactNode
+  /** Decorative carousel rotation while a committed roll is in flight. */
+  isRolling?: boolean
+}
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
@@ -33,6 +42,8 @@ interface ThreadPoolProps {
   onResetDice?: () => void | Promise<boolean>
   resetDicePending?: boolean
   resetDiceError?: string
+  /** Optional in isolated unit fixtures; the page always supplies it. */
+  presentation?: RollPresentationProps
 }
 
 export function ThreadPool({
@@ -57,9 +68,12 @@ export function ThreadPool({
   onResetDice,
   resetDicePending = false,
   resetDiceError = '',
+  presentation,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
+  const { isMobile } = useResponsive()
   const wasRatingView = useRef(isRatingView)
+  const view: RollPresentationProps = presentation ?? { dieSlot: null, isRolling: false }
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
   // The scoped eligible query applies the browser-owned snooze cookie that
   // bootstrap cannot see. Treat either source as snooze-backed emptiness so the
@@ -241,84 +255,24 @@ export function ThreadPool({
               </button>
             </div>
           </div>
+        ) : isMobile ? (
+          <MobileGallery
+            pool={displayPool}
+            cardByIssueId={cardByIssueId}
+            dieSlot={view.dieSlot}
+            isRolling={view.isRolling ?? false}
+            winningThreadId={selectedThreadId != null ? Number(selectedThreadId) : null}
+            onThreadClick={onThreadClick}
+          />
         ) : (
-          displayPool.map((thread, index) => {
-            const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
-            const routeLabels = (thread.route_labels ?? []).filter(Boolean)
-            const tags = thread.tags ?? []
-            const tagNames = tags.map((tag) => tag.name)
-            // The scoped card is authoritative for the identity it carries
-            // (#4719); bootstrap remains the fallback while cards settle.
-            const card = thread.issue_id != null ? cardByIssueId.get(thread.issue_id) : undefined
-            const displayTitle = card?.thread_title ?? thread.title
-            const issueNumber = card?.issue_number ?? thread.issue_number
-            return (
-              <div
-                key={thread.id}
-                onClick={() => onThreadClick(thread)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    onThreadClick(thread)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${displayTitle}${issueNumber ? `, issue ${issueNumber}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}${(thread.overflow_routes_count ?? 0) > 0 ? `, ${thread.overflow_routes_count} more connected routes` : ''}. Open series actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
-                  }`}
-              >
-                <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
-                  {index + 1}
-                </span>
-                {/* A die face with a canonical owned issue exposes the same
-                    covered read/rate/map entrance as every other exact-issue
-                    row. Stop propagation so opening the card never selects the
-                    die face or rolls. Rows without an owned id keep the series
-                    representative cover and no fabricated issue action. */}
-                {thread.issue_id != null ? (
-                  <div
-                    className="shrink-0"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <CompactIssueCardTrigger
-                      issueId={thread.issue_id}
-                      threadTitle={displayTitle}
-                      issueNumber={issueNumber ?? ''}
-                      status={card?.status === 'read' ? 'read' : 'unread'}
-                      card={card ?? null}
-                      hideTitle
-                    />
-                  </div>
-                ) : (
-                  <ComicIssueCover
-                    coverImageUrl={card?.cover_image_url ?? null}
-                    threadTitle={displayTitle}
-                    issueNumber={issueNumber ?? ''}
-                    variant="compact"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-stone-200 truncate text-sm">{displayTitle}</p>
-                  <p className="truncate text-xs text-stone-400">
-                    {issueNumber ? `#${issueNumber}` : 'Next unread issue'}
-                  </p>
-                  <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
-                  <ThreadTagChips
-                    tags={tags}
-                    label={`Tags for ${displayTitle}`}
-                    className="mt-1"
-                  />
-                  {routeLabels.length || (thread.overflow_routes_count ?? 0) > 0 ? (
-                    <p className="mt-1 truncate text-[10px] text-[var(--theme-continuity-accent)]">
-                      Connected to: {routeLabels.join(' · ')}{routeLabels.length && (thread.overflow_routes_count ?? 0) > 0 ? ' · ' : ''}{(thread.overflow_routes_count ?? 0) > 0 ? `+${thread.overflow_routes_count} more` : ''}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            )
-          })
+          <CoverBoard
+            pool={displayPool}
+            cardByIssueId={cardByIssueId}
+            dieSlot={view.dieSlot}
+            dieSize={dieSize ?? displayPool.length}
+            selectedThreadId={selectedThreadId}
+            onThreadClick={onThreadClick}
+          />
         )}
       </div>}
 

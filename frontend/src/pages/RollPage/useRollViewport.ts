@@ -30,7 +30,7 @@ interface UseRollViewportParams {
  * ends instead of fighting it.
  */
 export function useRollViewport({ isRatingView }: UseRollViewportParams) {
-  const mainDieRef = useRef<HTMLDivElement>(null)
+  const mainDieRef = useRef<HTMLButtonElement>(null)
   const ratingViewTopRef = useRef<HTMLDivElement>(null)
   const prevIsRatingViewRef = useRef(isRatingView)
 
