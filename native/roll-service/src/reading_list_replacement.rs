@@ -817,6 +817,33 @@ pub async fn commit_replacement(
         .map_err(qe)?
         .ok_or_else(|| ApiError::NotFound(format!("Reading List {list_id} not found")))?;
     let current_updated_at: String = list_row.get(3);
+    // An exact retry replays before version/source guards: the first commit has
+    // already advanced `updated_at`, so checking staleness first would turn a
+    // legitimate concurrent retry into a false conflict.
+    if let Some(key) = request.idempotency_key.as_deref() {
+        let replay = tx
+            .query_opt(
+                "SELECT id, response_json::text FROM custom_cbl_replacement_snapshots
+                 WHERE user_id = $1 AND list_id = $2 AND idempotency_key = $3",
+                &[&user.id(), &list_id, &key],
+            )
+            .await
+            .map_err(qe)?;
+        if let Some(row) = replay {
+            let mut response: ReplacementCommitResponse =
+                serde_json::from_str(&row.get::<_, String>(1)).unwrap_or(ReplacementCommitResponse {
+                    target_list_id: list_id,
+                    snapshot_id: row.get(0),
+                    updated_at: current_updated_at.clone(),
+                    applied_issue_ids: Vec::new(),
+                    preserved_manual_issue_ids: Vec::new(),
+                    replayed: true,
+                });
+            response.replayed = true;
+            tx.commit().await.map_err(qe)?;
+            return Ok(Json(response));
+        }
+    }
     if current_updated_at != request.expected_updated_at {
         return Err(structured(
             axum::http::StatusCode::CONFLICT,
@@ -845,31 +872,6 @@ pub async fn commit_replacement(
             "cbl_source_revision_stale",
             "The CBL source revision changed after you reviewed it",
         ));
-    }
-
-    if let Some(key) = request.idempotency_key.as_deref() {
-        let replay = tx
-            .query_opt(
-                "SELECT id, response_json::text FROM custom_cbl_replacement_snapshots
-                 WHERE user_id = $1 AND list_id = $2 AND idempotency_key = $3",
-                &[&user.id(), &list_id, &key],
-            )
-            .await
-            .map_err(qe)?;
-        if let Some(row) = replay {
-            let mut response: ReplacementCommitResponse =
-                serde_json::from_str(&row.get::<_, String>(1)).unwrap_or(ReplacementCommitResponse {
-                    target_list_id: list_id,
-                    snapshot_id: row.get(0),
-                    updated_at: current_updated_at.clone(),
-                    applied_issue_ids: Vec::new(),
-                    preserved_manual_issue_ids: Vec::new(),
-                    replayed: true,
-                });
-            response.replayed = true;
-            tx.commit().await.map_err(qe)?;
-            return Ok(Json(response));
-        }
     }
 
     let old = load_entries(&tx, list_id).await?;
