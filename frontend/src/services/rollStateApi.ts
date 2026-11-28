@@ -17,6 +17,11 @@ import type {
   RollPrerequisiteSwitchRequest,
 } from '../types/rollState'
 
+interface RollRecoveryQuery {
+  issue_id: number
+  snoozed?: string
+}
+
 /**
  * Client-side composition of the scoped Roll resources.
  *
@@ -82,7 +87,7 @@ export function createRollStateApi(client: HttpClient) {
         : null
       let recovery: RollRecovery | null = null
       if (blockedIssueId != null) {
-        const query: { issue_id: number; snoozed?: string } = { issue_id: blockedIssueId }
+        const query: RollRecoveryQuery = { issue_id: blockedIssueId }
         if (snoozes.length > 0) query.snoozed = snoozes.join(',')
         recovery = await nativeV2.recovery({ query })
       }

@@ -36,13 +36,11 @@ export function createRollResourcesApi(client: HttpClient) {
   return {
     dieState: (): Promise<DieStateResponse> => nativeV2.dieState(),
     lastRead: (): Promise<RollLastRead | null> => nativeV2.lastRead(),
-    recovery: (issueId: number, snoozedThreadIds: readonly number[] = []): Promise<RollRecovery | null> =>
-      nativeV2.recovery({
-        query: {
-          issue_id: issueId,
-          ...(snoozedThreadIds.length > 0 ? { snoozed: snoozedThreadIds.join(',') } : {}),
-        },
-      }),
+    recovery: (issueId: number, snoozedThreadIds: readonly number[] = []): Promise<RollRecovery | null> => {
+      const query: RollRecoveryQuery = { issue_id: issueId }
+      if (snoozedThreadIds.length > 0) query.snoozed = snoozedThreadIds.join(',')
+      return nativeV2.recovery({ query })
+    },
     eligibleIssueIds: (snoozedThreadIds: readonly number[] = []): Promise<EligibleIssueIdsResponse> =>
       nativeV2.eligibleIssueIds({
         query: snoozedThreadIds.length > 0 ? { snoozed: snoozedThreadIds.join(',') } : {},
@@ -50,6 +48,11 @@ export function createRollResourcesApi(client: HttpClient) {
     issueCards: (issueIds: readonly number[]): Promise<IssueCardsResponse> =>
       nativeV2.issueCards({ body: { issue_ids: [...issueIds] } }),
   }
+}
+
+interface RollRecoveryQuery {
+  issue_id: number
+  snoozed?: string
 }
 
 export type RollResourcesApi = ReturnType<typeof createRollResourcesApi>

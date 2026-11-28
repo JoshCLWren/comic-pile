@@ -29,6 +29,7 @@ async function getReadingMode(page: Page): Promise<ReadingMode> {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!response.ok) throw new Error(`Reading mode failed: ${response.status}`)
+    // SAFETY: the fulfilled scoped reading-mode route returns the ReadingMode wire shape.
     return response.json() as Promise<ReadingMode>
   })
 }
@@ -86,6 +87,7 @@ function modeLabel(value: string | null): string {
   if (!value) return ''
   const normalized = value.trim().toLowerCase()
   return Object.hasOwn(MODE_LABELS, normalized)
+    // SAFETY: Object.hasOwn above proves the normalized key exists in MODE_LABELS.
     ? MODE_LABELS[normalized as keyof typeof MODE_LABELS]
     : value.trim()
 }
