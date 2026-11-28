@@ -32,6 +32,10 @@ export async function resolveSnoozedSeriesCovers(
     }
   }
 
+  const snoozedState = queryClient.getQueryState<ThreadListResponse>(queryKeys.roll.snoozedSummaries())
+  if (snoozedState?.data && !snoozedState.isInvalidated) {
+    applyThreads(snoozedState.data.threads, snoozedState.dataUpdatedAt)
+  }
   const plannerState = queryClient.getQueryState<ThreadListItem[]>(queryKeys.thread.list())
   if (plannerState?.data && !plannerState.isInvalidated) {
     applyThreads(plannerState.data, plannerState.dataUpdatedAt)

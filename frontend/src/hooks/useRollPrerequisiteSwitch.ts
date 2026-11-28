@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { AuthContext } from '../contexts/AuthContext'
 import { fetchAndPublishRollBootstrap, isAmbiguousNetworkFailure } from './rollMutationReconciliation'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { useRollPendingSelection } from './useRollPendingSelection'
 import { getApiErrorDetail } from '../utils/apiError'
 
 interface RollPrerequisiteSwitchState {
@@ -14,12 +15,18 @@ interface RollPrerequisiteSwitchState {
 export function useRollPrerequisiteSwitch(): RollPrerequisiteSwitchState {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const userId = useContext(AuthContext)?.user?.id ?? null
+  const { select } = useRollPendingSelection()
 
   const mutation = useMutation({
     mutationFn: async (issueId: number) => {
       setErrorMessage(null)
       try {
-        await rollBootstrapApi.switchPrerequisite({ node_type: 'issue', node_id: issueId })
+        const response = await rollBootstrapApi.switchPrerequisite({ node_type: 'issue', node_id: issueId })
+        select({
+          issue_id: response.target_issue_id,
+          thread_id: response.target_thread_id,
+          issue_number: response.target_issue_number,
+        })
         try {
           await fetchAndPublishRollBootstrap(rollBootstrapApi, userId)
         } catch {

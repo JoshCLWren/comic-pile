@@ -138,6 +138,8 @@ export interface ThreadQueryParams {
   sort?: 'position' | 'title' | 'created';
   page_size?: number;
   page_token?: string;
+  /** Bounded exact-id filter for owner-scoped display summaries. */
+  ids?: string;
 }
 
 export interface ManualCreatorCredit {
