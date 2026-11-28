@@ -19,7 +19,7 @@ Comic Pile supports **issue-level dependencies** that enable creating linear rea
 **Key Fields:**
 - `id`: Unique identifier
 - `title`: Series name (e.g., "Uncanny X-Men")
-- `format`: Format type (e.g., "Comic", "Trade", "Omnibus")
+- `format`: Retired, inert legacy column (#3035); no API or UI consumer remains
 - `issues_remaining`: Counter for backward compatibility
 - `total_issues`: Total issue count (NULL = old system, not migrated)
 - `next_unread_issue_id`: Foreign key to next unread Issue
@@ -373,7 +373,7 @@ Response:
 2. **Thread Search:**
    - Real-time search with 300ms debounce
    - Filters out current thread
-   - Shows thread title and format
+   - Shows thread title
 
 3. **Inline Migration (Issue Mode):**
    - Detects if selected thread needs migration (`total_issues === null`)
@@ -1225,7 +1225,7 @@ target_thread.is_blocked = true IF
 CREATE TABLE threads (
     id INTEGER PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
-    format VARCHAR(50) NOT NULL,
+    format VARCHAR(50) NULL, -- retired, inert (#3035)
     issues_remaining INTEGER DEFAULT 0,
     total_issues INTEGER NULL,
     next_unread_issue_id INTEGER NULL REFERENCES issues(id) ON DELETE SET NULL,
