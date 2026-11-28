@@ -353,6 +353,8 @@ use utoipa::OpenApi;
         crate::creators_v2::CreatorIssueRow,
         crate::creators_v2::CreatorRatingBucket,
         crate::creators_v2::CreatorRatingDistribution,
+        crate::creators_v2::CreatorSeriesPopulationScope,
+        crate::creators_v2::CreatorRatedPopulationScope,
         crate::creators_v2::CreatorSeriesGroup,
         crate::creators_v2::CreatorSeriesIssueListResponse,
         crate::creators_v2::CreatorIssueInsight,

@@ -23,21 +23,3 @@ export const OVERSCAN_PX = 800
  * drag-to-reorder in the virtualized list.  Matches ~half a card height.
  */
 export const EDGE_SCROLL_ZONE = 80
-
-
-/**
- * Returns the subset of `threads` belonging to a given virtual row.
- *
- * In the single-column virtualization path, each virtual row contains
- * exactly one thread.
- *
- * @param threads - Full array of all threads.
- * @param rowIndex - Zero-based virtual row index.
- * @returns Array containing the thread at the given index, or empty if out of bounds.
- */
-export function getRowThreads<T>(
-  threads: T[],
-  rowIndex: number,
-): T[] {
-  return rowIndex < threads.length ? [threads[rowIndex]] : []
-}

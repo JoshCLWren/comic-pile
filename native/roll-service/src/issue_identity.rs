@@ -5552,4 +5552,182 @@ mod guard_db_tests {
 
         tx.rollback().await.expect("rollback guard transaction");
     }
+<<<<<<< HEAD
+=======
+
+    /// Counts `DbExec` statements so the rehearsal can prove the guard loader
+    /// is bounded: more facts must not mean more round trips.
+    struct CountingExec<'a> {
+        inner: &'a tokio_postgres::Transaction<'a>,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl<'a> CountingExec<'a> {
+        fn new(inner: &'a tokio_postgres::Transaction<'a>) -> Self {
+            Self {
+                inner,
+                calls: std::sync::atomic::AtomicUsize::new(0),
+            }
+        }
+
+        fn count(&self) -> usize {
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    impl DbExec for CountingExec<'_> {
+        async fn run_query(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.inner.query(sql, params).await
+        }
+
+        async fn run_query_opt(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.inner.query_opt(sql, params).await
+        }
+
+        async fn run_query_one(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.inner.query_one(sql, params).await
+        }
+
+        async fn run_execute(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<u64, tokio_postgres::Error> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.inner.execute(sql, params).await
+        }
+    }
+
+    #[tokio::test]
+    async fn rehearsal_unknown_identity_fails_closed_and_queries_stay_bounded() {
+        let (state, _guard) = fixture().await;
+        let mut conn = db::checkout(&state).await.expect("rehearsal connection");
+        let tx = conn
+            .build_transaction()
+            .read_only(true)
+            .start()
+            .await
+            .expect("rehearsal transaction");
+
+        // Safe unknown identity: an issue with no row, no mapping and no
+        // catalog link yields a review reason and no invented volume evidence.
+        let unknown = vec![fact(Some(9999), None)];
+        let unknown_state = load_collection_guard_state(&tx, 9101, &unknown)
+            .await
+            .expect("unknown guard state");
+        assert!(unknown_state.issue_volumes.is_empty());
+        assert_eq!(
+            guard_check(&unknown_state, &unknown[0]).map(|(reason, _)| reason),
+            Some("collection_identity_requires_review".to_string())
+        );
+
+        // Cross-owner shared reference: reader B uses the same catalog issue
+        // as reader A, but A's volume exclusion must never apply to B.
+        let other = vec![fact(Some(9501), Some(9401))];
+        let other_state = load_collection_guard_state(&tx, 9102, &other)
+            .await
+            .expect("other reader guard state");
+        assert_eq!(
+            guard_check(&other_state, &other[0]).map(|(reason, _)| reason),
+            None,
+            "foreign exclusion leaked across readers"
+        );
+
+        // Bounded queries: ten facts must cost the same statements as one.
+        let single = CountingExec::new(&tx);
+        let one = vec![fact(Some(9301), None)];
+        let _ = load_collection_guard_state(&single, 9101, &one)
+            .await
+            .expect("single fact guard state");
+        let repeated = (0..10).map(|_| fact(Some(9301), None)).collect::<Vec<_>>();
+        let many = CountingExec::new(&tx);
+        let _ = load_collection_guard_state(&many, 9101, &repeated)
+            .await
+            .expect("repeated facts guard state");
+        assert!(single.count() > 0, "the loader must execute real SQL");
+        assert!(
+            single.count() <= 8,
+            "guard loader used {} statements for one fact",
+            single.count()
+        );
+        assert_eq!(
+            many.count(),
+            single.count(),
+            "guard loader grew with the number of facts"
+        );
+
+        tx.rollback().await.expect("rollback rehearsal transaction");
+    }
+
+    #[tokio::test]
+    async fn rehearsal_rollback_restores_exclusion_state() {
+        let (state, _guard) = fixture().await;
+        let mut conn = db::checkout(&state).await.expect("rollback connection");
+        let tx = conn
+            .build_transaction()
+            .start()
+            .await
+            .expect("rollback transaction");
+        let fact = vec![fact(Some(9501), Some(9401))];
+
+        let before = load_collection_guard_state(&tx, 9102, &fact)
+            .await
+            .expect("before rollback state");
+        assert!(
+            guard_check(&before, &fact[0]).is_none(),
+            "reader B starts unexcluded"
+        );
+
+        tx.execute(
+            "INSERT INTO collection_exclusions \
+             (id, user_id, provider, external_volume_id, created_at) \
+             VALUES (9801, 9102, 'comicvine', '4050-1000', NOW())",
+            &[],
+        )
+        .await
+        .expect("insert rehearsal exclusion");
+        let during = load_collection_guard_state(&tx, 9102, &fact)
+            .await
+            .expect("during rollback state");
+        assert_eq!(
+            guard_check(&during, &fact[0]).map(|(reason, _)| reason),
+            Some("collection_volume_excluded".to_string())
+        );
+
+        tx.rollback().await.expect("rollback exclusion");
+
+        let check = conn
+            .build_transaction()
+            .read_only(true)
+            .start()
+            .await
+            .expect("post-rollback transaction");
+        let after = load_collection_guard_state(&check, 9102, &fact)
+            .await
+            .expect("after rollback state");
+        assert!(
+            guard_check(&after, &fact[0]).is_none(),
+            "rollback must restore the original guard state"
+        );
+        check
+            .rollback()
+            .await
+            .expect("rollback post-rollback transaction");
+    }
+>>>>>>> origin/main
 }

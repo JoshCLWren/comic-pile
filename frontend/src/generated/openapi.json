@@ -4218,7 +4218,7 @@
             "type": "array"
           },
           "rated_population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorRatedPopulationScope"
           },
           "rating_distribution": {
             "oneOf": [
@@ -4276,7 +4276,10 @@
           "rated_population_scope",
           "headline_roles",
           "read_unrated_issues",
-          "upcoming_issues"
+          "upcoming_issues",
+          "next_cursor",
+          "rating_distribution",
+          "insights"
         ],
         "type": "object"
       },
@@ -4605,9 +4608,13 @@
         "required": [
           "min_series_sample",
           "series_sample_met",
+          "series_message",
           "excluded_incomplete_series_count",
           "individual_issue_limit",
           "individual_issues_combined",
+          "strongest_series",
+          "weakest_series",
+          "most_rated_series",
           "highest_rated_issues",
           "lowest_rated_issues"
         ],
@@ -4703,6 +4710,8 @@
           "thread_title",
           "status",
           "roles",
+          "effective_rating",
+          "rating_timestamp",
           "sort_key"
         ],
         "type": "object"
@@ -4737,6 +4746,7 @@
           "canonical_creator_key",
           "display_name",
           "normalized_roles",
+          "average_rating",
           "ratings_count"
         ],
         "type": "object"
@@ -5020,6 +5030,13 @@
         ],
         "type": "object"
       },
+      "CreatorRatedPopulationScope": {
+        "description": "Only headline roles contribute to the headline rated list.",
+        "enum": [
+          "headline_roles_only"
+        ],
+        "type": "string"
+      },
       "CreatorRatingBucket": {
         "properties": {
           "count": {
@@ -5100,7 +5117,8 @@
         "required": [
           "role",
           "issue_count",
-          "rated_issue_count"
+          "rated_issue_count",
+          "average_rating"
         ],
         "type": "object"
       },
@@ -5131,7 +5149,7 @@
             "type": "boolean"
           },
           "population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorSeriesPopulationScope"
           },
           "rated_issue_count": {
             "format": "int64",
@@ -5170,6 +5188,9 @@
           "thread_id",
           "thread_title",
           "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
           "roles",
           "unread_issue_count",
           "read_unrated_issue_count",
@@ -5281,7 +5302,7 @@
             "type": "integer"
           },
           "population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorSeriesPopulationScope"
           },
           "rated_issue_count": {
             "format": "int64",
@@ -5314,14 +5335,25 @@
           "thread_title",
           "roles",
           "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
           "metadata_complete",
           "population_scope",
           "issues",
           "total",
           "limit",
-          "offset"
+          "offset",
+          "next_cursor"
         ],
         "type": "object"
+      },
+      "CreatorSeriesPopulationScope": {
+        "description": "Every verified credited role contributes to the series aggregate.",
+        "enum": [
+          "all_verified_credits"
+        ],
+        "type": "string"
       },
       "CreatorSummariesResponse": {
         "properties": {
@@ -5431,6 +5463,7 @@
           "canonical_creator_key",
           "display_name",
           "normalized_roles",
+          "average_rating",
           "ratings_count",
           "read_unrated_count",
           "upcoming_count"

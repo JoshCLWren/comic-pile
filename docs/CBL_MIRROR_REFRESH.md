@@ -125,8 +125,15 @@ Refresh behavior:
 - Publisher and arbitrarily nested source paths are preserved verbatim as source-relative paths.
 - Optional `Volume` and `Year` values containing the explicit `None` sentinel (case-insensitive,
   surrounding whitespace ignored) are preserved as unknown years. The occurrence stays in source
+<<<<<<< HEAD
   order; missing provider identities remain unresolved. Other malformed numeric values and missing
   required `Series`/`Number` still produce a path-specific parse failure. `NumIssues` remains numeric.
+=======
+  order; missing provider identities remain unresolved. An explicitly empty `Number=""` is also
+  preserved as an unknown issue number so real entries with a series and Comic Vine identity stay
+  in the catalog. A missing `Series`, an absent `Number` attribute, other malformed numeric values,
+  and malformed structure still produce a path-specific parse failure. `NumIssues` remains numeric.
+>>>>>>> origin/main
 - Comic Vine IDs are recorded as `external_identities` rows keyed by
   `(provider, entity_type, external_id)`, and CBL entries reference them.
 

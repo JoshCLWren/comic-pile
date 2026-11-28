@@ -91,6 +91,7 @@ pub struct CreatorSummaryItem {
     pub canonical_creator_key: String,
     pub display_name: String,
     pub normalized_roles: Vec<String>,
+    #[schema(required)]
     pub average_rating: Option<f64>,
     pub ratings_count: i64,
     pub read_unrated_count: i64,
@@ -108,6 +109,7 @@ pub struct CreatorListItem {
     pub canonical_creator_key: String,
     pub display_name: String,
     pub normalized_roles: Vec<String>,
+    #[schema(required)]
     pub average_rating: Option<f64>,
     pub ratings_count: i64,
 }
@@ -126,6 +128,7 @@ pub struct CreatorRoleStat {
     pub role: String,
     pub issue_count: i64,
     pub rated_issue_count: i64,
+    #[schema(required)]
     pub average_rating: Option<f64>,
 }
 
@@ -137,7 +140,9 @@ pub struct CreatorIssueRow {
     pub thread_title: String,
     pub status: String,
     pub roles: Vec<String>,
+    #[schema(required)]
     pub effective_rating: Option<f64>,
+    #[schema(required)]
     pub rating_timestamp: Option<String>,
     pub sort_key: String,
 }
@@ -158,21 +163,38 @@ pub struct CreatorRatingDistribution {
     pub max_rating: f64,
 }
 
+/// Every verified credited role contributes to the series aggregate.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CreatorSeriesPopulationScope {
+    AllVerifiedCredits,
+}
+
+/// Only headline roles contribute to the headline rated list.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CreatorRatedPopulationScope {
+    HeadlineRolesOnly,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatorSeriesGroup {
     pub series_key: String,
     pub thread_id: i64,
     pub thread_title: String,
     pub rated_issue_count: i64,
+    #[schema(required)]
     pub average_rating: Option<f64>,
+    #[schema(required)]
     pub lowest_rating: Option<f64>,
+    #[schema(required)]
     pub highest_rating: Option<f64>,
     pub roles: Vec<String>,
     pub unread_issue_count: i64,
     pub read_unrated_issue_count: i64,
     pub metadata_complete: bool,
     pub sort_key: String,
-    pub population_scope: String,
+    pub population_scope: CreatorSeriesPopulationScope,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -182,15 +204,19 @@ pub struct CreatorSeriesIssueListResponse {
     pub thread_title: String,
     pub roles: Vec<String>,
     pub rated_issue_count: i64,
+    #[schema(required)]
     pub average_rating: Option<f64>,
+    #[schema(required)]
     pub lowest_rating: Option<f64>,
+    #[schema(required)]
     pub highest_rating: Option<f64>,
     pub metadata_complete: bool,
-    pub population_scope: String,
+    pub population_scope: CreatorSeriesPopulationScope,
     pub issues: Vec<CreatorIssueRow>,
     pub total: i64,
     pub limit: i64,
     pub offset: i64,
+    #[schema(required)]
     pub next_cursor: Option<String>,
 }
 
@@ -223,12 +249,16 @@ pub struct CreatorSeriesInsight {
 pub struct CreatorInsights {
     pub min_series_sample: i64,
     pub series_sample_met: bool,
+    #[schema(required)]
     pub series_message: Option<String>,
     pub excluded_incomplete_series_count: i64,
     pub individual_issue_limit: i64,
     pub individual_issues_combined: bool,
+    #[schema(required)]
     pub strongest_series: Option<CreatorSeriesInsight>,
+    #[schema(required)]
     pub weakest_series: Option<CreatorSeriesInsight>,
+    #[schema(required)]
     pub most_rated_series: Option<CreatorSeriesInsight>,
     pub highest_rated_issues: Vec<CreatorIssueInsight>,
     pub lowest_rated_issues: Vec<CreatorIssueInsight>,
@@ -243,12 +273,15 @@ pub struct CreatorDetailResponse {
     pub series_groups_total: i64,
     pub series_groups_complete: bool,
     pub rated_issues: Vec<CreatorIssueRow>,
-    pub rated_population_scope: String,
+    pub rated_population_scope: CreatorRatedPopulationScope,
     pub headline_roles: Vec<String>,
     pub read_unrated_issues: Vec<CreatorIssueRow>,
     pub upcoming_issues: Vec<CreatorIssueRow>,
+    #[schema(required)]
     pub next_cursor: Option<String>,
+    #[schema(required)]
     pub rating_distribution: Option<CreatorRatingDistribution>,
+    #[schema(required)]
     pub insights: Option<CreatorInsights>,
 }
 
@@ -1729,7 +1762,7 @@ fn build_series_group(aggregate: &SeriesAggregate) -> CreatorSeriesGroup {
         read_unrated_issue_count: aggregate.read_unrated_issue_count,
         metadata_complete: aggregate.metadata_complete,
         sort_key: format!("{:012}", aggregate.thread_id),
-        population_scope: "all_verified_credits".to_string(),
+        population_scope: CreatorSeriesPopulationScope::AllVerifiedCredits,
     }
 }
 
@@ -2078,7 +2111,7 @@ fn build_detail(
         series_groups_total: series_groups_total as i64,
         series_groups_complete,
         rated_issues: rated_rows,
-        rated_population_scope: "headline_roles_only".to_string(),
+        rated_population_scope: CreatorRatedPopulationScope::HeadlineRolesOnly,
         headline_roles: HEADLINE_ROLES
             .iter()
             .map(|role| role.to_string())
@@ -4693,10 +4726,20 @@ mod tests {
         assert_eq!(detail.series_groups[0].sort_key, "000000000010");
         assert_eq!(
             detail.series_groups[0].population_scope,
+            CreatorSeriesPopulationScope::AllVerifiedCredits
+        );
+        assert_eq!(
+            detail.rated_population_scope,
+            CreatorRatedPopulationScope::HeadlineRolesOnly
+        );
+        assert_eq!(detail.next_cursor, None);
+        let wire = serde_json::to_value(&detail).expect("serialize creator detail");
+        assert_eq!(wire["rated_population_scope"], "headline_roles_only");
+        assert_eq!(
+            wire["series_groups"][0]["population_scope"],
             "all_verified_credits"
         );
-        assert_eq!(detail.rated_population_scope, "headline_roles_only");
-        assert_eq!(detail.next_cursor, None);
+        assert_eq!(wire.get("next_cursor"), Some(&Value::Null));
         let insights = detail.insights.expect("insights");
         assert_eq!(insights.individual_issue_limit, 3);
         assert_eq!(insights.highest_rated_issues[0].issue_id, 2);
@@ -4719,7 +4762,10 @@ mod tests {
         assert_eq!(response.series_key, "thread:10");
         assert_eq!(response.rated_issue_count, 2);
         assert_eq!(response.total, 2);
-        assert_eq!(response.population_scope, "all_verified_credits");
+        assert_eq!(
+            response.population_scope,
+            CreatorSeriesPopulationScope::AllVerifiedCredits
+        );
         assert_eq!(
             response
                 .issues

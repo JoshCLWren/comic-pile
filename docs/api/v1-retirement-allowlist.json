@@ -1419,8 +1419,12 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ]
     },
     {
@@ -1433,8 +1437,12 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ]
     },
     {
@@ -1447,8 +1455,12 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ]
     },
     {

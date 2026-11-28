@@ -60,37 +60,28 @@ describe('creatorMetricDrilldownApi', () => {
     })
   })
 
-  it('requests rating distribution buckets from the dedicated endpoint', async () => {
+  it.each([
+    ['rating-distribution', { ratingValue: '5.0', page: 1 }, { rating_value: '5.0', page: 1 }],
+    ['role-stats', { role: 'writer', pageSize: 10 }, { role: 'writer', page_size: 10 }],
+    ['series-stats', { seriesKey: 'thread:7' }, { series_key: 'thread:7' }],
+  ] as const)('requests %s through the live generic endpoint', async (metric, params, expected) => {
     client.get.mockResolvedValue(DRILLDOWN)
-
-    await drilldownApi.getRatingDistributionDrilldown('creator:1', '5.0', { page: 1 })
-    expect(client.get).toHaveBeenCalledWith(
-      '/v2/creators/creator:1/metrics/rating-distribution/5.0',
-      { params: { page: 1, page_size: undefined } },
-    )
-  })
-
-  it('requests role and series drilldowns from their dedicated endpoints', async () => {
-    client.get.mockResolvedValue(DRILLDOWN)
-
-    await drilldownApi.getRoleDrilldown('creator:1', 'writer', { pageSize: 10 })
-    expect(client.get).toHaveBeenCalledWith('/v2/creators/creator:1/metrics/role-stats/writer', {
-      params: { page: undefined, page_size: 10 },
+    await drilldownApi.getMetricDrilldown('creator:1', metric, params)
+    expect(client.get).toHaveBeenCalledWith('/v2/creators/creator:1/metrics/' + metric, {
+      params: {
+        role: undefined,
+        rating_value: undefined,
+        series_key: undefined,
+        page: undefined,
+        page_size: undefined,
+        ...expected,
+      },
     })
-
-    await drilldownApi.getSeriesDrilldown('creator:1', 'thread:7', {})
-    expect(client.get).toHaveBeenCalledWith(
-      '/v2/creators/creator:1/metrics/series-stats/thread:7',
-      { params: { page: undefined, page_size: undefined } },
-    )
   })
 
   it('exposes only read methods so drilldowns cannot persist', () => {
     expect(Object.keys(drilldownApi).sort()).toEqual([
       'getMetricDrilldown',
-      'getRatingDistributionDrilldown',
-      'getRoleDrilldown',
-      'getSeriesDrilldown',
     ])
   })
 })

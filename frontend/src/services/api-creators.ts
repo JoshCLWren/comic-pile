@@ -1,170 +1,45 @@
 import { defaultHttpClient, type ApiRequestConfig, type HttpClient } from './httpClient'
+import type {
+  CreatorsListResponse as NativeCreatorsListResponse,
+  DetailResponse as NativeCreatorDetailResponse,
+  SeriesIssuesResponse as NativeCreatorSeriesIssuesResponse,
+} from '../generated/nativeV2Client'
 
 const RECOVERY_CONFIG = { skipAuthRedirect: true }
 
+// Resolve response types through the generated v2 operations, not component
+// names that can collide with frozen legacy schemas during contract merging.
+export type CreatorDetailResponse = NativeCreatorDetailResponse
+export type CreatorListResponse = NativeCreatorsListResponse
+export type CreatorSeriesIssueListResponse = NativeCreatorSeriesIssuesResponse
+
 /** Headline personal summary for one stable creator identity (issue #2028). */
-export interface CreatorSummaryItem {
-  canonical_creator_key: string
-  display_name: string
-  normalized_roles: string[]
-  average_rating: number | null
-  ratings_count: number
-  read_unrated_count: number
-  upcoming_count: number
-}
+export type CreatorSummaryItem = CreatorDetailResponse['summary']
 
 /** Library-wide metadata coverage state distinguishing complete from lower-bound stats. */
-export interface CreatorSummaryCoverage {
-  rated_issues_total: number
-  rated_issues_with_creator_metadata: number
-  ratings_complete: boolean
-  read_unrated_issues_total: number
-  read_unrated_issues_with_creator_metadata: number
-  read_unrated_complete: boolean
-  unread_issues_total: number
-  unread_issues_with_creator_metadata: number
-  upcoming_complete: boolean
-}
+export type CreatorSummaryCoverage = CreatorDetailResponse['coverage']
 
-export interface CreatorRoleStat {
-  role: string
-  issue_count: number
-  rated_issue_count: number
-  average_rating: number | null
-}
+export type CreatorRoleStat = CreatorDetailResponse['role_stats'][number]
 
-export interface CreatorIssueRow {
-  issue_id: number
-  issue_number: string
-  thread_id: number
-  thread_title: string
-  status: string
-  roles: string[]
-  effective_rating: number | null
-  rating_timestamp: string | null
-  sort_key: string
-}
+export type CreatorIssueRow = CreatorDetailResponse['rated_issues'][number]
 
 /** One half-star bucket in a creator's rating distribution (issue #3087). */
-export interface CreatorRatingBucket {
-  rating: number
-  count: number
-}
+export type CreatorRatingBucket = CreatorRatingDistribution['buckets'][number]
 
 /** Rating distribution, median, range, mean, and sample strength (issue #3087). */
-export interface CreatorRatingDistribution {
-  buckets: CreatorRatingBucket[]
-  sample_count: number
-  mean_rating: number
-  median_rating: number
-  min_rating: number
-  max_rating: number
-}
+export type CreatorRatingDistribution = NonNullable<CreatorDetailResponse['rating_distribution']>
 
 /** Series/run-level aggregate of one creator's attributed rated work (issue #3099). */
-export interface CreatorSeriesGroup {
-  series_key: string
-  thread_id: number
-  thread_title: string
-  rated_issue_count: number
-  average_rating: number | null
-  lowest_rating: number | null
-  highest_rating: number | null
-  roles: string[]
-  unread_issue_count: number
-  read_unrated_issue_count: number
-  metadata_complete: boolean
-  sort_key: string
-  /**
-   * Population backing this aggregate (issue #3579). Series groups include
-   * every verified credited role, so they can exceed the headline Rated list.
-   */
-  population_scope: 'all_verified_credits'
-}
-
-/** Bounded drill-down of the issues backing one creator series group. */
-export interface CreatorSeriesIssueListResponse {
-  series_key: string
-  thread_id: number
-  thread_title: string
-  roles: string[]
-  rated_issue_count: number
-  average_rating: number | null
-  lowest_rating: number | null
-  highest_rating: number | null
-  metadata_complete: boolean
-  population_scope: 'all_verified_credits'
-  issues: CreatorIssueRow[]
-  total: number
-  limit: number
-  offset: number
-  next_cursor: string | null
-}
+export type CreatorSeriesGroup = CreatorDetailResponse['series_groups'][number]
 
 /** One individual issue extreme behind a creator highlight (issue #3092). */
-export interface CreatorIssueInsight {
-  issue_id: number
-  issue_number: string
-  thread_id: number
-  thread_title: string
-  effective_rating: number
-  roles: string[]
-  sort_key: string
-}
+export type CreatorIssueInsight = CreatorInsights['highest_rated_issues'][number]
 
 /** One series/run extreme backed by a minimum rated-issue sample (issue #3092). */
-export interface CreatorSeriesInsight {
-  series_key: string
-  thread_id: number
-  thread_title: string
-  rated_issue_count: number
-  average_rating: number
-  lowest_rating: number
-  highest_rating: number
-  roles: string[]
-  metadata_complete: boolean
-  sort_key: string
-}
+export type CreatorSeriesInsight = NonNullable<CreatorInsights['strongest_series']>
 
 /** Evidence-backed strongest/weakest/most-read highlights (issue #3092). */
-export interface CreatorInsights {
-  min_series_sample: number
-  series_sample_met: boolean
-  series_message: string | null
-  excluded_incomplete_series_count: number
-  individual_issue_limit: number
-  /**
-   * True when the rated set is too small to separate into distinct highest and
-   * lowest lists (issue #3946). The UI then lists every rated issue once
-   * instead of repeating the same issue as both the best and the worst work.
-   */
-  individual_issues_combined: boolean
-  strongest_series: CreatorSeriesInsight | null
-  weakest_series: CreatorSeriesInsight | null
-  most_rated_series: CreatorSeriesInsight | null
-  highest_rated_issues: CreatorIssueInsight[]
-  lowest_rated_issues: CreatorIssueInsight[]
-}
-
-/** Full personal creator detail payload (issue #2037). */
-export interface CreatorDetailResponse {
-  summary: CreatorSummaryItem
-  coverage: CreatorSummaryCoverage
-  role_stats: CreatorRoleStat[]
-  series_groups: CreatorSeriesGroup[]
-  series_groups_total: number
-  series_groups_complete: boolean
-  rated_issues: CreatorIssueRow[]
-  /** Population behind the headline summary and Rated list (issue #3579). */
-  rated_population_scope: 'headline_roles_only'
-  /** Explicit role set that makes an issue headline-eligible. */
-  headline_roles: string[]
-  read_unrated_issues: CreatorIssueRow[]
-  upcoming_issues: CreatorIssueRow[]
-  next_cursor: string | null
-  rating_distribution: CreatorRatingDistribution | null
-  insights: CreatorInsights | null
-}
+export type CreatorInsights = NonNullable<CreatorDetailResponse['insights']>
 
 export interface CreatorDetailPageParams {
   limit?: number
@@ -172,22 +47,7 @@ export interface CreatorDetailPageParams {
 }
 
 /** One row in the bounded creator discovery collection (issue #2775). */
-export interface CreatorListItem {
-  canonical_creator_key: string
-  display_name: string
-  normalized_roles: string[]
-  average_rating: number | null
-  ratings_count: number
-}
-
-/** Response body for the bounded personal creator list endpoint (issue #2775). */
-export interface CreatorListResponse {
-  items: CreatorListItem[]
-  total: number
-  limit: number
-  offset: number
-  coverage: CreatorSummaryCoverage
-}
+export type CreatorListItem = CreatorListResponse['items'][number]
 
 export interface CreatorListParams {
   search?: string

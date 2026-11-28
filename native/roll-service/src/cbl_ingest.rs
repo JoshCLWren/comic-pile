@@ -612,7 +612,15 @@ fn is_xml_character(code: u32) -> bool {
         || (0x10000..=0x10FFFF).contains(&code)
 }
 
+<<<<<<< HEAD
 fn attribute(
+=======
+/// Read one attribute, keeping an explicitly empty value distinct from a
+/// missing attribute. Real CBL files use `Number=""` for an entry whose issue
+/// number is unknown (for example an undetermined mini-book or one-shot); the
+/// entry still carries series and Comic Vine identities and must be ingested.
+fn attribute_value(
+>>>>>>> origin/main
     element: &quick_xml::events::BytesStart<'_>,
     key: &[u8],
 ) -> Result<Option<String>, IngestError> {
@@ -625,16 +633,32 @@ fn attribute(
         let value = attribute
             .normalized_value(XmlVersion::Implicit1_0)
             .map_err(|error| IngestError::new(format!("invalid CBL attribute: {error}")))?;
+<<<<<<< HEAD
         let value = value.trim();
         return Ok(if value.is_empty() {
             None
         } else {
             Some(value.to_string())
         });
+=======
+        return Ok(Some(value.trim().to_string()));
+>>>>>>> origin/main
     }
     Ok(None)
 }
 
+<<<<<<< HEAD
+=======
+/// Read one non-empty attribute. An absent or explicitly empty value is
+/// treated as missing, which is appropriate for fields that must carry data.
+fn attribute(
+    element: &quick_xml::events::BytesStart<'_>,
+    key: &[u8],
+) -> Result<Option<String>, IngestError> {
+    Ok(attribute_value(element, key)?.filter(|value| !value.is_empty()))
+}
+
+>>>>>>> origin/main
 fn first_attribute(
     element: &quick_xml::events::BytesStart<'_>,
     keys: &[&[u8]],
@@ -670,8 +694,14 @@ fn parse_book(element: &quick_xml::events::BytesStart<'_>) -> Result<CBLBook, In
     let series = attribute(element, b"Series")?
         .filter(|value| !value.is_empty())
         .ok_or_else(|| IngestError::new("book is missing required Series"))?;
+<<<<<<< HEAD
     let issue_number = attribute(element, b"Number")?
         .filter(|value| !value.is_empty())
+=======
+    // `Number` must be present, but an explicitly empty value is a valid
+    // unknown issue number in the shared fork; keep the entry and its identity.
+    let issue_number = attribute_value(element, b"Number")?
+>>>>>>> origin/main
         .ok_or_else(|| IngestError::new("book is missing required Number"))?;
     let volume_year = parse_optional_year(attribute(element, b"Volume")?)?;
     let publication_year = parse_optional_year(attribute(element, b"Year")?)?;
@@ -1587,6 +1617,35 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn empty_issue_number_is_preserved_instead_of_failing_the_whole_list() {
+        // Real entries in the shared fork omit the number (e.g. undetermined
+        // mini-books) while still carrying a usable Comic Vine identity.
+        let xml = minimal_cbl(
+            "<Book Series=\"Marvel Mini-Books\" Number=\"\" Volume=\"1966\" Year=\"1966\">\
+               <Database Name=\"cv\" Series=\"133048\" Issue=\"823883\" />\
+             </Book>",
+        );
+        let list = parse_cbl_bytes(&xml, "Marvel/Master Reading Order/CMRO.cbl").expect("parse");
+        assert_eq!(list.books.len(), 1);
+        assert_eq!(list.books[0].series, "Marvel Mini-Books");
+        assert_eq!(list.books[0].issue_number, "");
+        assert_eq!(list.books[0].comicvine_series_id.as_deref(), Some("133048"));
+        assert_eq!(list.books[0].comicvine_issue_id.as_deref(), Some("823883"));
+
+        // A Number attribute that is absent, unlike one that is empty, is
+        // still a path-specific parse failure.
+        let missing = minimal_cbl("<Book Series=\"X\" />");
+        let error = parse_cbl_bytes(&missing, "DC/Missing.cbl").expect_err("missing Number");
+        assert!(
+            error.to_string().contains("missing required Number"),
+            "{error}"
+        );
+    }
+
+    #[test]
+>>>>>>> origin/main
     fn inventory_counts_publishers_duplicates_and_failures() {
         let good = parse_cbl_bytes(
             &minimal_cbl("<Book Series=\"X\" Number=\"1\" />"),
