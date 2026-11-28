@@ -456,3 +456,41 @@ def test_select_sources_reports_all_missing_pr_numbers() -> None:
     )
     assert summary["missing_count"] == 1
     assert summary["missing_pr_numbers"] == [5]
+
+
+def test_main_failure_outputs_leave_missing_prs_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed select omits missing_pr_numbers so the summary fallback runs.
+
+    The workflow's still-missing fallback is guarded by an empty check (issue
+    #5693). Emitting a rendered empty list would make that guard unreachable,
+    so this test drives the real failure path through GITHUB_OUTPUT and
+    verifies the value the summary condition will observe.
+    """
+    output_path = tmp_path / "github_output"
+    output_path.touch()
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "release_recovery.py",
+            "select",
+            "--repository",
+            "JoshCLWren/comic-pile",
+            "--health-url",
+            "notaurl://health.invalid",
+        ],
+    )
+    assert recovery.main() == 1
+    outputs = dict(
+        line.split("=", 1)
+        for line in output_path.read_text(encoding="utf-8").splitlines()
+        if "=" in line
+    )
+    assert outputs["needed"] == "false"
+    assert "selection_error" in outputs
+    assert outputs["selection_error"] == "production health URL URL is invalid"
+    # Absent (not a rendered '[]') is what makes the summary's -z guard fire.
+    assert "missing_pr_numbers" not in outputs
+    assert outputs.get("missing_pr_numbers", "") == ""

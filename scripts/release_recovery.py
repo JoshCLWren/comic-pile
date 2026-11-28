@@ -901,12 +901,13 @@ def main() -> int:
         # Emit machine-readable failure outputs so the workflow summary can
         # still report the URL kind and that no source was selected. The text
         # is safe by construction (URL kinds only, no raw URLs or secrets) and
-        # is flattened to one line for GITHUB_OUTPUT.
+        # is flattened to one line for GITHUB_OUTPUT. Do not emit
+        # missing_pr_numbers here: an absent value is what lets the workflow
+        # fall back to listing the still-missing PR candidates (issue #5693).
         _write_outputs(
             {
                 "needed": False,
                 "selection_error": " ".join(str(exc).split()),
-                "missing_pr_numbers": [],
             }
         )
         print(f"release recovery failed: {exc}", file=sys.stderr)

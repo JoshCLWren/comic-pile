@@ -8,6 +8,8 @@ Covers Greptile PR #3993 findings:
 """
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -184,3 +186,43 @@ def test_recovery_failure_is_visible_as_check_and_summary() -> None:
     assert "MISSING_PRS" in summary_scripts
     assert "SELECT_OUTCOME" in summary_scripts
     assert "Selection did not complete" in summary_scripts
+
+
+def test_summary_fallback_guard_runs_on_failure_outputs() -> None:
+    """The real summary condition fires for values a failed select can emit.
+
+    A failed selection leaves MISSING_PRS unset, while an empty successful
+    selection renders it as the literal '[]'. Both must enter the fallback
+    that lists the still-missing PRs (issue #5693). The guard is extracted
+    from the workflow and evaluated by bash rather than asserted as text.
+    """
+    workflow = _release_writer()
+    steps = workflow["jobs"]["recover"].get("steps") or []
+    summary = next(
+        step for step in steps if "GITHUB_STEP_SUMMARY" in str(step.get("run", ""))
+    )
+    script = str(summary.get("run", ""))
+    guard = next(
+        line.strip().removeprefix("if ").removesuffix("; then")
+        for line in script.splitlines()
+        if line.strip().startswith("if ") and "missing_prs" in line
+    )
+    assert guard.startswith("[[") and guard.endswith("]]")
+
+    def evaluate(missing_prs: str, outcome: str) -> int:
+        result = subprocess.run(
+            ["bash", "-c", guard],
+            env={**os.environ, "MISSING_PRS": missing_prs, "SELECT_OUTCOME": outcome},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert not result.stderr, result.stderr
+        return result.returncode
+
+    # The two values the failure path can produce both enter the fallback.
+    assert evaluate("", "failure") == 0
+    assert evaluate("[]", "failure") == 0
+    # A real listing on a successful selection must not enter the fallback.
+    assert evaluate("[42]", "success") == 1
+    assert evaluate("[]", "success") == 1

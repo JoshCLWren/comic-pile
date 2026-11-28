@@ -174,7 +174,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           missing_prs="${MISSING_PRS:-}"
-          if [[ -z "$missing_prs" && "${SELECT_OUTCOME:-}" != "success" ]]; then
+          # A failed select leaves MISSING_PRS unset; a successful empty list is
+          # rendered as the literal '[]'. Neither is a usable listing, so both
+          # must enter the bounded still-missing fallback (issue #5693).
+          if [[ ( -z "$missing_prs" || "$missing_prs" == "[]" ) && "${SELECT_OUTCOME:-}" != "success" ]]; then
             # Bounded diagnostic when selection failed before it could classify
             # sources. These candidates are NOT deployment-verified; they show
             # which merged PRs still need a release-note check.
