@@ -49,21 +49,21 @@ pub const SIGNAL_TYPES: [&str; 5] = ["creator", "character", "team", "publisher"
 pub const VERDICTS: [&str; 3] = ["confirmed", "sometimes", "rejected"];
 
 /// Current preference values for the authenticated user.
+///
+/// Night Shift is fixed, so no appearance field is exposed. The user id keeps
+/// the existing endpoint shape available for unrelated preference fields.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct UserPreferencesResponse {
-    pub theme: String,
     pub user_id: i32,
 }
 
 /// Partial update of the authenticated user's preferences.
 ///
-/// `theme` is optional: when omitted or explicit JSON null the current
-/// preference is left unchanged and a missing row is seeded with the
-/// default, exactly like the Python `UserPreferencesPatchRequest`.
+/// The request is intentionally empty. Serde ignores legacy unknown fields, so
+/// an older client that still sends `theme` cannot restore or persist a retired
+/// appearance preference.
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
-pub struct UserPreferencesPatchRequest {
-    pub theme: Option<String>,
-}
+pub struct UserPreferencesPatchRequest {}
 
 /// Canonical representation of one persisted Taste Bank signal.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -97,17 +97,6 @@ pub struct TasteVerdictRequest {
 
 fn unprocessable(detail: &str) -> ApiError {
     ApiError::Unprocessable(detail.to_string())
-}
-
-/// Validate an optional theme exactly like the Python `ThemeId` literal.
-fn validate_theme(theme: Option<String>) -> Result<Option<String>, ApiError> {
-    match theme {
-        None => Ok(None),
-        Some(value) if SUPPORTED_THEMES.contains(&value.as_str()) => Ok(Some(value)),
-        Some(_) => Err(unprocessable(
-            "theme must be one of classic, ink-gold, command-center",
-        )),
-    }
 }
 
 /// Validate a Taste Bank signal type exactly like the Python literal.
@@ -202,84 +191,25 @@ fn taste_signal_from_row(row: &Row) -> TasteSignalResponse {
 
 /// `GET /api/v2/users/me/preferences`
 ///
-/// Returns the persisted theme, resolving to `classic` when no preference
-/// row exists yet, exactly like the Python service.
+/// Night Shift is fixed. This returns only the authenticated user id and does
+/// not consult the retired `user_preferences.theme` column.
 pub async fn get_user_preferences(
-    State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<UserPreferencesResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-    let row = connection
-        .query_opt(
-            "SELECT theme FROM user_preferences WHERE user_id = $1",
-            &[&user.id()],
-        )
-        .await
-        .map_err(db::query_error)?;
-    PREFERENCES_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
-    let theme: String = row
-        .map(|row| row.get::<_, String>(0))
-        .unwrap_or_else(|| DEFAULT_THEME.to_string());
     Ok(Json(UserPreferencesResponse {
-        theme,
         user_id: user.id(),
     }))
 }
 
 /// `PATCH /api/v2/users/me/preferences`
 ///
-/// A present theme is applied as a single atomic upsert so overlapping
-/// first-time writes resolve as updates instead of surfacing a unique
-/// violation (issue #1872). An omitted or explicit-null theme leaves an
-/// existing row unchanged and seeds a missing row with the default.
+/// The request has no writable appearance fields. Legacy unknown fields are
+/// ignored by Serde, and no preference row is read, seeded, or updated.
 pub async fn patch_user_preferences(
-    State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(request): Json<UserPreferencesPatchRequest>,
+    Json(_request): Json<UserPreferencesPatchRequest>,
 ) -> Result<Json<UserPreferencesResponse>, ApiError> {
-    let theme = validate_theme(request.theme)?;
-    let connection = db::checkout(&state).await?;
-    let persisted_theme = match theme {
-        Some(theme) => {
-            let row = connection
-                .query_one(
-                    "INSERT INTO user_preferences (user_id, theme, created_at, updated_at) \
-                     VALUES ($1, $2, NOW(), NOW()) \
-                     ON CONFLICT (user_id) DO UPDATE \
-                     SET theme = EXCLUDED.theme, updated_at = NOW() \
-                     RETURNING theme",
-                    &[&user.id(), &theme],
-                )
-                .await
-                .map_err(db::query_error)?;
-            PREFERENCES_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
-            row.get::<_, String>(0)
-        }
-        None => {
-            connection
-                .execute(
-                    "INSERT INTO user_preferences (user_id, theme, created_at, updated_at) \
-                     VALUES ($1, $2, NOW(), NOW()) \
-                     ON CONFLICT (user_id) DO NOTHING",
-                    &[&user.id(), &DEFAULT_THEME],
-                )
-                .await
-                .map_err(db::query_error)?;
-            PREFERENCES_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
-            let row = connection
-                .query_opt(
-                    "SELECT theme FROM user_preferences WHERE user_id = $1",
-                    &[&user.id()],
-                )
-                .await
-                .map_err(db::query_error)?;
-            PREFERENCES_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
-            row.map(|row| row.get::<_, String>(0))
-                .unwrap_or_else(|| DEFAULT_THEME.to_string())
-        }
-    };
     Ok(Json(UserPreferencesResponse {
-        theme: persisted_theme,
         user_id: user.id(),
     }))
 }
@@ -414,7 +344,7 @@ pub(crate) fn get_user_preferences_documentation() {}
     responses(
         (status = 200, description = "The user's preferences after the update", body = UserPreferencesResponse),
         (status = 401, description = "Not authenticated"),
-        (status = 422, description = "Unknown theme id"),
+        (status = 422, description = "Invalid request body"),
         (status = 503, description = "Database temporarily unavailable")
     ),
     security(("HTTPBearer" = []))
@@ -465,17 +395,13 @@ mod tests {
     use utoipa::OpenApi;
 
     #[test]
-    fn supported_themes_are_accepted_and_unknown_themes_are_422() {
-        for theme in SUPPORTED_THEMES {
-            assert_eq!(
-                validate_theme(Some(theme.to_string())).expect("supported theme"),
-                Some(theme.to_string())
-            );
-        }
-        assert_eq!(validate_theme(None).expect("omitted theme"), None);
-        let error = validate_theme(Some("neon-pink".to_string()))
-            .expect_err("unknown theme must be rejected");
-        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    fn legacy_theme_fields_are_ignored_without_restoring_a_preference() {
+        let request: UserPreferencesPatchRequest = serde_json::from_value(serde_json::json!({
+            "theme": "command-center"
+        }))
+        .expect("legacy unknown fields are ignored");
+        let serialized = serde_json::to_value(request).expect("serializable request");
+        assert_eq!(serialized, serde_json::json!({}));
     }
 
     #[test]
@@ -596,31 +522,47 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn patch_user_preferences_persists_then_preserves_the_theme() {
-        let (state, client, _db) = db_fixture().await;
-        let Json(first) = patch_user_preferences(
-            State(state.clone()),
+    async fn preferences_never_read_seed_or_update_the_retired_theme_column() {
+        let (_state, client, _db) = db_fixture().await;
+        client
+            .execute(
+                "INSERT INTO user_preferences (user_id, theme) VALUES (1, 'ink-gold')",
+                &[],
+            )
+            .await
+            .expect("seed legacy preference");
+        let statements_before = PREFERENCES_STATEMENTS_ISSUED.load(Ordering::Relaxed);
+
+        let Json(read) = get_user_preferences(AuthenticatedUser::for_test(1))
+            .await
+            .expect("preferences read must succeed");
+        let Json(patched) = patch_user_preferences(
             AuthenticatedUser::for_test(1),
-            Json(UserPreferencesPatchRequest {
-                theme: Some("ink-gold".into()),
-            }),
+            Json(UserPreferencesPatchRequest {}),
         )
         .await
-        .expect("theme patch must succeed");
-        assert_eq!(first.theme, "ink-gold");
-        let Json(second) = patch_user_preferences(
-            State(state.clone()),
-            AuthenticatedUser::for_test(1),
-            Json(UserPreferencesPatchRequest { theme: None }),
-        )
-        .await
-        .expect("omitted theme must preserve the row");
-        assert_eq!(second.theme, "ink-gold");
+        .expect("empty patch must succeed");
+
+        assert_eq!(read.user_id, 1);
+        assert_eq!(patched.user_id, 1);
+        assert_eq!(
+            serde_json::to_value(read).expect("serializable response"),
+            serde_json::json!({ "user_id": 1 })
+        );
         let row = client
             .query_one("SELECT theme FROM user_preferences WHERE user_id=1", &[])
             .await
-            .expect("persisted preferences");
+            .expect("legacy preference remains untouched");
         assert_eq!(row.get::<_, String>(0), "ink-gold");
+        let rows = client
+            .query_one("SELECT COUNT(*) FROM user_preferences WHERE user_id=2", &[])
+            .await
+            .expect("missing preference count");
+        assert_eq!(rows.get::<_, i64>(0), 0);
+        assert_eq!(
+            PREFERENCES_STATEMENTS_ISSUED.load(Ordering::Relaxed),
+            statements_before
+        );
     }
 
     #[tokio::test]
