@@ -22,12 +22,7 @@ test.describe('P0 #5525 Roll manual selection', () => {
     page.on('request', (request) => {
       if (request.method() === 'GET') return
       const path = new URL(request.url()).pathname
-      // `/issues/cards` is the batched read-model projection used to hydrate
-      // the exact issue card, not a pending-offer or read-state write.
-      if (
-        (path.includes('/roll/offers') || path.includes('/issues/')) &&
-        !path.includes('/issues/cards')
-      ) {
+      if (path.includes('set-pending') || path.includes('/roll/offers') || path.includes('/issues/')) {
         rollRequests.push(`${request.method()} ${path}`)
       }
     })
@@ -61,11 +56,7 @@ test.describe('P0 #5525 Roll manual selection', () => {
     page.on('request', (request) => {
       if (request.method() === 'GET') return
       const path = new URL(request.url()).pathname
-<<<<<<< HEAD
-      if (path.includes('roll/override') || path.includes('/roll/offers')) {
-=======
       if (path.includes('set-pending') || path.includes('/roll/offers')) {
->>>>>>> origin/main
         disallowed.push(path)
       }
     })

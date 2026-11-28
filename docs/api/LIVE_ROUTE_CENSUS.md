@@ -13,21 +13,13 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-<<<<<<< HEAD
-- Live API routes: 252 (v1 64, v2 176, unversioned 12).
-- v1 routes with a named retirement owner: 64.
-- v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
-- Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 922.
-=======
 - Live API routes: 253 (v1 65, v2 176, unversioned 12).
 - v1 routes with a named retirement owner: 65.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
 - Scanned first-party call sites: 918.
->>>>>>> origin/main
 - Stale AIP baseline entries (no live route): 4.
-- Allowlist entries: 174 (owner 174, baseline debt 0, nonconforming v2 98).
+- Allowlist entries: 175 (owner 175, baseline debt 0, nonconforming v2 98).
 
 ## Ownership matrix
 
@@ -105,6 +97,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v1/threads/{thread_id}/issues:validateOrder` | `thread_ordering::validate_issue_order` | v1 | none | /api/native_roll.rs | #5706 | GET /api/v2/threads/{thread_id}/issues \| POST /api/v2/threads/{thread_id}/issues | slice-open |
 | GET | `/api/v1/threads/{thread_id}/reading-orders` | `thread_ordering::get_thread_reading_orders` | v1 | none | /api/native_roll.rs | #5715 | GET /api/v2/threads/{thread_id}/readingOrders | slice-open |
 | POST | `/api/v1/threads/{thread_id}/restore` | `thread_lifecycle::restore_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5704 | POST /api/v2/queue-exclusions/restore | slice-open |
+| POST | `/api/v1/threads/{thread_id}/set-pending` | `thread_lifecycle::set_pending_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts | /api/native_roll.rs | #4344 | retire-without-replacement | owner-issue-open |
 | PUT | `/api/v1/threads/{thread_id}/test-backdate` | `thread_lifecycle::backdate_thread_for_testing` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-dependency-groups.ts, frontend/src/services/api-issues.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-reading-orders.ts, frontend/src/services/api-threads.ts | /api/native_roll.rs | #4335 | retire-without-replacement | test-helper-debt |
 | POST | `/api/v1/threads:getBlockingInfo` | `thread_ordering::get_threads_blocking_info` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/useReadingBoundaries.request-budget.test.tsx | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | GET | `/api/v1/users/me/taste-signals` | `preferences::list_taste_signals` | v1 | none | /api/native_roll.rs | #5717 | PATCH /api/v2/users/me/tasteSignals/{signal_id} | slice-open |
@@ -241,7 +234,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | PATCH | `/api/v2/readingOrderGroups/{group_id}` | `dependency_groups::update_group_v2` | v2 | frontend/src/services/api-dependency-groups.ts, frontend/src/unit/api-dependency-groups.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | DELETE | `/api/v2/readingOrderGroups/{group_id}` | `dependency_groups::delete_group_v2` | v2 | frontend/src/services/api-dependency-groups.ts, frontend/src/unit/api-dependency-groups.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions` | `session_list::list_reading_sessions` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
-| POST | `/api/v2/readingSessions` | `bootstrap::initialize_session` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
+| POST | `/api/v2/readingSessions` | `bootstrap::initialize_session` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}` | `session_list::get_reading_session` | v2 | frontend/src/unit/api.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}/details` | `session_details::get_session_details` | v2 | frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}/snapshots` | `session_history::list_session_snapshots` | v2 | frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
@@ -251,11 +244,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/roll/die-state` | `roll_resources::die_state` | v2 | frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/rollResourcesApi.test.ts | /api/native_roll.rs | #4595 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/dismiss-pending` | `dismiss_pending::dismiss_pending` | v2 | frontend/src/services/api-roll.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | GET | `/api/v2/roll/eligible-issue-ids` | `roll_resources::eligible_issue_ids` | v2 | frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/rollResourcesApi.test.ts | /api/native_roll.rs | #4595 | canonical-v2 | live-target |
-<<<<<<< HEAD
-| POST | `/api/v2/roll/offer` | `roll_offer::offer` | v2 | frontend/src/services/api-roll.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
-=======
 | POST | `/api/v2/roll/offer` | `roll_offer::offer` | v2 | frontend/src/services/api-roll.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
->>>>>>> origin/main
 | POST | `/api/v2/roll/reset` | `roll_reset::reset` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/RollPage.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/switch-prerequisite` | `roll_switch_prerequisite::switch_prerequisite` | v2 | frontend/src/services/rollBootstrapApi.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/unsnooze` | `roll_offer::unsnooze` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
@@ -275,7 +264,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | DELETE | `/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}` | `tags::unassign_tag` | v2 | frontend/src/services/api-tags.ts, frontend/src/unit/api-tags.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/tags/{tag_id}/unassignment-batches` | `tags::bulk_unassign_tag` | v2 | frontend/src/services/api-tags.ts, frontend/src/unit/api-tags.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | GET | `/api/v2/tags/{tag_id}/usage` | `tags::get_tag_usage` | v2 | frontend/src/services/api-tags.ts, frontend/src/unit/api-tags.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
-| GET | `/api/v2/threads` | `threads::list_threads` | v2 | frontend/src/services/api-threads.ts, frontend/src/test/fixtures.ts, frontend/src/test/issue-2725-queue-virtualization-blank-region.spec.ts, frontend/src/test/issue-4503-request-budget.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api-threads.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4342 | canonical-v2 | live-target |
+| GET | `/api/v2/threads` | `threads::list_threads` | v2 | frontend/src/services/api-threads.ts, frontend/src/test/fixtures.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-2725-queue-virtualization-blank-region.spec.ts, frontend/src/test/issue-4503-request-budget.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api-threads.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4342 | canonical-v2 | live-target |
 | PATCH | `/api/v2/threads/{thread_id}` | `thread_lifecycle::patch_thread` | v2 | frontend/src/services/api-threads.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api-threads.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/threads/{thread_id}/creatorCredits` | `thread_issues::list_thread_creator_credits` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | PUT | `/api/v2/threads/{thread_id}/issue-order` | `issue_mutation::reorder_issues` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
@@ -292,7 +281,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Owner issue cross-reference
 
-Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4443, #4459, #4549, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5713, #5714, #5715, #5716, #5717, #5718.
+Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4549, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5713, #5714, #5715, #5716, #5717, #5718.
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:
@@ -308,6 +297,7 @@ Non-browser / helper / infrastructure surface included in the census:
 
 - #4341: `POST /api/v1/roll/override` — not-live; retire-without-replacement.
 - #4343: `GET /api/v1/sessions/current/` — not-live; retire-without-replacement.
+- #5525: `POST /api/v1/threads/{thread_id}/set-pending` — live-p0-evidence; retire-without-replacement.
 - #5707: `POST /api/v1/threads/{thread_id}:setCurrentIssue` — not-live; POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
 - #5710: `GET /api/v1/reading-order-groups/` — not-live; GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}].
@@ -318,4 +308,4 @@ None. Every live v1 method has an owner or an explicit disposition.
 
 ## Verification
 
-`node scripts/generate_live_route_census.mjs --check` regenerates the matrix, compares the checked-in artifacts byte-for-byte, and fails on duplicate registrations, unowned new routes, unknown ingress/runtime, stale allowlist entries, or a new first-party v1 call.
+`node scripts/generate_live_route_census.mjs --check` regenerates the matrix, compares the checked-in artifacts byte-for-byte, and fails on duplicate registrations, unowned new routes, unknown ingress/runtime, stale allowlist entries, or a new first-party v1 call. The regression `POST /api/v1/threads/{thread_id}/set-pending` must always be present with owner #4344.

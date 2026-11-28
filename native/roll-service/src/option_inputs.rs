@@ -1231,8 +1231,6 @@ mod tests {
         assert_eq!(b_frontiers.len(), 1, "{b_frontiers:?}");
         assert_eq!(b_frontiers[0].issue_id, 9401);
     }
-<<<<<<< HEAD
-=======
 
     /// #3231 rehearsal fixture. Two readers confirm the same external series and
     /// even share a catalog-only issue link, but every reader-private column is
@@ -1753,5 +1751,4 @@ mod tests {
         );
         drop(conn);
     }
->>>>>>> origin/main
 }

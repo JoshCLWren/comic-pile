@@ -29,6 +29,7 @@ use utoipa::OpenApi;
         crate::thread_lifecycle::exclude_thread_documentation,
         crate::thread_lifecycle::restore_thread_documentation,
         crate::thread_lifecycle::reactivate_thread_documentation,
+        crate::thread_lifecycle::set_pending_thread_documentation,
         crate::thread_lifecycle::list_stale_threads_documentation,
         crate::thread_lifecycle::list_excluded_threads_documentation,
         crate::thread_lifecycle::check_potential_duplicates_documentation,
@@ -38,16 +39,13 @@ use utoipa::OpenApi;
         crate::thread_lifecycle::ThreadCreateRequest,
         crate::thread_lifecycle::ThreadUpdateRequest,
         crate::thread_lifecycle::ReactivateRequest,
+        crate::thread_lifecycle::SetPendingRequest,
         crate::thread_lifecycle::CheckDuplicatesRequest,
         crate::thread_lifecycle::CheckDuplicatesResponse,
         crate::thread_lifecycle::PotentialDuplicateMatch,
         crate::thread_lifecycle::GroupsBatchRequest,
         crate::thread_lifecycle::DependencyGroupSummary,
-<<<<<<< HEAD
-
-=======
         crate::thread_lifecycle::RollResponse,
->>>>>>> origin/main
         crate::threads::ThreadListResponse,
         crate::threads::ThreadListItem,
         crate::threads::ThreadTag,

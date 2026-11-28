@@ -5552,8 +5552,6 @@ mod guard_db_tests {
 
         tx.rollback().await.expect("rollback guard transaction");
     }
-<<<<<<< HEAD
-=======
 
     /// Counts `DbExec` statements so the rehearsal can prove the guard loader
     /// is bounded: more facts must not mean more round trips.
@@ -5729,5 +5727,4 @@ mod guard_db_tests {
             .await
             .expect("rollback post-rollback transaction");
     }
->>>>>>> origin/main
 }
