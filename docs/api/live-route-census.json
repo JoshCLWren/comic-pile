@@ -24,7 +24,7 @@
     "v1_with_owner": 65,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 923,
+    "first_party_call_sites": 927,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -1032,9 +1032,10 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts"
       ],
-      "caller_count": 1,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5705,
@@ -1103,9 +1104,10 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts"
       ],
-      "caller_count": 1,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5711,
@@ -1124,9 +1126,10 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5704,
@@ -1145,10 +1148,11 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 5,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5701,
@@ -1168,16 +1172,15 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 26,
+      "caller_count": 24,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5701,
@@ -1198,16 +1201,14 @@
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 26,
+      "caller_count": 22,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4832,
@@ -1227,16 +1228,15 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 24,
+      "caller_count": 22,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5703,
@@ -1256,16 +1256,15 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 24,
+      "caller_count": 22,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5703,
@@ -3440,9 +3439,10 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-issues.ts"
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/api-issues.test.ts"
       ],
-      "caller_count": 1,
+      "caller_count": 6,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -5580,9 +5580,10 @@
       "consumers": [
         "frontend/src/services/api-issues.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
-        "frontend/src/unit/api-issues-coverage.test.ts"
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/api-issues.test.ts"
       ],
-      "caller_count": 10,
+      "caller_count": 13,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
