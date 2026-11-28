@@ -73,7 +73,6 @@ pub struct UndoApplyResponse {
 pub struct SessionActiveThread {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub last_rolled_result: Option<i32>,
@@ -135,8 +134,8 @@ const SNAPSHOT_COUNT_SQL: &str = "SELECT count(*)::int FROM snapshots WHERE sess
 const LADDER_SQL: &str = "SELECT die_after FROM events WHERE session_id = $1 AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp ASC, id ASC";
 const CURRENT_DIE_SQL: &str = "SELECT die_after, context::text FROM events WHERE session_id = $1 AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
 const LATEST_ACTION_SQL: &str = "SELECT type, selected_thread_id, result FROM events WHERE session_id = $1 AND type IN ('roll','rate','snooze','rolled_but_skipped') ORDER BY timestamp DESC, id DESC LIMIT 1";
-const PENDING_THREAD_SQL: &str = "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1 AND user_id = $2";
-const ROLLED_THREAD_SQL: &str = "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1";
+const PENDING_THREAD_SQL: &str = "SELECT id, title, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1 AND user_id = $2";
+const ROLLED_THREAD_SQL: &str = "SELECT id, title, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1";
 const UNREAD_COUNT_SQL: &str =
     "SELECT count(*)::int FROM issues WHERE thread_id = $1 AND status = 'unread'";
 const NEXT_ISSUE_SQL: &str = "SELECT id, issue_number FROM issues WHERE id = $1";
@@ -176,16 +175,6 @@ fn internal() -> ApiError {
         StatusCode::INTERNAL_SERVER_ERROR,
         "Internal Server Error".to_string(),
     )
-}
-
-/// Python `normalize_format_value`: trim, then map known variants.
-pub(crate) fn normalize_format(value: &str) -> String {
-    let stripped = value.trim();
-    match stripped.to_ascii_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => stripped.to_string(),
-    }
 }
 
 fn normalize_bandwidth_level(value: Option<&str>) -> Option<String> {
@@ -368,7 +357,7 @@ async fn apply_full_snapshot(
     if !restore_thread_ids.is_empty() {
         let threads_rows = tx
             .query(
-                "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = ANY($1)",
+                "SELECT id, title, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = ANY($1)",
                 &[&restore_thread_ids],
             )
             .await
@@ -633,7 +622,7 @@ async fn apply_delta_snapshot(
     if !restore_thread_ids.is_empty() {
         let threads_rows = tx
             .query(
-                "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = ANY($1)",
+                "SELECT id, title, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = ANY($1)",
                 &[&restore_thread_ids],
             )
             .await
@@ -985,14 +974,6 @@ async fn restore_thread_from_state(
             tx.execute(
                 "UPDATE threads SET title = $1 WHERE id = $2 AND user_id = $3",
                 &[&title, &thread_id, &user_id],
-            )
-            .await
-            .map_err(db::query_error)?;
-        }
-        if let Some(format) = state.get("format").and_then(|v| v.as_str()) {
-            tx.execute(
-                "UPDATE threads SET format = $1 WHERE id = $2 AND user_id = $3",
-                &[&format, &thread_id, &user_id],
             )
             .await
             .map_err(db::query_error)?;
