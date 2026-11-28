@@ -102,20 +102,21 @@ than falling back to a project-level remove operation.
 ## Daily release-source sync (Vercel Cron)
 
 ComicPile runs release-source synchronization once per day through Vercel Cron.
-The same `/api/v1/cron/release-sync` URL is now served by the native Rust handler;
-it does not require a Python function, another service, or a long-running worker.
+The canonical `/api/v2/cron/release-sync` URL is served by the native Rust
+handler (#5958); it does not require a Python function, another service, or a
+long-running worker. The handler, `CRON_SECRET` bearer gate and response body
+are unchanged from the retired `/api/v1` alias.
 
 ```json
 {
   "crons": [
-    { "path": "/api/v1/cron/release-sync", "schedule": "0 9 * * *" }
+    { "path": "/api/v2/cron/release-sync", "schedule": "0 9 * * *" }
   ]
 }
 ```
 
-This snippet shows the maintained release-sync entry only; `vercel.json` also
-still declares a stale ComicVine repair cron described below, which has no
-registered native route and must not be treated as active repair.
+This is the only cron in the fragment-derived `vercel.json`. The retired
+ComicVine repair cron had no registered native route and is gone.
 
 On the Vercel Hobby tier the job may start at any point inside the `09:00` UTC
 hour. Do not add a more frequent schedule; once daily is the v1 contract.
@@ -181,7 +182,7 @@ Use the deployment secret from your shell environment without printing it:
 ```bash
 curl --fail --silent --show-error \
   --header "Authorization: Bearer ${CRON_SECRET}" \
-  https://comic-pile.vercel.app/api/v1/cron/release-sync
+  https://comic-pile.vercel.app/api/v2/cron/release-sync
 ```
 
 A successful run returns `status: "completed"` plus secret-free counters for

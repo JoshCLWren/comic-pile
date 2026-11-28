@@ -1,7 +1,6 @@
 {
   "family": "issues",
   "owned_path_patterns": [
-    "^/api/v1/issues(?::.*|/.*)?$",
     "^/api/v2/issues(?:/.*)?$",
     "^/api/v2/issue\\-read\\-markers(?:/.*)?$",
     "^/api/v2/issue\\-read\\-marker\\-removals(?:/.*)?$"
@@ -183,19 +182,6 @@
       "consumers": [
         "frontend/src/services/api-issues.ts"
       ]
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/issues/{issue_id}/comicvine",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/issues/[0-9]+/comicvine$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-reader-context.ts"
-      ],
-      "exclude_from_inventory": true
     }
   ]
 }

@@ -1824,7 +1824,7 @@ fn scheduled_response(payload: ScheduledSyncResponse) -> Response {
 }
 
 /// Multi-owner Rust path for the daily Vercel Cron release sync
-/// (`GET /api/v1/cron/release-sync`). Every owner with an enabled release
+/// (`GET /api/v2/cron/release-sync`, #5958). Every owner with an enabled release
 /// source is synced through the same per-user core as the authenticated HTTP
 /// endpoint, with independent per-owner failure isolation, a transaction-scoped
 /// advisory lock against overlapping invocations, and a wall-clock budget.

@@ -166,26 +166,6 @@
     },
     {
       "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads/",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads/check-duplicates",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/check\\-duplicates$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
-    },
-    {
-      "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/excluded/threads",
       "dest": "/api/native_api.rs",
@@ -216,31 +196,11 @@
     },
     {
       "bucket": "v1_operations",
-      "method": "DELETE",
-      "path": "/api/v1/threads/{thread_id}",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
-    },
-    {
-      "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}",
       "dest": "/api/native_api.rs",
       "src": "^/api/v1/threads/[0-9]+$",
       "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "PUT",
-      "path": "/api/v1/threads/{thread_id}",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
@@ -276,14 +236,6 @@
     },
     {
       "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/threads/{thread_id}/issues",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+/issues$",
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/restore",
       "dest": "/api/native_api.rs",
@@ -298,16 +250,6 @@
       "path": "/api/v1/threads/{thread_id}/set-pending",
       "dest": "/api/native_api.rs",
       "src": "^/api/v1/threads/[^/]+/set\\-pending$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "PUT",
-      "path": "/api/v1/threads/{thread_id}/test-backdate",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4832

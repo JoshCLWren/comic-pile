@@ -1516,6 +1516,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retired_unowned_legacy_routes_return_404_in_inner_router() {
+        // #5958: inner-router parity with the Vercel ingress negative probes.
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        let retired: &[(&str, &str)] = &[
+            ("GET", "/api/v1/creators"),
+            ("GET", "/api/v1/creators/"),
+            ("GET", "/api/v1/creators/summaries"),
+            ("PUT", "/api/v1/releases/"),
+            ("GET", "/api/v1/releases/source"),
+            ("GET", "/api/v1/releases/7"),
+            ("POST", "/api/v1/releases/7/retract"),
+            ("GET", "/api/v1/continuity-rules/"),
+            ("POST", "/api/v1/continuity-rules/"),
+            ("GET", "/api/v1/continuity-rules/3"),
+            ("PUT", "/api/v1/continuity-rules/3"),
+            ("DELETE", "/api/v1/continuity-rules/3"),
+            ("GET", "/api/v1/issues/7/comicvine"),
+            ("GET", "/api/v1/comicvine/series/42/import-status"),
+            ("GET", "/api/v1/roll/events/9/recommendation-explanation"),
+            ("GET", "/api/roll/events/9/recommendation-explanation"),
+            ("GET", "/api/v1/cron/release-sync"),
+            ("POST", "/api/v1/threads/"),
+            ("POST", "/api/v1/threads/check-duplicates"),
+            ("PUT", "/api/v1/threads/21"),
+            ("DELETE", "/api/v1/threads/21"),
+            ("GET", "/api/v1/threads/21/issues"),
+            ("POST", "/api/v1/threads/21/issues"),
+            ("GET", "/api/v1/threads/21/issues/creators"),
+            ("POST", "/api/v1/threads/21/issues:reorder"),
+            ("GET", "/api/v1/threads/21/issues:validateOrder"),
+            ("GET", "/api/v1/threads/21/reading-orders"),
+            ("PUT", "/api/v1/threads/21/test-backdate"),
+            ("PUT", "/api/v1/reading-order-groups/7/order"),
+            ("POST", "/api/v1/catalog/series-mappings/preview"),
+            ("POST", "/api/v1/continuity-plans/7/reading-orders/project-preview"),
+        ];
+        for (method, uri) in retired {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(*method)
+                        .uri(*uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),

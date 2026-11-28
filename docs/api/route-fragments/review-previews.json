@@ -1,7 +1,6 @@
 {
   "family": "review-previews",
   "owned_path_patterns": [
-    "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
     "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$"
   ],
   "defaults": {
@@ -16,13 +15,6 @@
     ]
   },
   "operations": [
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$"
-    },
     {
       "bucket": "v1_operations",
       "method": "POST",

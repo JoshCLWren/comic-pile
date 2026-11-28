@@ -41,8 +41,8 @@ test('no scheduled ComicVine metadata repair invocation remains', () => {
   const generated = generatedVercel();
   assert.deepEqual(
     generated.crons,
-    [{path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'}],
-    'only the unrelated release-sync cron may remain in generated ingress',
+    [{path: '/api/v2/cron/release-sync', schedule: '0 9 * * *'}],
+    'only the canonical v2 release-sync cron may remain in generated ingress',
   );
   const api = JSON.stringify(generated.routes);
   assert.ok(!api.includes('comicvine-metadata-repairs'));
