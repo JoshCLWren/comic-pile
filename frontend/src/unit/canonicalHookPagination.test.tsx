@@ -124,18 +124,22 @@ describe('canonical hook pagination', () => {
     let count = 0
     const list = vi.fn(async () => {
       count += 1
+      const remaining = threadCount - (count - 1) * 100
       return {
-        threads: [{ ...thread, id: count }],
+        threads: Array.from(
+          { length: Math.min(100, remaining) },
+          (_, index) => ({ ...thread, id: (count - 1) * 100 + index + 1 }),
+        ),
         active_count: threadCount,
         filtered_count: threadCount,
-        next_page_token: count < threadCount ? String(count) : null,
+        next_page_token: remaining > 100 ? String(count) : null,
       }
     })
     const { result } = renderHook(
       () => useAllThreads({ threads: { list } }),
       { wrapper: createWrapper() },
     )
-    await waitFor(() => expect(result.current.data).toHaveLength(COLLECT_ALL_DEFAULT_MAX_PAGES + 1))
+    await waitFor(() => expect(result.current.data).toHaveLength(threadCount))
     expect(result.current.isError).toBe(false)
     expect(list).toHaveBeenCalledTimes(COLLECT_ALL_DEFAULT_MAX_PAGES + 1)
   })
