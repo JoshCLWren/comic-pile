@@ -30,6 +30,20 @@ interface MobileGalleryProps {
 }
 
 /**
+ * Decorative rotation is skipped for reduced-motion readers; the outcome is not.
+ * `matchMedia` is decoded with the runtimeChecks contract helper rather than a
+ * bare `typeof` guard: a function at this DOM boundary is the browser's
+ * `MediaQueryList` factory, so `.matches` is a boolean preference.
+ */
+function prefersReducedMotion(): boolean {
+  return (
+    isWindowDefined() &&
+    isFunction(window.matchMedia) &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
+/**
  * Wraparound comic gallery for phone Roll (issue #5981). Browsing is pure
  * presentation state: swiping or using the arrows only moves the highlighted
  * face. The die above the carousel is the single roll trigger, and the winning
@@ -67,11 +81,7 @@ export function MobileGallery({
   // the authoritative winner is supplied by the committed roll response. Reduced
   // motion skips the decorative rotation; the winning face still centers.
   useEffect(() => {
-    const reducedMotion =
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reducedMotion || !isRolling || pool.length < 2) return
+    if (prefersReducedMotion() || !isRolling || pool.length < 2) return
     const interval = window.setInterval(() => {
       setActive((current) => wrapCarouselIndex(current + 1, pool.length))
     }, 110)
