@@ -2115,9 +2115,9 @@ mod tests {
         conn.batch_execute(
             "INSERT INTO users (id, username, is_admin, created_at) VALUES \
                 (1,'owner',false,NOW()), (2,'other',false,NOW()); \
-             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
-                (1,1,'Owned thread','comics',2,0,'active','[]'::json,false,false,false,NOW()), \
-                (2,2,'Other thread','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                (1, 1, 'Owned thread', 2, 0, 'active', '[]'::json, false, false, false, NOW()), \
+                (2, 2, 'Other thread', 1, 0, 'active', '[]'::json, false, false, false, NOW()); \
              INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
                 (1,1,'#1','unread',0,NOW()), \
                 (2,1,'#2','unread',1,NOW()), \
@@ -2205,9 +2205,9 @@ mod tests {
         let conn = state.pool.get().await.unwrap();
         conn.batch_execute(
             "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
-             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
-                 (1,1,'Mutant X','comics',1,0,'active','[]'::json,false,false,false,NOW()), \
-                 (2,1,'Mutant Y','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1, 1, 'Mutant X', 1, 0, 'active', '[]'::json, false, false, false, NOW()), \
+                 (2, 1, 'Mutant Y', 1, 0, 'active', '[]'::json, false, false, false, NOW()); \
              INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
                  (1,1,'#1','unread',0,NOW()), \
                  (2,2,'#1','unread',0,NOW()); \
@@ -2346,8 +2346,8 @@ mod tests {
         let conn = state.pool.get().await.unwrap();
         conn.batch_execute(
             "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
-             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
-                 (1,1,'Owned','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1, 1, 'Owned', 1, 0, 'active', '[]'::json, false, false, false, NOW()); \
              INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
                  (1,1,'#6','unread',0,NOW()); \
              INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
@@ -2425,8 +2425,8 @@ mod tests {
         let conn = state.pool.get().await.unwrap();
         conn.batch_execute(
             "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
-             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
-                 (1,1,'Mutant X','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1, 1, 'Mutant X', 1, 0, 'active', '[]'::json, false, false, false, NOW()); \
              INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
                  (1,1,'#4','unread',0,NOW()); \
              INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
@@ -2529,8 +2529,8 @@ mod tests {
         let conn = state.pool.get().await.unwrap();
         conn.batch_execute(
             "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'matcher',false,NOW()); \
-             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
-                (1,1,'BPRD','comics',2,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                (1, 1, 'BPRD', 2, 0, 'active', '[]'::json, false, false, false, NOW()); \
              INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
                 (1,1,'1.MU','unread',0,NOW()), \
                 (2,1,'2','unread',1,NOW()); \

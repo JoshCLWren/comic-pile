@@ -2155,8 +2155,8 @@ mod tests {
         for (thread_id, user_id) in [(11_i32, 7_i32), (12, 7), (13, 8)] {
             connection
                 .execute(
-                    "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position, is_blocked) \
-                     VALUES ($1, $2, $3, 'Comic', 1, 'active', 1, false)",
+                    "INSERT INTO threads (id, user_id, title, issues_remaining, status, queue_position, is_blocked) \
+                     VALUES ($1, $2, $3, 1, 'active', 1, false)",
                     &[&thread_id, &user_id, &format!("Thread {thread_id}")],
                 )
                 .await
@@ -2242,8 +2242,8 @@ mod tests {
             .expect("seed group");
         connection
             .execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position) \
-                 VALUES (11, 7, 'Series', 'Comic', 1, 'active', 1)",
+                "INSERT INTO threads (id, user_id, title, issues_remaining, status, queue_position) \
+                 VALUES (11, 7, 'Series', 1, 'active', 1)",
                 &[],
             )
             .await
@@ -2346,8 +2346,8 @@ mod tests {
         }
         connection
             .execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position, is_blocked) \
-                 VALUES (11, 7, 'Thread 11', 'Comic', 4, 'active', 1, false)",
+                "INSERT INTO threads (id, user_id, title, issues_remaining, status, queue_position, is_blocked) \
+                 VALUES (11, 7, 'Thread 11', 4, 'active', 1, false)",
                 &[],
             )
             .await

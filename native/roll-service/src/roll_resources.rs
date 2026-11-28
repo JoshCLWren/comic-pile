@@ -500,24 +500,22 @@ mod tests {
             VALUES (1, 'revoked-jti', NOW() + interval '1 day');
         -- Reader one: six active threads, one completed thread, a d4 die.
         INSERT INTO threads
-            (id, user_id, title, format, issues_remaining, queue_position,
-             total_issues, reading_progress, status, is_blocked)
+            (id, user_id, title, issues_remaining, queue_position, total_issues, reading_progress, status, is_blocked)
         VALUES
-            (10, 1, 'Saga', 'Comic', 3, 1, 12, '25%', 'active', false),
-            (20, 1, 'Watchmen', 'Graphic Novel', 1, 2, 12, '8%', 'active', false),
-            (30, 1, 'Batman', 'Comic', 5, 3, 20, '15%', 'active', false),
-            (40, 1, 'Sandman', 'Graphic Novel', 2, 4, 10, '20%', 'active', false),
-            (50, 1, 'Hellboy', 'Comic', 4, 5, 15, '30%', 'active', false),
-            (60, 1, 'Y: The Last Man', 'Graphic Novel', 6, 6, 12, '50%', 'active', false),
-            (70, 1, 'Finished', 'Comic', 0, 7, 4, '100%', 'completed', false);
+            (10, 1, 'Saga', 3, 1, 12, '25%', 'active', false),
+            (20, 1, 'Watchmen', 1, 2, 12, '8%', 'active', false),
+            (30, 1, 'Batman', 5, 3, 20, '15%', 'active', false),
+            (40, 1, 'Sandman', 2, 4, 10, '20%', 'active', false),
+            (50, 1, 'Hellboy', 4, 5, 15, '30%', 'active', false),
+            (60, 1, 'Y: The Last Man', 6, 6, 12, '50%', 'active', false),
+            (70, 1, 'Finished', 0, 7, 4, '100%', 'completed', false);
         -- Reader two: two active threads, a legacy d50 outcome and one
         -- reader prerequisite that holds the second thread behind the first.
         INSERT INTO threads
-            (id, user_id, title, format, issues_remaining, queue_position,
-             total_issues, reading_progress, status, is_blocked)
+            (id, user_id, title, issues_remaining, queue_position, total_issues, reading_progress, status, is_blocked)
         VALUES
-            (110, 2, 'Bone', 'Comic', 3, 1, 10, '30%', 'active', false),
-            (120, 2, 'Lucifer', 'Comic', 5, 2, 11, '45%', 'active', false);
+            (110, 2, 'Bone', 3, 1, 10, '30%', 'active', false),
+            (120, 2, 'Lucifer', 5, 2, 11, '45%', 'active', false);
         INSERT INTO issues
             (id, thread_id, position, status, issue_number, created_at)
         VALUES

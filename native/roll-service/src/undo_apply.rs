@@ -1929,7 +1929,7 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'undo-json-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Snoozed Comic', 'comics', 3, NULL, NULL, 1, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Snoozed Comic', 3, NULL, NULL, 1, 'active', false);
                  INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids) VALUES (9301, 9101, NOW(), NULL, 6, NULL, NULL, false, '[9201]'::json);
                  INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description) VALUES (9401, 9301, '{}'::json, '{}'::json, NOW(), 'Pre-undo');",
             )
@@ -1966,9 +1966,9 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'undo-die-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked)
-                 VALUES (9201, 9101, 'Tesla Strong', 'Comic', 1, 2, 'in_progress', 1, 'active', false),
-                        (9202, 9101, 'Other Comic', 'Comic', 1, 1, NULL, 2, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'Tesla Strong', 1, 2, 'in_progress', 1, 'active', false),
+                        (9202, 9101, 'Other Comic', 1, 1, NULL, 2, 'active', false);
                  INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position)
                  VALUES (9501, 9201, '1', 'read', NOW(), NOW(), 1),
                         (9502, 9201, '2', 'unread', NULL, NOW(), 2);
@@ -2154,8 +2154,8 @@ mod tests {
                         (9722, 'comicvine', 'issue', 'ext-2', '{}'::json, NOW(), NOW());
                  INSERT INTO catalog_issues (id, canonical_external_identity_id, created_at, updated_at)
                  VALUES (9611, 9711, NOW(), NOW()), (9622, 9722, NOW(), NOW());
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
-                 VALUES (9201, 9101, 'Linked Comic', 'Comic', 2, 2, 1, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'Linked Comic', 2, 2, 1, 'active', false);
                  INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id)
                  VALUES (9501, 9201, '1', 'read', NOW(), NOW(), 1, 9611),
                         (9502, 9201, '2', 'unread', NULL, NOW(), 2, 9622);
@@ -2215,9 +2215,9 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'undo-pending-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
-                 VALUES (9201, 9101, 'In Snapshot', 'Comic', 3, 3, 1, 'active', false),
-                        (9299, 9101, 'Added Later', 'Comic', 1, 1, 2, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'In Snapshot', 3, 3, 1, 'active', false),
+                        (9299, 9101, 'Added Later', 1, 1, 2, 'active', false);
                  INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids)
                  VALUES (9301, 9101, NOW(), NULL, 12, NULL, 9299, false, '[]'::json);
                  INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description)
@@ -2273,8 +2273,8 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'undo-lock-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
-                 VALUES (9201, 9101, 'Offer Target', 'Comic', 3, 3, 1, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'Offer Target', 3, 3, 1, 'active', false);
                  INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids)
                  VALUES (9301, 9101, NOW(), NULL, 12, NULL, NULL, false, '[]'::json);
                  INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description)

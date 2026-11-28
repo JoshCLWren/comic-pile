@@ -965,9 +965,9 @@ mod tests {
         for (id, position, blocked) in ids {
             connection
                 .execute(
-                    "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                    "INSERT INTO threads (id, user_id, title, issues_remaining, status, \
                      queue_position, is_blocked) \
-                     VALUES ($1, $2, $3, 'Comic', 1, 'active', $4, $5)",
+                     VALUES ($1, $2, $3, 1, 'active', $4, $5)",
                     &[id, &user_id, &format!("Thread {id}"), position, blocked],
                 )
                 .await
@@ -1052,9 +1052,9 @@ mod tests {
             .expect("seed option e reader");
         connection
             .execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                "INSERT INTO threads (id, user_id, title, issues_remaining, status, \
                  queue_position, is_blocked) \
-                 VALUES ($1, $2, $3, 'Comic', 1, 'active', $4, $5)",
+                 VALUES ($1, $2, $3, 1, 'active', $4, $5)",
                 &[
                     &thread_id,
                     &user_id,

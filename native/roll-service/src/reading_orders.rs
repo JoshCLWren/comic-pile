@@ -372,7 +372,7 @@ mod tests {
             .expect("seed user");
         connection
             .execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position, is_blocked) VALUES ($1, $2, $3, 'Comic', 1, 'active', 1, false)",
+                "INSERT INTO threads (id, user_id, title, issues_remaining, status, queue_position, is_blocked) VALUES ($1, $2, $3, 1, 'active', 1, false)",
                 &[&11_i32, &7_i32, &"Thread 11"],
             )
             .await

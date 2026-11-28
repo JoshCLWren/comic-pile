@@ -2097,8 +2097,8 @@ mod tests {
         connection
             .batch_execute(&format!(
                 "INSERT INTO users (id, username) VALUES ({user_id}, 'cron-owner-{user_id}');
-                 INSERT INTO threads (id, title, format, issues_remaining, queue_position, status, user_id, created_at)
-                 VALUES ({thread_id}, 'Cron thread', 'other', 0, 1, 'active', {user_id}, NOW());
+                 INSERT INTO threads (id, title, issues_remaining, queue_position, status, user_id, created_at)
+                 VALUES ({thread_id}, 'Cron thread', 0, 1, 'active', {user_id}, NOW());
                  INSERT INTO continuity_plans
                    (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
                  VALUES ({plan_id}, {user_id}, 'Cron plan', 'informational', '[]'::json, '[]'::json, NOW(), NOW());
@@ -2145,10 +2145,8 @@ mod tests {
             .batch_execute(&format!(
                 "INSERT INTO users (id, username) VALUES ({LIST_SYNC_USER_ID}, 'list-sync-owner');
                  INSERT INTO threads
-                   (id, user_id, title, format, issues_remaining, queue_position, status,
-                    total_issues, next_unread_issue_id, reading_progress)
-                 VALUES ({LIST_SYNC_THREAD_ID}, {LIST_SYNC_USER_ID}, 'List sync', 'Comic',
-                         0, 1, 'active', 1, NULL, 'completed');
+                   (id, user_id, title, issues_remaining, queue_position, status, total_issues, next_unread_issue_id, reading_progress)
+                 VALUES ({LIST_SYNC_THREAD_ID}, {LIST_SYNC_USER_ID}, 'List sync', 0, 1, 'active', 1, NULL, 'completed');
                  INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position)
                  VALUES ({LIST_SYNC_FIRST_ISSUE_ID}, {LIST_SYNC_THREAD_ID}, '1', 'read',
                          '2024-01-01T00:00:00Z', NOW(), {first_position});

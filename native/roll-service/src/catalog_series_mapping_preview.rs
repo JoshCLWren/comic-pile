@@ -643,11 +643,8 @@ mod tests {
                 INSERT INTO users (id, username, created_at, is_admin)
                 VALUES (9001, 'map-series-preview', now(), false);
                 INSERT INTO threads
-                    (id, user_id, title, format, issues_remaining, queue_position, status,
-                     total_issues, created_at, is_blocked, is_test, manual_creator_credits,
-                     queue_position_is_manual)
-                VALUES (561077, 9001, 'Terra Obscura (2003)', 'Comic', 0, 1, 'active', 6, now(),
-                        false, false, '[]', false);
+                    (id, user_id, title, issues_remaining, queue_position, status, total_issues, created_at, is_blocked, is_test, manual_creator_credits, queue_position_is_manual)
+                VALUES (561077, 9001, 'Terra Obscura (2003)', 0, 1, 'active', 6, now(), false, false, '[]', false);
                 INSERT INTO issues
                     (id, thread_id, issue_number, status, created_at, position)
                 SELECT 5610000 + n, 561077, n::text, 'unread', now(), n
@@ -951,10 +948,8 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO threads
-                    (id, user_id, title, format, issues_remaining, queue_position, status,
-                     total_issues, created_at, is_blocked, is_test, manual_creator_credits,
-                     queue_position_is_manual)
-                 VALUES ($1, $2, $3, 'Comic', 0, 1, 'active', $4, now(), false, false, '[]', false)",
+                    (id, user_id, title, issues_remaining, queue_position, status, total_issues, created_at, is_blocked, is_test, manual_creator_credits, queue_position_is_manual)
+                 VALUES ($1, $2, $3, 0, 1, 'active', $4, now(), false, false, '[]', false)",
                 &[&thread_id, &user_id, &title.to_string(), &issue_count],
             )
             .await

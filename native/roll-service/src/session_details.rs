@@ -834,7 +834,7 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'session-details-test'), (9102, 'session-details-other');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Owned Comic', 'comics', 3, NULL, NULL, 1, 'active', false), (9202, 9102, 'Foreign Comic', 'Comic', 2, NULL, NULL, 1, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Owned Comic', 3, NULL, NULL, 1, 'active', false), (9202, 9102, 'Foreign Comic', 2, NULL, NULL, 1, 'active', false);
                  INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids) VALUES (9301, 9101, NOW(), NULL, 6, NULL, 9201, false, NULL), (9302, 9102, NOW(), NULL, 6, NULL, 9202, false, NULL), (9303, 9101, NOW(), NULL, 6, NULL, NULL, false, NULL), (9304, 9101, NOW(), NULL, 6, NULL, NULL, false, '[9201]');
                  INSERT INTO events (session_id, type, timestamp, selected_thread_id, thread_id, die, die_after, result) VALUES (9301, 'roll', NOW(), 9201, NULL, 6, NULL, 4), (9301, 'rate', NOW() + interval '1 minute', NULL, 9201, 6, 4, NULL), (9303, 'roll', NOW(), 9201, NULL, 6, NULL, 2), (9304, 'roll', NOW(), 9203, NULL, 6, NULL, 4), (9304, 'snooze', NOW() + interval '1 minute', NULL, 9201, NULL, NULL, NULL);
                   INSERT INTO snapshots (session_id, thread_states, session_state, created_at, description) VALUES (9304, '{\"9203\": {\"title\": \"Lost Comic\"}, \"_meta\": 1}'::json, '{}'::json, NOW(), 'Session start');",
@@ -977,7 +977,7 @@ mod tests {
         let connection = db::checkout(&state).await.expect("connection");
         connection
             .batch_execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9210, 9101, 'Done Comic', 'comics', 0, NULL, NULL, 2, 'completed', false);
+                "INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9210, 9101, 'Done Comic', 0, NULL, NULL, 2, 'completed', false);
                  INSERT INTO events (session_id, type, timestamp, thread_id, selected_thread_id, issue_number, rating) VALUES
                    (9303, 'rate', NOW() + interval '1 second', 9201, NULL, '5', 3.5),
                    (9303, 'undo', NOW() + interval '2 seconds', 9201, NULL, NULL, NULL),

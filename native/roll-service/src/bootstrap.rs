@@ -1485,10 +1485,9 @@ mod cover_source_tests {
             .batch_execute(
                 r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status,
-                      queue_position, last_activity_at)
-                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1, NULL),
-                        (20, 1, 'Second', 'Comic', 1, 'active', 2, NULL);
+                     (id, user_id, title, issues_remaining, status, queue_position, last_activity_at)
+                 VALUES (10, 1, 'First', 1, 'active', 1, NULL),
+                        (20, 1, 'Second', 1, 'active', 2, NULL);
                  INSERT INTO sessions (id, user_id, started_at, start_die)
                  VALUES (1, 1, NOW() - interval '1 hour', 6);
                  INSERT INTO events (thread_id, type, timestamp, context)
@@ -1575,12 +1574,11 @@ mod pool_parity_tests {
             .batch_execute(
                 r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status,
-                      queue_position, last_activity_at)
+                     (id, user_id, title, issues_remaining, status, queue_position, last_activity_at)
                  SELECT id, 1, 'Thread ' || id, 'Comic', 1, 'active', id, NULL
                  FROM generate_series(1, 12) AS id;
                  INSERT INTO sessions (id, user_id, started_at, start_die)
-                 VALUES (1, 1, now() - interval '1 day', 6);
+                 VALUES (1, 1, now() - interval '1 day');
                  INSERT INTO events (thread_id, type, timestamp)
                  VALUES (2, 'snooze', now());"#,
             )

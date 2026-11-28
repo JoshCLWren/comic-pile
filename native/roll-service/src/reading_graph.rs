@@ -1147,11 +1147,10 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'frontier-audit-a'), (9102, 'frontier-audit-b');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position,
-                                      status, total_issues)
-                 VALUES (9305, 9101, 'Uncanny X-Men', 'series', 1, 1, 'active', 2),
-                        (9306, 9101, 'X-Men', 'series', 2, 2, 'active', 2),
-                        (9401, 9102, 'Unrelated Series', 'series', 1, 1, 'active', 2);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status, total_issues)
+                 VALUES (9305, 9101, 'Uncanny X-Men', 1, 1, 'active', 2),
+                        (9306, 9101, 'X-Men', 2, 2, 'active', 2),
+                        (9401, 9102, 'Unrelated Series', 1, 1, 'active', 2);
                  INSERT INTO issues (id, thread_id, issue_number, status, created_at, position) VALUES
                      (9028, 9305, '360', 'read', NOW(), 1),
                      (9029, 9305, '361', 'unread', NOW(), 2),

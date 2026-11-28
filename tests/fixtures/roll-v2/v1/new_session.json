@@ -73,7 +73,6 @@
         "thread_states": {
           "1": {
             "created_at": "2026-01-04T12:00:00+00:00",
-            "format": "Comic",
             "is_blocked": false,
             "is_test": false,
             "issue_states": [
@@ -108,7 +107,6 @@
           },
           "2": {
             "created_at": "2026-01-04T12:00:00+00:00",
-            "format": "Comic",
             "is_blocked": false,
             "is_test": false,
             "issue_states": [
@@ -268,7 +266,6 @@
         },
         "routes": [],
         "thread": {
-          "format": "Comic",
           "id": 1,
           "last_activity_at": "2026-01-04T12:00:00+00:00",
           "title": "Alpha"
@@ -298,7 +295,6 @@
         },
         "routes": [],
         "thread": {
-          "format": "Comic",
           "id": 2,
           "last_activity_at": "2026-01-04T12:00:00+00:00",
           "title": "Beta"

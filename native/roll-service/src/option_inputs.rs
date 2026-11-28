@@ -1043,11 +1043,10 @@ mod tests {
                 (id, canonical_external_identity_id, catalog_series_id, created_at, updated_at)
             VALUES (9001, 8101, 1001, NOW(), NOW()), (9002, 8102, 1002, NOW(), NOW());
             INSERT INTO threads
-                (id, user_id, title, format, issues_remaining, queue_position, status,
-                 created_at, catalog_series_id)
-            VALUES (9201, 9101, 'Catalog Only', 'comic', 2, 1, 'active', NOW(), NULL),
-                   (9401, 9102, 'Confirmed Series', 'comic', 1, 1, 'active', NOW(), NULL),
-                   (9402, 9102, 'Confirmed Metadata', 'comic', 1, 2, 'active', NOW(), NULL);
+                (id, user_id, title, issues_remaining, queue_position, status, created_at, catalog_series_id)
+            VALUES (9201, 9101, 'Catalog Only', 2, 1, 'active', NOW(), NULL),
+                   (9401, 9102, 'Confirmed Series', 1, 1, 'active', NOW(), NULL),
+                   (9402, 9102, 'Confirmed Metadata', 1, 2, 'active', NOW(), NULL);
             INSERT INTO issues
                 (id, thread_id, issue_number, status, created_at, position, catalog_issue_id)
             VALUES (9201, 9201, '1', 'unread', NOW(), 1, 9001),
@@ -1273,13 +1272,10 @@ mod tests {
                    (9003, 8104, 1002, NOW(), NOW());
 
             INSERT INTO threads
-                (id, user_id, title, format, issues_remaining, queue_position, status,
-                 created_at, catalog_series_id, notes, last_rating, reading_progress)
+                (id, user_id, title, issues_remaining, queue_position, status, created_at, catalog_series_id, notes, last_rating, reading_progress)
             VALUES
-                (9201, 9101, 'A catalog thread', 'comic', 2, 1, 'active', NOW(), NULL,
-                    'A private notes', 4.0, 'reading'),
-                (9401, 9102, 'B confirmed thread', 'comic', 2, 2, 'active', NOW(), 1001,
-                    'B private notes', 3.0, 'in_progress');
+                (9201, 9101, 'A catalog thread', 2, 1, 'active', NOW(), NULL, 'A private notes', 4.0, 'reading'),
+                (9401, 9102, 'B confirmed thread', 2, 2, 'active', NOW(), 1001, 'B private notes', 3.0, 'in_progress');
             INSERT INTO issues
                 (id, thread_id, issue_number, status, created_at, position, catalog_issue_id)
             VALUES

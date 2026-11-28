@@ -5434,12 +5434,11 @@ mod guard_db_tests {
                 (id, canonical_external_identity_id, catalog_series_id, created_at, updated_at)
             VALUES (9001, 8101, 1001, NOW(), NOW());
             INSERT INTO threads
-                (id, user_id, title, format, issues_remaining, queue_position, status,
-                 created_at, catalog_series_id)
+                (id, user_id, title, issues_remaining, queue_position, status, created_at, catalog_series_id)
             VALUES
-                (9201, 9101, 'A catalog thread', 'comic', 1, 1, 'active', NOW(), 1001),
-                (9202, 9101, 'A confirmed thread', 'comic', 1, 2, 'active', NOW(), NULL),
-                (9401, 9102, 'B catalog thread', 'comic', 1, 1, 'active', NOW(), 1001);
+                (9201, 9101, 'A catalog thread', 1, 1, 'active', NOW(), 1001),
+                (9202, 9101, 'A confirmed thread', 1, 2, 'active', NOW(), NULL),
+                (9401, 9102, 'B catalog thread', 1, 1, 'active', NOW(), 1001);
             INSERT INTO issues
                 (id, thread_id, issue_number, status, created_at, position, catalog_issue_id)
             VALUES

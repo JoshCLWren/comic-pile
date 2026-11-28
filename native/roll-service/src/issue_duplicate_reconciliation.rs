@@ -1728,10 +1728,10 @@ mod tests {
                 (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
             VALUES (8001, 'comicvine', 'issue', '4050-0001', '{}'::json, NOW(), NOW());
             INSERT INTO threads
-                (id, user_id, title, format, issues_remaining, queue_position, status, created_at)
-            VALUES (9201, 9101, 'A one', 'comic', 1, 1, 'active', NOW()),
-                   (9202, 9101, 'A two', 'comic', 1, 2, 'active', NOW()),
-                   (9401, 9102, 'B one', 'comic', 1, 1, 'active', NOW());
+                (id, user_id, title, issues_remaining, queue_position, status, created_at)
+            VALUES (9201, 9101, 'A one', 1, 1, 'active', NOW()),
+                   (9202, 9101, 'A two', 1, 2, 'active', NOW()),
+                   (9401, 9102, 'B one', 1, 1, 'active', NOW());
             INSERT INTO issues
                 (id, thread_id, issue_number, status, created_at, position)
             VALUES (9201, 9201, '1', 'unread', NOW(), 1),

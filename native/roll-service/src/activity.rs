@@ -502,12 +502,11 @@ mod tests {
     const PRODUCTION_SEQUENCE: &str = r#"
         INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
         INSERT INTO threads
-            (id, user_id, title, format, issues_remaining, status,
-             queue_position, total_issues, reading_progress)
-        VALUES (3153, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%'),
-               (3469, 1, 'Paper Girls', 'Comic', 3, 'active', 2, 12, '25%'),
-               (8417, 1, 'Astro City: Astra', 'Comic', 1, 'active', 3, 2, '50%'),
-               (9001, 2, 'Other Reader Series', 'Comic', 3, 'active', 1, 4, '0%');
+            (id, user_id, title, issues_remaining, status, queue_position, total_issues, reading_progress)
+        VALUES (3153, 1, 'Saga', 3, 'active', 1, 12, '25%'),
+               (3469, 1, 'Paper Girls', 3, 'active', 2, 12, '25%'),
+               (8417, 1, 'Astro City: Astra', 1, 'active', 3, 2, '50%'),
+               (9001, 2, 'Other Reader Series', 3, 'active', 1, 4, '0%');
         INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
         VALUES (1121330, 3153, '4', 'unread', now(), 1),
                (25301, 3469, '7', 'unread', now(), 1),
@@ -662,9 +661,8 @@ mod tests {
             r#"
             INSERT INTO users (id, username) VALUES (1, 'reader-1');
             INSERT INTO threads
-                (id, user_id, title, format, issues_remaining, status,
-                 queue_position, total_issues, reading_progress)
-            VALUES (10, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%');
+                (id, user_id, title, issues_remaining, status, queue_position, total_issues, reading_progress)
+            VALUES (10, 1, 'Saga', 3, 'active', 1, 12, '25%');
             INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
             VALUES (100, 10, '1', 'read', now(), 1);
             -- Command A: issue receipt + dice step (one action).
@@ -715,9 +713,8 @@ mod tests {
             r#"
             INSERT INTO users (id, username) VALUES (1, 'reader-1');
             INSERT INTO threads
-                (id, user_id, title, format, issues_remaining, status,
-                 queue_position, total_issues, reading_progress)
-            VALUES (10, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%');
+                (id, user_id, title, issues_remaining, status, queue_position, total_issues, reading_progress)
+            VALUES (10, 1, 'Saga', 3, 'active', 1, 12, '25%');
             INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
             VALUES (100, 10, '1', 'read', now(), 1);
             -- issue_service records an unchanged rating as issue_command with
@@ -764,11 +761,10 @@ mod tests {
             INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
             INSERT INTO sessions (id, user_id, start_die) VALUES (1, 1, 6), (2, 2, 6);
             INSERT INTO threads
-                (id, user_id, title, format, issues_remaining, status,
-                 queue_position, total_issues, reading_progress)
-            VALUES (10, 1, 'First', 'Comic', 1, 'active', 1, 1, '0%'),
-                   (20, 1, 'Second', 'Comic', 1, 'active', 2, 1, '0%'),
-                   (30, 1, 'Third', 'Comic', 1, 'active', 3, 1, '0%');
+                (id, user_id, title, issues_remaining, status, queue_position, total_issues, reading_progress)
+            VALUES (10, 1, 'First', 1, 'active', 1, 1, '0%'),
+                   (20, 1, 'Second', 1, 'active', 2, 1, '0%'),
+                   (30, 1, 'Third', 1, 'active', 3, 1, '0%');
             INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
             VALUES (100, 10, '1', 'unread', now(), 1),
                    (200, 20, '1', 'unread', now(), 1),

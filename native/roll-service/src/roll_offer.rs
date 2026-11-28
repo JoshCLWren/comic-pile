@@ -938,9 +938,8 @@ mod tests {
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status,
-                      queue_position, total_issues, reading_progress)
-                 VALUES (10, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%');
+                     (id, user_id, title, issues_remaining, status, queue_position, total_issues, reading_progress)
+                 VALUES (10, 1, 'Saga', 3, 'active', 1, 12, '25%');
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1);
@@ -988,10 +987,10 @@ mod tests {
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (10, 1, 'Late', 'Comic', 0, 'active', 30),
-                        (11, 1, 'Early', 'Comic', 0, 'active', 10),
-                        (12, 1, 'Middle', 'Comic', 0, 'active', 20);"#,
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'Late', 0, 'active', 30),
+                        (11, 1, 'Early', 0, 'active', 10),
+                        (12, 1, 'Middle', 0, 'active', 20);"#,
         )
         .await;
         let owner = AuthenticatedUser::for_test(1);
@@ -1022,8 +1021,8 @@ mod tests {
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO sessions (id, user_id, start_die) VALUES (1, 1, 6);
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 1, 'active', 1);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1);"#,
@@ -1066,8 +1065,8 @@ mod tests {
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO sessions (id, user_id, start_die) VALUES (1, 1, 6);
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 1, 'active', 1);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1);"#,
@@ -1166,8 +1165,8 @@ mod tests {
             .batch_execute(
                 r#"INSERT INTO users (id, username) VALUES (1, 'route-reader');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (8, 1, 'Eight', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (8, 1, 'Eight', 1, 'active', 1);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (80, 8, '1', 'unread', now(), 1);
