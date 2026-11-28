@@ -113,7 +113,9 @@ pub(crate) fn log_provider_failure(context: &'static str, failure: ProviderFailu
                 "comicvine provider unavailable"
             );
         }
-        ProviderFailure::RateLimited { retry_after_seconds } => tracing::warn!(
+        ProviderFailure::RateLimited {
+            retry_after_seconds,
+        } => tracing::warn!(
             comicvine_failure = failure.code(),
             retry_after_seconds,
             context,
@@ -312,13 +314,9 @@ pub(crate) enum Exchange {
     Payload(Value),
     /// HTTP 420/429 throttle with the raw `Retry-After` header, if any. The
     /// provider-supplied delay is preserved by the caller, never discarded.
-    Throttled {
-        retry_after: Option<String>,
-    },
+    Throttled { retry_after: Option<String> },
     /// Any other non-success HTTP status. The body is never read or logged.
-    HttpStatus {
-        status: u16,
-    },
+    HttpStatus { status: u16 },
 }
 
 /// Parse Python-compatible delta-seconds or an HTTP-date, then apply the
@@ -557,7 +555,10 @@ pub(crate) async fn catalog_volume_roster(
         .filter(|v| *v > 0)
         .ok_or_else(unavailable)?;
     let api_key = provider_api_key().ok_or_else(|| {
-        log_provider_failure("catalog_volume_roster", ProviderFailure::ProviderNotConfigured);
+        log_provider_failure(
+            "catalog_volume_roster",
+            ProviderFailure::ProviderNotConfigured,
+        );
         unavailable()
     })?;
     let volume = limits
@@ -1833,5 +1834,243 @@ mod tests {
         assert_eq!(paths.len(), 2, "one volume read and one roster page");
         assert!(paths[0].starts_with("/api/volume/4050-5851001/?"));
         assert!(paths[1].starts_with("/api/issues/?"));
+    }
+
+    /// #5919: the vocabulary is closed and each class has a stable, secret-free
+    /// code. Quota, body and timeout limits remain in force.
+    #[test]
+    fn provider_failure_codes_are_stable_and_limits_are_bounded() {
+        assert_eq!(
+            ProviderFailure::ProviderNotConfigured.code(),
+            "provider_not_configured"
+        );
+        assert_eq!(
+            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::Transport).code(),
+            "provider_unavailable"
+        );
+        assert_eq!(
+            ProviderUnavailableCategory::HttpStatus { status: 403 }.code(),
+            "http_status"
+        );
+        assert_eq!(
+            ProviderUnavailableCategory::ErrorEnvelope.code(),
+            "error_envelope"
+        );
+        assert_eq!(ProviderUnavailableCategory::Transport.code(), "transport");
+        assert_eq!(
+            ProviderFailure::RateLimited {
+                retry_after_seconds: 120
+            }
+            .code(),
+            "rate_limited"
+        );
+        assert_eq!(ProviderFailure::Timeout.code(), "timeout");
+        assert_eq!(ProviderFailure::InvalidResponse.code(), "invalid_response");
+        assert_eq!(ProviderFailure::PersistFailed.code(), "persist_failed");
+        assert_eq!(PROVIDER_TIMEOUT, Duration::from_secs(5));
+        assert_eq!(MAX_BODY, 2_000_000);
+        assert_eq!(crate::comicvine_limits::REQUESTS_PER_HOUR, 180);
+    }
+
+    /// #5919: a 429 preserves the provider's `Retry-After` as a bounded typed
+    /// delay, and no emitted line leaks the credential-bearing request URL.
+    #[tokio::test(flavor = "current_thread")]
+    async fn provider_response_classifies_429_with_bounded_retry_after() {
+        let (logs, _guard) = capture_logs();
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let mut headers = HeaderMap::new();
+        headers.insert("retry-after", "120".parse().unwrap());
+        fake.push_ok(StatusCode::TOO_MANY_REQUESTS, headers, Bytes::new());
+        let outbound: Arc<dyn OutboundHttp> = fake.clone();
+
+        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("429 must be rate limited");
+        assert_eq!(
+            err,
+            ProviderFailure::RateLimited {
+                retry_after_seconds: 120
+            }
+        );
+        assert_eq!(fake.calls().len(), 1);
+        let logged = logs.text();
+        assert!(logged.contains("rate_limited"), "{logged}");
+        assert_redacted(&logged);
+    }
+
+    /// #5919: an absurd provider delay is bounded before it enters the typed
+    /// failure, so downstream cooldowns cannot overflow or stall forever.
+    #[tokio::test(flavor = "current_thread")]
+    async fn provider_response_bounds_an_absurd_retry_after() {
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let mut headers = HeaderMap::new();
+        headers.insert("retry-after", "999999999999".parse().unwrap());
+        fake.push_ok(StatusCode::TOO_MANY_REQUESTS, headers, Bytes::new());
+        let outbound: Arc<dyn OutboundHttp> = fake;
+
+        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("429 must be rate limited");
+        let ProviderFailure::RateLimited {
+            retry_after_seconds,
+        } = err
+        else {
+            panic!("expected a bounded rate limit, got {err:?}");
+        };
+        assert!((60..=3600).contains(&retry_after_seconds));
+    }
+
+    /// #5919: an error envelope is its own safe category. Provider-controlled
+    /// text (here echoing a credential) never appears in a log line.
+    #[tokio::test(flavor = "current_thread")]
+    async fn provider_response_classifies_error_envelope_without_logging_the_body() {
+        let (logs, _guard) = capture_logs();
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let body = json!({
+            "status_code": 100,
+            "error": {"message": "bad api_key=TESTKEY123; SECRET_TOKEN session=abc"}
+        })
+        .to_string();
+        fake.push_ok(StatusCode::OK, HeaderMap::new(), Bytes::from(body));
+        let outbound: Arc<dyn OutboundHttp> = fake;
+
+        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("an error envelope must be classified");
+        assert_eq!(
+            err,
+            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::ErrorEnvelope)
+        );
+        let logged = logs.text();
+        assert!(logged.contains("error_envelope"), "{logged}");
+        assert_redacted(&logged);
+    }
+
+    /// #5919: a malformed payload is distinct from an error envelope.
+    #[tokio::test(flavor = "current_thread")]
+    async fn provider_response_classifies_malformed_payload() {
+        let (logs, _guard) = capture_logs();
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from_static(b"not json"),
+        );
+        let outbound: Arc<dyn OutboundHttp> = fake;
+
+        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("malformed JSON must be invalid_response");
+        assert_eq!(err, ProviderFailure::InvalidResponse);
+        let logged = logs.text();
+        assert!(logged.contains("invalid_response"), "{logged}");
+        assert_redacted(&logged);
+    }
+
+    /// #5919: a transport failure is its own category, even when the transport
+    /// error text embeds the full credential-bearing URL and a token.
+    #[tokio::test(flavor = "current_thread")]
+    async fn provider_response_classifies_transport_error_and_redacts_logs() {
+        let (logs, _guard) = capture_logs();
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        fake.push_error(OutboundError::Send(
+            "GET https://comicvine.gamespot.com/api/issue/4000-1/?api_key=TESTKEY123&format=json failed with SECRET_TOKEN".to_owned(),
+        ));
+        let outbound: Arc<dyn OutboundHttp> = fake;
+
+        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("a transport error must be classified");
+        assert_eq!(
+            err,
+            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::Transport)
+        );
+        let logged = logs.text();
+        assert!(logged.contains("transport"), "{logged}");
+        assert_redacted(&logged);
+    }
+
+    /// #5919: the deadline is classified as `timeout` rather than a generic
+    /// unavailable, using an injectable deadline and a pending fake.
+    #[tokio::test(flavor = "current_thread")]
+    async fn provider_exchange_classifies_timeout() {
+        let (logs, _guard) = capture_logs();
+        let outbound: Arc<dyn OutboundHttp> = Arc::new(PendingOutbound);
+
+        let err = provider_exchange_with_timeout(
+            &outbound,
+            "issue/4000-1",
+            "",
+            "TESTKEY123",
+            Duration::from_millis(10),
+        )
+        .await
+        .expect_err("the deadline must classify as timeout");
+        assert_eq!(err, ProviderFailure::Timeout);
+        let logged = logs.text();
+        assert!(logged.contains("timeout"), "{logged}");
+        assert_redacted(&logged);
+    }
+
+    /// #5919: persisted-metadata failures are classified, not silently
+    /// collapsed into `provider_unavailable`, and the diagnostic stays redacted.
+    #[tokio::test(flavor = "current_thread")]
+    async fn persist_failure_emits_a_typed_redacted_diagnostic() {
+        let (logs, _guard) = capture_logs();
+        log_provider_failure("test_persist", ProviderFailure::PersistFailed);
+        let logged = logs.text();
+        assert!(logged.contains("persist_failed"), "{logged}");
+        assert_redacted(&logged);
+    }
+
+    /// #5919: credential normalization and the canonical slash URL remain in
+    /// force at the transport boundary, with no secret in any emitted line.
+    #[tokio::test(flavor = "current_thread")]
+    async fn normalization_and_canonical_slash_url_never_leak_in_logs() {
+        let (logs, _guard) = capture_logs();
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from_static(br#"{"status_code":1,"results":{}}"#),
+        );
+        let outbound: Arc<dyn OutboundHttp> = fake.clone();
+
+        let exchange = provider_exchange(&outbound, "issue/4000-1/", "", "  TESTKEY123\n")
+            .await
+            .expect("padded credential must be normalized and fetched");
+        assert!(matches!(exchange, Exchange::Payload(_)));
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(
+            calls[0].path,
+            "/api/issue/4000-1/?api_key=TESTKEY123&format=json"
+        );
+        assert_redacted(&logs.text());
+    }
+
+    /// #5919: the limits path also classifies a 403 by HTTP status instead of
+    /// collapsing it into a generic unavailable result.
+    #[tokio::test(flavor = "current_thread")]
+    async fn limits_call_classifies_403_by_http_status() {
+        let (logs, _guard) = capture_logs();
+        let limits = crate::comicvine_limits::ComicVineLimits::default();
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        fake.push_ok(StatusCode::FORBIDDEN, HeaderMap::new(), Bytes::new());
+        let outbound: Arc<dyn OutboundHttp> = fake;
+
+        let err = limits
+            .call(&outbound, "issues", "", "TESTKEY123")
+            .await
+            .expect_err("403 must be a classified provider failure");
+        assert_eq!(
+            err,
+            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus {
+                status: 403
+            })
+        );
+        let logged = logs.text();
+        assert!(logged.contains("http_status"), "{logged}");
+        assert_redacted(&logged);
     }
 }

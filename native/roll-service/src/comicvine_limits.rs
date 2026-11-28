@@ -282,9 +282,11 @@ impl ComicVineLimits {
                     },
                 }
             }
-            Ok(Exchange::HttpStatus { status }) => ProviderFailure::ProviderUnavailable(
-                ProviderUnavailableCategory::HttpStatus { status },
-            ),
+            Ok(Exchange::HttpStatus { status }) => {
+                ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus {
+                    status,
+                })
+            }
             Err(failure) => failure,
         };
         log_provider_failure("comicvine_limits", failure);
