@@ -987,6 +987,7 @@ function _parseArgs(argv) {
     'rewrite-fragment': REWRITE_FRAGMENT_PATH,
     vercel: VERCEL_PATH,
     agents: AGENTS_PATH,
+    router: NATIVE_ROUTER_PATH,
     check: false,
   };
   for (let i = 2; i < argv.length; i++) {
