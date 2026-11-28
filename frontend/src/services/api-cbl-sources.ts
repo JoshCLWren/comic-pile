@@ -287,19 +287,21 @@ export function createCblSourcesApi(client: HttpClient) {
     const entriesById = new Map(
       preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
     )
+    // The commit applies `series_overrides` after the per-entry plan, so a
+    // position-level override would defeat a rechecked issue inside an excluded
+    // volume. Expand volume choices around explicit per-entry decisions only.
+    const explicitPositions = new Set<number>()
+    for (const entryId of Object.keys(choices.entry_decisions)) {
+      const entry = entriesById.get(entryId)
+      if (entry) explicitPositions.add(entry.cbl_position)
+    }
     const overridesByPosition = new Map<number, 'include' | 'exclude'>()
     for (const [groupId, include] of Object.entries(choices.series_decisions)) {
       const decision = include ? 'include' : 'exclude'
       for (const entry of preview.entries) {
-        if (entry.series_group_id === groupId) {
+        if (entry.series_group_id === groupId && !explicitPositions.has(entry.cbl_position)) {
           overridesByPosition.set(entry.cbl_position, decision)
         }
-      }
-    }
-    for (const [entryId, include] of Object.entries(choices.entry_decisions)) {
-      const entry = entriesById.get(entryId)
-      if (entry) {
-        overridesByPosition.set(entry.cbl_position, include ? 'include' : 'exclude')
       }
     }
     const seriesOverrides = [...overridesByPosition.entries()]

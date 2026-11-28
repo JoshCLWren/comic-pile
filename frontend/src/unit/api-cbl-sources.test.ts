@@ -101,8 +101,6 @@ describe('cblSourcesApi.commit', () => {
         series_decisions: [],
         series_overrides: [
           { cbl_position: 1, decision: 'exclude' },
-          { cbl_position: 2, decision: 'include' },
-          { cbl_position: 3, decision: 'exclude' },
           { cbl_position: 4, decision: 'exclude' },
         ],
         overlap_decisions: [],
@@ -202,7 +200,6 @@ describe('cblSourcesApi.commitNew', () => {
         series_decisions: [],
         series_overrides: [
           { cbl_position: 1, decision: 'exclude' },
-          { cbl_position: 2, decision: 'include' },
           { cbl_position: 3, decision: 'exclude' },
           { cbl_position: 4, decision: 'exclude' },
         ],
@@ -249,6 +246,23 @@ describe('cblSourcesApi.commitSource', () => {
       }),
       { timeout: 60_000 },
     )
+  })
+
+  it('keeps a rechecked issue inside an excluded volume out of the position overrides', async () => {
+    await cblSourcesApi.commitSource(42, reviewedPreview, {
+      series_decisions: { bprd: false },
+      entry_decisions: { '101': true },
+    })
+    const payload = client.post.mock.calls[0][1] as {
+      entry_decisions: Record<string, string>
+      series_overrides: Array<{ cbl_position: number; decision: string }>
+    }
+    expect(payload.entry_decisions).toEqual({ '101': 'include' })
+    expect(payload.series_overrides).toEqual([
+      { cbl_position: 2, decision: 'exclude' },
+      { cbl_position: 3, decision: 'exclude' },
+      { cbl_position: 4, decision: 'exclude' },
+    ])
   })
 
   it('omits the guards on a first add so the server creates the canonical list', async () => {
