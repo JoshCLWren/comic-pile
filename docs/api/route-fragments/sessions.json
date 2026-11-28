@@ -8,8 +8,7 @@
     "runtime": "native-rust",
     "status": "target",
     "consumers": [
-      "frontend/src/services/api-sessions.ts",
-      "frontend/src/services/rollBootstrapApi.ts"
+      "frontend/src/services/api-sessions.ts"
     ]
   },
   "operations": [
@@ -29,9 +28,7 @@
       "path": "/api/v2/readingSessions",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/readingSessions$",
-      "consumers": [
-        "frontend/src/services/rollBootstrapApi.ts"
-      ]
+      "consumers": []
     },
     {
       "bucket": "operations",

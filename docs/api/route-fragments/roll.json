@@ -6,7 +6,9 @@
     "^/api/v2/roll/unsnooze$",
     "^/api/v2/roll/override$",
     "^/api/v2/roll/dismiss-pending$",
-    "^/api/v2/roll/switch-prerequisite$"
+    "^/api/v2/roll/switch-prerequisite$",
+    "^/api/v2/roll/last-read$",
+    "^/api/v2/roll/recovery$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -14,7 +16,7 @@
     "owning_issue": 4850,
     "consumers": [
       "frontend/src/services/api-roll.ts",
-      "frontend/src/services/rollBootstrapApi.ts"
+      "frontend/src/services/rollStateApi.ts"
     ]
   },
   "operations": [
@@ -62,7 +64,29 @@
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/roll/switch\\-prerequisite$",
       "consumers": [
-        "frontend/src/services/rollBootstrapApi.ts"
+        "frontend/src/services/rollStateApi.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/roll/last-read",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/roll/last-read$",
+      "owning_issue": 4350,
+      "consumers": [
+        "frontend/src/services/rollResourcesApi.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/roll/recovery",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/roll/recovery$",
+      "owning_issue": 4350,
+      "consumers": [
+        "frontend/src/services/rollResourcesApi.ts"
       ]
     }
   ]
