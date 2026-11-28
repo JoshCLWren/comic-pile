@@ -557,7 +557,7 @@ async fn concurrent_first_applies_serialize_and_report_truthful_counts() {
         (second, first)
     };
     assert_eq!(creator.inserted_lists, 600);
-    assert_eq!(follower.source_created, false);
+    assert!(!follower.source_created);
     assert_eq!(follower.inserted_lists, 0);
     assert_eq!(follower.updated_lists, 0);
     assert_eq!(follower.unchanged_lists, 600);
