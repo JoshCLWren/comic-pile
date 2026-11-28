@@ -81,7 +81,7 @@ it('splits large migrations into server-bounded create ranges', async () => {
   })
   expect(client.post).toHaveBeenCalledTimes(15) // 2 creates + 13 bulk read-marker posts
   expect(client.post).toHaveBeenNthCalledWith(15, '/v2/issue-read-markers', {
-    issue_ids: second.slice(200),
+    issue_ids: second.slice(200).map((issue) => issue.id),
   })
   expect(client.get).toHaveBeenCalledWith('/v1/threads/42')
 })
