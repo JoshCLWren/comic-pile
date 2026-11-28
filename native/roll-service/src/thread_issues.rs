@@ -36,7 +36,6 @@ use axum::{
     body::Bytes,
     extract::{rejection::PathRejection, Path, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -437,29 +436,6 @@ pub(crate) fn natural_issue_order(existing: &[String], incoming: &[String]) -> O
         }
     }
     Some(result)
-}
-
-/// Python `int(str)` for the strings the migration route can receive.
-fn python_int(text: &str) -> Option<i128> {
-    let trimmed = text.trim();
-    let (negative, digits) = match trimmed.as_bytes().first()? {
-        b'-' => (true, &trimmed[1..]),
-        b'+' => (false, &trimmed[1..]),
-        _ => (false, trimmed),
-    };
-    if digits.is_empty()
-        || digits.starts_with('_')
-        || digits.ends_with('_')
-        || digits.contains("__")
-    {
-        return None;
-    }
-    if !digits.bytes().all(|b| b.is_ascii_digit() || b == b'_') {
-        return None;
-    }
-    let cleaned: String = digits.chars().filter(|c| *c != '_').collect();
-    let value: i128 = cleaned.parse().ok()?;
-    Some(if negative { -value } else { value })
 }
 
 // ---------------------------------------------------------------------------
@@ -1509,20 +1485,6 @@ mod tests {
         // reader-authored order and must never be numerically re-seated here.
         let julix = strings(&["129", "140", "141", "142", "130", "131", "143"]);
         assert_eq!(natural_issue_order(&julix, &strings(&["101"])), None);
-    }
-
-    #[test]
-    fn python_int_parsing() {
-        assert_eq!(python_int("5"), Some(5));
-        assert_eq!(python_int(" 5 "), Some(5));
-        assert_eq!(python_int("+5"), Some(5));
-        assert_eq!(python_int("-5"), Some(-5));
-        assert_eq!(python_int("1_000"), Some(1000));
-        assert_eq!(python_int("1__0"), None);
-        assert_eq!(python_int("_1"), None);
-        assert_eq!(python_int("1.5"), None);
-        assert_eq!(python_int("Annual 1"), None);
-        assert_eq!(python_int(""), None);
     }
 
     #[test]

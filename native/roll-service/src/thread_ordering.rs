@@ -412,7 +412,7 @@ pub async fn post_thread_action(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     segment: Result<Path<String>, PathRejection>,
-    body: axum::body::Bytes,
+    _body: axum::body::Bytes,
 ) -> Result<Response, ApiError> {
     let Path(segment) = segment.map_err(|_| validation_failed())?;
     match segment.split_once(':') {
