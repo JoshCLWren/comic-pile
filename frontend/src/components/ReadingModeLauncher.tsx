@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import ReadingModeQuiz from './ReadingModeQuiz'
-import {
-  dismissReadingModeSuggestion,
-  getReadingMode,
-} from '../services/readingMode'
+import { dismissReadingModeSuggestion } from '../services/readingMode'
 import { FEATURES } from '../config/features'
 import type { ReadingModeState } from '../types'
+import { useReadingMode } from '../hooks/useReadingMode'
+import { queryKeys } from '../query/queryKeys'
 
 /**
  * Always-reachable entry point for the reading-mode quiz plus a non-blocking
@@ -13,32 +13,20 @@ import type { ReadingModeState } from '../types'
  * quiz never opens automatically and never blocks rolling.
  */
 export default function ReadingModeLauncher() {
-  const [mode, setMode] = useState<ReadingModeState | null>(null)
+  const queryClient = useQueryClient()
+  const { data: mode = null } = useReadingMode()
   const [quizOpen, setQuizOpen] = useState(false)
   const [dismissing, setDismissing] = useState(false)
 
-  const refresh = useCallback(async () => {
-    try {
-      const state = await getReadingMode()
-      setMode(state)
-    } catch {
-      // Reading mode is optional; ignore transient fetch failures.
-    }
-  }, [])
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
-
   const handleComplete = useCallback((state: ReadingModeState) => {
-    setMode(state)
-  }, [])
+    queryClient.setQueryData(queryKeys.readingMode.state(), state)
+  }, [queryClient])
 
   const handleDismiss = useCallback(async () => {
     setDismissing(true)
     try {
       const state = await dismissReadingModeSuggestion()
-      setMode(state)
+      queryClient.setQueryData(queryKeys.readingMode.state(), state)
     } catch {
       // Best-effort dismissal; ignore failures.
     } finally {

@@ -5,7 +5,6 @@ import { DICE_LADDER } from '../../../components/diceLadder'
 import type { DiceSide } from '../../../components/diceTypes'
 import type { RollState, RollThreadSummary } from '../../../types/rollState'
 import type { ReadingModeDisplay } from '../../../types/readingMode'
-import { useReadingMode } from '../../../hooks/useReadingMode'
 import {
   ROLL_WORKSPACE_GUTTER,
   ROLL_WORKSPACE_MAX_WIDTH,
@@ -28,6 +27,7 @@ interface RollHeaderProps {
   onOpenDieModal: () => void
   onBackToQueue?: () => void
   dieState?: DieStateResponse | null
+  readingMode?: ReadingModeDisplay | null
 }
 
 /**
@@ -66,6 +66,7 @@ export function RollHeader({
   onOpenDieModal,
   onBackToQueue,
   dieState,
+  readingMode,
 }: RollHeaderProps) {
   const effectiveDie = dieState?.die ?? currentDie
   // Scoped ladder is authoritative when present; the static ladder remains
@@ -73,7 +74,6 @@ export function RollHeader({
   const effectiveLadder =
     dieState?.ladder && dieState.ladder.length > 0 ? dieState.ladder : DICE_LADDER
   const maxLadderDie = effectiveLadder[effectiveLadder.length - 1]
-  const { data: readingMode } = useReadingMode()
   const mode: ReadingModeDisplay | null | undefined = readingMode
     ? {
         bandwidth: readingMode.bandwidth,

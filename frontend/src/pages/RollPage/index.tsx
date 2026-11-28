@@ -41,6 +41,7 @@ import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
+import { useReadingMode } from '../../hooks/useReadingMode'
 import { useToast } from '../../contexts/useToast'
 import { invalidateDirectReadIssueSelection, invalidateRollStateOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
@@ -83,6 +84,7 @@ export default function RollPage() {
   // session state. It survives reload and tabs and is cleared only on a
   // committed read/rate of that same issue or an explicit Reset (#4350).
   const pendingSelection = useRollPendingSelection()
+  const { data: readingMode } = useReadingMode()
 
   // Die-header surface migration (#4719): the scoped die resource is
   // authoritative for the selected die, ladder readout, die size and 3D
@@ -425,6 +427,7 @@ export default function RollPage() {
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
         onBackToQueue={handleBackToQueue}
         dieState={scopedDieState ?? null}
+        readingMode={readingMode ?? null}
       />
 
       <ReadingModeLauncher />
