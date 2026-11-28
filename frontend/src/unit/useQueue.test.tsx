@@ -149,19 +149,18 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   it('drops a replayed thread id when a cursor page repeats a row', async () => {
     // A read-only revisit can refetch cached cursors after concurrent writes;
     // a repeated id must not become a second rendered series (#3604).
-    listThreads
-      // SAFETY: the stubbed pages supply only the fields the pager reads
-      .mockResolvedValueOnce({
-        threads: [{ id: 1 } as never, { id: 2 } as never],
-        next_page_token: 'tok-2',
-        active_count: 2,
-      })
-      // SAFETY: the stubbed pages supply only the fields the pager reads
-      .mockResolvedValueOnce({
-        threads: [{ id: 2 } as never, { id: 3 } as never],
-        next_page_token: null,
-        active_count: 3,
-      })
+    // SAFETY: the stubbed pages supply only the fields the pager reads
+    listThreads.mockResolvedValueOnce({
+      threads: [{ id: 1 } as never, { id: 2 } as never],
+      next_page_token: 'tok-2',
+      active_count: 2,
+    })
+    // SAFETY: the stubbed pages supply only the fields the pager reads
+    listThreads.mockResolvedValueOnce({
+      threads: [{ id: 2 } as never, { id: 3 } as never],
+      next_page_token: null,
+      active_count: 3,
+    })
 
     const wrapper = createWrapper()
     const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
