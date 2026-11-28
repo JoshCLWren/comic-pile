@@ -20,15 +20,19 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt, fs,
+    io::Read,
     path::{Path, PathBuf},
 };
 use tokio_postgres::{Client, Config as PostgresConfig, GenericClient};
 
 const DEFAULT_REPOSITORY: &str = "JoshCLWren/CBL-ReadingLists";
 const MAX_MIRROR_FILES: usize = 50_000;
+const MAX_CBL_FILE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_BOOKS_PER_LIST: usize = 20_000;
 const MAX_SOURCE_PATH_LENGTH: usize = 1000;
 const MAX_LIST_NAME_LENGTH: usize = 500;
+const MAX_SERIES_NAME_LENGTH: usize = 500;
+const MAX_ISSUE_NUMBER_LENGTH: usize = 100;
 const MAX_EXTERNAL_ID_LENGTH: usize = 100;
 const MAX_REVISION_LENGTH: usize = 64;
 const BATCH_SIZE: usize = 500;
@@ -249,6 +253,11 @@ pub fn discover_cbl_files(mirror_path: &Path) -> Result<Vec<PathBuf>, IngestErro
                 .file_type()
                 .map_err(|error| IngestError::new(format!("cannot stat mirror entry: {error}")))?;
             if file_type.is_dir() {
+                if pending.len() >= MAX_MIRROR_FILES {
+                    return Err(IngestError::new(
+                        "mirror exceeds the supported directory limit",
+                    ));
+                }
                 pending.push(path);
             } else if file_type.is_file()
                 && path
@@ -256,12 +265,14 @@ pub fn discover_cbl_files(mirror_path: &Path) -> Result<Vec<PathBuf>, IngestErro
                     .and_then(|extension| extension.to_str())
                     .is_some_and(|extension| extension.eq_ignore_ascii_case("cbl"))
             {
+                if discovered.len() >= MAX_MIRROR_FILES {
+                    return Err(IngestError::new(
+                        "mirror exceeds the supported file limit",
+                    ));
+                }
                 discovered.push(path);
             }
         }
-    }
-    if discovered.len() > MAX_MIRROR_FILES {
-        return Err(IngestError::new("mirror exceeds the supported file limit"));
     }
     discovered.sort_by(|left, right| {
         let left = relative_source_path(left, mirror_path);
