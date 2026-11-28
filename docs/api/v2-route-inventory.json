@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 157,
-    "native_rust": 157,
+    "total_live_operations": 176,
+    "native_rust": 176,
     "python_fastapi": 0,
-    "native_rust_status": 157,
+    "native_rust_status": 176,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -20,7 +20,12 @@
       "runtime": "native-rust",
       "status": "target",
       "consumers": [
-        "frontend/src/services/api-activity.ts"
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/issue-3429-bootstrap-recovery.spec.ts",
+        "frontend/src/test/ui-audit/stabilize.ts",
+        "frontend/src/unit/api-activity.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/ui-audit-stabilize.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/activity",
@@ -35,7 +40,32 @@
       "status": "target",
       "owning_issue": 4459,
       "consumers": [
-        "frontend/src/services/api.ts"
+        "frontend/src/services/api.ts",
+        "frontend/src/test/auth-account-switching.spec.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
+        "frontend/src/test/continuity-parallel-lanes.spec.ts",
+        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
+        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
+        "frontend/src/test/issue-2298-crossover-reading-order.spec.ts",
+        "frontend/src/test/issue-3268-threads-route-redirect.spec.ts",
+        "frontend/src/test/issue-4527-roll-snoozes.spec.ts",
+        "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
+        "frontend/src/test/network-budget/auth-public.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+        "frontend/src/test/reading-list-gate-authoring.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/test/shared-issue-reader.spec.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -60,7 +90,12 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api-auth.ts",
-        "frontend/src/services/api.ts"
+        "frontend/src/services/api.ts",
+        "frontend/src/test/auth-account-switching.spec.ts",
+        "frontend/src/test/network-budget/auth-public.spec.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -83,7 +118,22 @@
       "status": "target",
       "owning_issue": 4459,
       "consumers": [
-        "frontend/src/services/api.ts"
+        "frontend/src/pages/LoginPage.tsx",
+        "frontend/src/services/api.ts",
+        "frontend/src/test/auth-account-switching.spec.ts",
+        "frontend/src/test/auth-fixtures.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/issue-3429-bootstrap-recovery.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api-proxy.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/login-email-validation.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/password-reset-pages.test.tsx",
+        "frontend/src/unit/uncovered-pages.test.tsx"
       ],
       "sql_budget": {
         "application_statements": 6,
@@ -107,7 +157,12 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": [],
+      "consumers": [
+        "frontend/src/components/Navigation.tsx",
+        "frontend/src/test/auth-account-switching.spec.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json",
@@ -128,7 +183,28 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": [],
+      "consumers": [
+        "frontend/src/App.tsx",
+        "frontend/src/test/auth-account-switching.spec.ts",
+        "frontend/src/test/auth-fixtures.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/issue-4527-roll-snoozes.spec.ts",
+        "frontend/src/test/network-budget/auth-public.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/shared-issue-reader.spec.ts",
+        "frontend/src/test/ui-audit/stabilize.ts",
+        "frontend/src/unit/App.test.tsx",
+        "frontend/src/unit/AuthHardRefresh.test.tsx",
+        "frontend/src/unit/Navigation.test.tsx",
+        "frontend/src/unit/api-auth-recovery.test.ts",
+        "frontend/src/unit/api-session-persistence.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/auth-bootstrap-retry-budget.test.tsx",
+        "frontend/src/unit/auth-provider-recovery.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/theme-runtime.test.tsx",
+        "frontend/src/unit/ui-audit-stabilize.test.ts"
+      ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json",
@@ -150,7 +226,18 @@
       "status": "target",
       "owning_issue": 4459,
       "consumers": [
-        "frontend/src/services/api.ts"
+        "frontend/src/services/api.ts",
+        "frontend/src/test/auth-account-switching.spec.ts",
+        "frontend/src/test/auth-fixtures.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/issue-4527-roll-snoozes.spec.ts",
+        "frontend/src/test/network-budget/auth-public.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/api-auth-recovery.test.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api-creators.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -173,7 +260,14 @@
       "status": "target",
       "owning_issue": 4459,
       "consumers": [
-        "frontend/src/services/api.ts"
+        "frontend/src/pages/RegisterPage.tsx",
+        "frontend/src/services/api.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/issue-3429-bootstrap-recovery.spec.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/uncovered-pages.test.tsx"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -197,7 +291,11 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api-auth.ts",
-        "frontend/src/services/api.ts"
+        "frontend/src/services/api.ts",
+        "frontend/src/test/network-budget/auth-public.spec.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -212,19 +310,6 @@
         "proof_reference": "native/roll-service/src/auth/services.rs",
         "measurement_status": "pending-fixture"
       }
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4835,
-      "consumers": [
-        "frontend/src/services/api-comicvine.ts"
-      ],
-      "method": "DELETE",
-      "path": "/api/v2/comicvine/issues/{issue_id}/identity",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
     },
     {
       "runtime": "native-rust",
@@ -322,7 +407,8 @@
       "status": "target",
       "owning_issue": 4835,
       "consumers": [
-        "frontend/src/services/api-comicvine.ts"
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/comicvine/issues:import",
@@ -335,7 +421,8 @@
       "status": "target",
       "owning_issue": 4835,
       "consumers": [
-        "frontend/src/services/api-comicvine.ts"
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/api-comicvine.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/comicvine/resolve",
@@ -348,7 +435,8 @@
       "status": "target",
       "owning_issue": 4835,
       "consumers": [
-        "frontend/src/services/api-comicvine.ts"
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/api-comicvine.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/comicvine/search/series",
@@ -361,7 +449,9 @@
       "status": "target",
       "owning_issue": 4835,
       "consumers": [
-        "frontend/src/services/api-comicvine.ts"
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/api-comicvine.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
@@ -374,7 +464,8 @@
       "status": "target",
       "owning_issue": 4835,
       "consumers": [
-        "frontend/src/services/api-comicvine.ts"
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/api-comicvine.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
@@ -387,7 +478,9 @@
       "status": "target",
       "owning_issue": 4835,
       "consumers": [
-        "frontend/src/services/api-comicvine.ts"
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/api-comicvine.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/comicvine/series:import",
@@ -403,7 +496,9 @@
       "path": "/api/v2/continuity-plans/",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -417,7 +512,15 @@
       "path": "/api/v2/continuity-plans/",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
+        "frontend/src/test/continuity-parallel-lanes.spec.ts",
+        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -431,7 +534,8 @@
       "path": "/api/v2/continuity-plans/from-reading-order",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -445,7 +549,7 @@
       "path": "/api/v2/continuity-plans/release-sources/",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/unit/api-continuity-plans.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -458,8 +562,7 @@
       "method": "DELETE",
       "path": "/api/v2/continuity-plans/release-sources/{source_id}",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-continuity-plans.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -472,8 +575,7 @@
       "method": "PATCH",
       "path": "/api/v2/continuity-plans/release-sources/{source_id}",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-continuity-plans.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -487,7 +589,9 @@
       "path": "/api/v2/continuity-plans/{plan_id}",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/api-reading-orders.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -501,7 +605,9 @@
       "path": "/api/v2/continuity-plans/{plan_id}",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/api-reading-orders.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -515,7 +621,9 @@
       "path": "/api/v2/continuity-plans/{plan_id}",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/api-reading-orders.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -570,7 +678,11 @@
       "method": "GET",
       "path": "/api/v2/continuity-plans/{plan_id}/reader",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts"
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/test/shared-issue-reader.spec.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "sql_budget": {
         "application_statements": 8,
@@ -593,8 +705,8 @@
       "method": "POST",
       "path": "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -607,7 +719,7 @@
       "method": "GET",
       "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts"
+        "frontend/src/services/api-reading-plan-recovery.ts"
       ],
       "sql_budget": {
         "application_statements": 5,
@@ -630,7 +742,7 @@
       "method": "POST",
       "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts"
+        "frontend/src/services/api-reading-plan-recovery.ts"
       ],
       "sql_budget": {
         "application_statements": 6,
@@ -667,8 +779,21 @@
       "method": "GET",
       "path": "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-continuity-plans.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuityPlans/{*custom_method}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -680,11 +805,9 @@
       "owning_issue": 4836,
       "consumers": [
         "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/test/issue-2774-creators-browse.spec.ts",
+        "frontend/src/test/issue-3091-creator-comparison.spec.ts",
+        "frontend/src/unit/api-creators.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators",
@@ -699,10 +822,8 @@
       "consumers": [
         "frontend/src/services/api-creators.ts",
         "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/test/issue-3091-creator-comparison.spec.ts",
+        "frontend/src/unit/api-creator-comparison.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/compare",
@@ -716,11 +837,7 @@
       "owning_issue": 4836,
       "consumers": [
         "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/services/creatorDiscoveryApi.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/discoveries",
@@ -734,11 +851,8 @@
       "owning_issue": 4836,
       "consumers": [
         "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/services/creatorsApi.ts",
+        "frontend/src/unit/api-creators.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/summaries",
@@ -752,11 +866,8 @@
       "owning_issue": 4836,
       "consumers": [
         "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
         "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/unit/creatorTeamChemistryApi.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/team-chemistry",
@@ -772,9 +883,13 @@
         "frontend/src/services/api-creators.ts",
         "frontend/src/services/creatorComparisonApi.ts",
         "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
         "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/services/creatorsApi.ts",
+        "frontend/src/test/issue-3091-creator-comparison.spec.ts",
+        "frontend/src/unit/api-creator-comparison.test.ts",
+        "frontend/src/unit/api-creators.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/creatorTeamChemistryApi.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/{creator_key}",
@@ -787,12 +902,8 @@
       "status": "target",
       "owning_issue": 4836,
       "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
@@ -805,12 +916,8 @@
       "status": "target",
       "owning_issue": 4836,
       "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
@@ -823,12 +930,8 @@
       "status": "target",
       "owning_issue": 4836,
       "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
@@ -841,12 +944,8 @@
       "status": "target",
       "owning_issue": 4836,
       "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/{creator_key}/metrics/{metric_type}",
@@ -860,11 +959,7 @@
       "owning_issue": 4836,
       "consumers": [
         "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
+        "frontend/src/unit/api-creators.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/creators/{creator_key}/series/{series_key}/issues",
@@ -879,7 +974,7 @@
       "runtime": "native-rust",
       "status": "target",
       "consumers": [
-        "frontend/src/services/api-demo.ts"
+        "frontend/src/unit/api-demo.test.ts"
       ],
       "db_free": true,
       "sql_budget": {
@@ -903,7 +998,13 @@
       "method": "POST",
       "path": "/api/v2/dependencies/",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts"
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
+        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api.test.ts"
       ],
       "sql_budget": {
         "application_statements": 10,
@@ -926,7 +1027,9 @@
       "method": "GET",
       "path": "/api/v2/dependencies/blocked",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts"
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/unit/api.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -939,7 +1042,10 @@
       "method": "DELETE",
       "path": "/api/v2/dependencies/{dependency_id}",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts"
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+        "frontend/src/unit/api.test.ts"
       ],
       "sql_budget": {
         "application_statements": 5,
@@ -962,7 +1068,9 @@
       "method": "GET",
       "path": "/api/v2/dependencies/{dependency_id}",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts"
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/unit/api.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -975,8 +1083,76 @@
       "method": "PATCH",
       "path": "/api/v2/dependencies/{dependency_id}",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts"
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/unit/api.test.ts"
       ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/factory/github/callback",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/factory/github/dispatch",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/factory/github/runs/{run_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/factory/github/session",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/factory/github/start",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/health",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
@@ -986,7 +1162,11 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-identity.ts"
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/api-identity.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "method": "GET",
       "path": "/api/v2/identity-inbox",
@@ -999,7 +1179,8 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-identity.ts"
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/identity-inbox/issue-matches",
@@ -1012,7 +1193,8 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-identity.ts"
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/identity-inbox/{mapping_id}",
@@ -1025,7 +1207,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-identity.ts"
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "method": "POST",
       "path": "/api/v2/identity-inbox/{mapping_id}/confirmations",
@@ -1038,7 +1222,8 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-identity.ts"
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/identity-inbox/{mapping_id}/deferrals",
@@ -1051,7 +1236,8 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-identity.ts"
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/identity-inbox/{mapping_id}/rejections",
@@ -1064,7 +1250,8 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-identity.ts"
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/identity-inbox/{mapping_id}/skips",
@@ -1077,7 +1264,8 @@
       "status": "target",
       "owning_issue": 4653,
       "consumers": [
-        "frontend/src/services/api-issue-duplicate-reconciliation.ts"
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts",
+        "frontend/src/unit/api-issue-duplicate-reconciliation.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/issue-duplicate-reconciliation/apply",
@@ -1090,7 +1278,8 @@
       "status": "target",
       "owning_issue": 4653,
       "consumers": [
-        "frontend/src/services/api-issue-duplicate-reconciliation.ts"
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts",
+        "frontend/src/unit/api-issue-duplicate-reconciliation.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/issue-duplicate-reconciliation/detect",
@@ -1103,7 +1292,8 @@
       "status": "target",
       "owning_issue": 4653,
       "consumers": [
-        "frontend/src/services/api-issue-duplicate-reconciliation.ts"
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts",
+        "frontend/src/unit/api-issue-duplicate-reconciliation.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/issue-duplicate-reconciliation/preview",
@@ -1116,7 +1306,8 @@
       "status": "target",
       "owning_issue": 4653,
       "consumers": [
-        "frontend/src/services/api-issue-duplicate-reconciliation.ts"
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts",
+        "frontend/src/unit/api-issue-duplicate-reconciliation.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/issue-duplicate-reconciliation/undo",
@@ -1151,12 +1342,48 @@
       "verified_against": "vercel.json"
     },
     {
+      "method": "GET",
+      "path": "/api/v2/issue-read-operations/{operation_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issue-read-operations/{operation_id}/undo",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4443,
       "consumers": [
-        "frontend/src/services/rollResourcesApi.ts",
-        "frontend/src/services/issueCardsApi.ts"
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/issueCardsApi.ts",
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/p0-native-issue-verification.spec.ts",
+        "frontend/src/test/shared-issue-reader.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/issueCardsApi.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/rollResourcesApi.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/issues/cards",
@@ -1182,8 +1409,16 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-issues.ts",
+        "frontend/src/services/issueCardsApi.ts",
         "frontend/src/services/nativeRollMutationApi.ts",
-        "frontend/src/services/issueCardsApi.ts"
+        "frontend/src/test/p0-native-issue-verification.spec.ts",
+        "frontend/src/test/shared-issue-reader.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/issueCardsApi.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/rollResourcesApi.test.ts"
       ],
       "method": "DELETE",
       "path": "/api/v2/issues/{issue_id}",
@@ -1207,7 +1442,16 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-dependencies.ts"
+        "frontend/src/services/issueCardsApi.ts",
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/test/p0-native-issue-verification.spec.ts",
+        "frontend/src/test/shared-issue-reader.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/issueCardsApi.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/rollResourcesApi.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/issues/{issue_id}",
@@ -1220,9 +1464,19 @@
       "status": "target",
       "owning_issue": 4443,
       "consumers": [
-        "frontend/src/services/nativeRollMutationApi.ts",
         "frontend/src/services/api-issues.ts",
-        "frontend/src/services/issueCardsApi.ts"
+        "frontend/src/services/issueCardsApi.ts",
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/p0-native-issue-verification.spec.ts",
+        "frontend/src/test/shared-issue-reader.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/issueCardsApi.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/rollResourcesApi.test.ts"
       ],
       "method": "PATCH",
       "path": "/api/v2/issues/{issue_id}",
@@ -1269,7 +1523,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-dependencies.ts"
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/p0-dependencies-reading-order.spec.ts"
       ],
       "method": "GET",
       "path": "/api/v2/issues/{issue_id}/dependencies",
@@ -1282,7 +1538,8 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-issues.ts"
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
       ],
       "method": "PUT",
       "path": "/api/v2/issues/{issue_id}/position",
@@ -1295,20 +1552,10 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-issues.ts"
-      ],
-      "method": "DELETE",
-      "path": "/api/v2/issues/{issue_id}/read-markers",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335,
-      "consumers": [
-        "frontend/src/services/api-issues.ts"
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/issues/{issue_id}/read-markers",
@@ -1336,7 +1583,12 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4335,
-      "consumers": [],
+      "consumers": [
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json",
@@ -1358,7 +1610,10 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-queue.ts"
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -1418,7 +1673,8 @@
       "status": "target",
       "owning_issue": 5435,
       "consumers": [
-        "frontend/src/services/api-threads.ts"
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/unit/api-threads.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/queue-exclusions/status:check",
@@ -1433,7 +1689,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-queue.ts"
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -1456,7 +1714,11 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-reading-boundaries.ts"
+        "frontend/src/services/api-reading-boundaries.ts",
+        "frontend/src/test/queue-boundary-retry.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/useReadingBoundaries.request-budget.test.tsx"
       ],
       "sql_budget": {
         "application_statements": 9,
@@ -1480,7 +1742,11 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-reading-graph.ts"
+        "frontend/src/services/api-reading-graph.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
       ],
       "sql_budget": {
         "application_statements": 2,
@@ -1524,7 +1790,11 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "method": "GET",
       "path": "/api/v2/reading-lists",
@@ -1547,7 +1817,14 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "method": "POST",
       "path": "/api/v2/reading-lists",
@@ -1570,7 +1847,12 @@
       "status": "target",
       "owning_issue": 4844,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/reading-list-discovery.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/reading-lists/issue-candidates",
@@ -1583,7 +1865,8 @@
       "status": "target",
       "owning_issue": 5435,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-lists/memberships:check",
@@ -1596,7 +1879,10 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "method": "DELETE",
       "path": "/api/v2/reading-lists/{list_id}",
@@ -1619,7 +1905,13 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/reading-list-discovery.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "method": "GET",
       "path": "/api/v2/reading-lists/{list_id}",
@@ -1642,7 +1934,11 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
       "method": "PUT",
       "path": "/api/v2/reading-lists/{list_id}",
@@ -1665,7 +1961,8 @@
       "status": "target",
       "owning_issue": 4844,
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts"
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/unit/api-cbl-sources.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-lists/{list_id}/adoption-commits",
@@ -1678,7 +1975,8 @@
       "status": "target",
       "owning_issue": 4844,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/reading-lists/{list_id}/export",
@@ -1730,7 +2028,9 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts"
       ],
       "method": "GET",
       "path": "/api/v2/reading-lists/{list_id}/reader",
@@ -1753,7 +2053,8 @@
       "status": "target",
       "owning_issue": 4844,
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts"
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/unit/api-cbl-sources.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
@@ -1766,7 +2067,9 @@
       "status": "target",
       "owning_issue": 4844,
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts"
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
@@ -1779,7 +2082,11 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/readingMode.ts"
+        "frontend/src/services/readingMode.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/test/reading-mode-quiz.spec.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/readingMode.service.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/reading-mode",
@@ -1792,7 +2099,11 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/readingMode.ts"
+        "frontend/src/services/readingMode.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/test/reading-mode-quiz.spec.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/readingMode.service.test.ts"
       ],
       "method": "PUT",
       "path": "/api/v2/reading-mode",
@@ -1805,7 +2116,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/readingMode.ts"
+        "frontend/src/services/readingMode.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/readingMode.service.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-mode/suggestion-dismissals",
@@ -1818,7 +2131,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/readingMode.ts"
+        "frontend/src/services/readingMode.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/readingMode.service.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-mode/suggestions",
@@ -1831,7 +2146,9 @@
       "status": "target",
       "owning_issue": 4841,
       "consumers": [
-        "frontend/src/services/api-dependency-groups.ts"
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-order-groups/{group_id}/issue-ranges",
@@ -1844,7 +2161,11 @@
       "status": "target",
       "owning_issue": 4841,
       "consumers": [
-        "frontend/src/services/api-dependency-groups.ts"
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
+        "frontend/src/test/issue-2298-crossover-reading-order.spec.ts",
+        "frontend/src/test/issue-3268-threads-route-redirect.spec.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-order-groups/{group_id}/members",
@@ -1857,7 +2178,8 @@
       "status": "target",
       "owning_issue": 4841,
       "consumers": [
-        "frontend/src/services/api-dependency-groups.ts"
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
       ],
       "method": "DELETE",
       "path": "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
@@ -1883,7 +2205,10 @@
       "status": "target",
       "owning_issue": 4841,
       "consumers": [
-        "frontend/src/services/api-dependency-groups.ts"
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/test/core-views-request-budget.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-dependency-groups.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-order-groups:resolveMemberships",
@@ -1896,7 +2221,8 @@
       "status": "target",
       "owning_issue": 4851,
       "consumers": [
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/reading-orders/",
@@ -1909,7 +2235,8 @@
       "status": "target",
       "owning_issue": 4851,
       "consumers": [
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/reading-orders/{reading_order_id}/items",
@@ -1919,7 +2246,7 @@
     },
     {
       "runtime": "native-rust",
-      "status": "native Rust",
+      "status": "target",
       "owning_issue": 4851,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts"
@@ -1932,7 +2259,7 @@
     },
     {
       "runtime": "native-rust",
-      "status": "native Rust",
+      "status": "target",
       "owning_issue": 4851,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts"
@@ -1944,17 +2271,119 @@
       "verified_against": "vercel.json"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/reading-sessions",
       "runtime": "native-rust",
-      "status": "transitional",
-      "owning_issue": 4335,
+      "status": "target",
+      "owning_issue": 5710,
       "consumers": [
-        "frontend/src/services/rollBootstrapApi.ts"
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
+      "method": "GET",
+      "path": "/api/v2/readingOrderGroups",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
+        "frontend/src/test/issue-2298-crossover-reading-order.spec.ts",
+        "frontend/src/test/issue-3268-threads-route-redirect.spec.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ],
+      "method": "POST",
+      "path": "/api/v2/readingOrderGroups",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
+      ],
+      "method": "DELETE",
+      "path": "/api/v2/readingOrderGroups/{group_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/readingOrderGroups/{group_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
+      ],
+      "method": "PATCH",
+      "path": "/api/v2/readingOrderGroups/{group_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 5708,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts",
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/rollBootstrapTimezone.test.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/readingSessions",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 5708,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/rollBootstrapTimezone.test.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/readingSessions",
       "sql_budget": {
         "application_statements": 20,
         "transaction_control_statements": 2,
@@ -1964,30 +2393,48 @@
         "max_statements": 22,
         "proof_reference": "native/roll-service/src/bootstrap.rs",
         "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "owning_issue": 4839,
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/services/api-sessions.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/reading-sessions/{session_id}/details",
+      },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
     },
     {
-      "owning_issue": 4839,
+      "owning_issue": 5708,
       "runtime": "native-rust",
       "status": "target",
       "consumers": [
-        "frontend/src/services/api-sessions.ts"
+        "frontend/src/unit/api.test.ts"
       ],
       "method": "GET",
-      "path": "/api/v2/reading-sessions/{session_id}/snapshots",
+      "path": "/api/v2/readingSessions/{session_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 5708,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+      ],
+      "method": "GET",
+      "path": "/api/v2/readingSessions/{session_id}/details",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 5708,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+      ],
+      "method": "GET",
+      "path": "/api/v2/readingSessions/{session_id}/snapshots",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
@@ -1997,7 +2444,11 @@
       "runtime": "native-rust",
       "status": "target",
       "consumers": [
-        "frontend/src/services/api-releases.ts"
+        "frontend/src/services/api-releases.ts",
+        "frontend/src/test/network-budget/authTransitions.network.test.tsx",
+        "frontend/src/test/network-budget/auxiliaryRoutes.network.test.tsx",
+        "frontend/src/test/whats-new-wiring.test.ts",
+        "frontend/src/unit/api-releases.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/releases",
@@ -2015,11 +2466,24 @@
       "method": "GET",
       "path": "/api/v2/roll/bootstrap",
       "runtime": "native-rust",
-      "status": "transitional",
-      "owning_issue": 4335,
+      "status": "target",
+      "owning_issue": 4299,
       "consumers": [
+        "frontend/src/services/protectedRollMutationApi.ts",
         "frontend/src/services/rollBootstrapApi.ts",
-        "frontend/src/services/protectedRollMutationApi.ts"
+        "frontend/src/test/core-views-request-budget.spec.ts",
+        "frontend/src/test/issue-3429-bootstrap-recovery.spec.ts",
+        "frontend/src/test/issue-4140-http-request-count.spec.ts",
+        "frontend/src/test/issue-4140-roll-navigation-optimization.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/test/roll-back-to-queue.spec.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/rollBootstrapTimezone.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -2041,10 +2505,11 @@
       "method": "POST",
       "path": "/api/v2/roll/dice-command",
       "runtime": "native-rust",
-      "status": "transitional",
+      "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-roll.ts"
+        "frontend/src/services/api-roll.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -2067,7 +2532,9 @@
       "status": "target",
       "owning_issue": 4595,
       "consumers": [
-        "frontend/src/services/rollResourcesApi.ts"
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/rollResourcesApi.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -2105,7 +2572,9 @@
       "status": "target",
       "owning_issue": 4595,
       "consumers": [
-        "frontend/src/services/rollResourcesApi.ts"
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/rollResourcesApi.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -2127,10 +2596,14 @@
       "method": "POST",
       "path": "/api/v2/roll/offer",
       "runtime": "native-rust",
-      "status": "transitional",
+      "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-roll.ts"
+        "frontend/src/services/api-roll.ts",
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/rollApi.queueSnooze.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -2147,26 +2620,15 @@
       }
     },
     {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4850,
-      "consumers": [
-        "frontend/src/services/api-roll.ts"
-      ],
-      "method": "POST",
-      "path": "/api/v2/roll/override",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
       "method": "POST",
       "path": "/api/v2/roll/reset",
       "runtime": "native-rust",
-      "status": "transitional",
+      "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-roll.ts"
+        "frontend/src/services/api-roll.ts",
+        "frontend/src/unit/RollPage.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -2200,7 +2662,8 @@
       "status": "target",
       "owning_issue": 4850,
       "consumers": [
-        "frontend/src/services/api-roll.ts"
+        "frontend/src/services/api-roll.ts",
+        "frontend/src/unit/rollApi.queueSnooze.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/roll/unsnooze",
@@ -2213,7 +2676,8 @@
       "status": "target",
       "owning_issue": 4844,
       "consumers": [
-        "frontend/src/services/api-series-mapping.ts"
+        "frontend/src/services/api-series-mapping.ts",
+        "frontend/src/unit/api-series-mapping.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/series-mapping-commits",
@@ -2224,9 +2688,30 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 5716,
+      "consumers": [
+        "frontend/src/services/api-series-mapping.ts",
+        "frontend/src/unit/api-proxy.test.ts",
+        "frontend/src/unit/api-series-mapping.test.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/seriesMappings:preview",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/test/core-views-request-budget.spec.ts",
+        "frontend/src/unit/TagEditor.request-scope.test.tsx",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/tags",
@@ -2239,7 +2724,13 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/test/core-views-request-budget.spec.ts",
+        "frontend/src/unit/TagEditor.request-scope.test.tsx",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/tags",
@@ -2252,7 +2743,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/tags/effective/issues/{issue_id}",
@@ -2265,7 +2758,11 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/tags/effective/plans/{plan_id}",
@@ -2278,7 +2775,11 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/TagEditor.request-scope.test.tsx",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/tags/effective/threads/{thread_id}",
@@ -2291,7 +2792,10 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/tags/effective/threads/{thread_id}/issues",
@@ -2304,7 +2808,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "DELETE",
       "path": "/api/v2/tags/{tag_id}",
@@ -2317,7 +2823,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/tags/{tag_id}",
@@ -2330,7 +2838,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "PATCH",
       "path": "/api/v2/tags/{tag_id}",
@@ -2343,7 +2853,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/tags/{tag_id}/assignment-batches",
@@ -2356,7 +2868,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/tags/{tag_id}/assignments",
@@ -2369,7 +2883,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "DELETE",
       "path": "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}",
@@ -2382,7 +2898,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/tags/{tag_id}/unassignment-batches",
@@ -2395,7 +2913,9 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-tags.ts"
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/tags/{tag_id}/usage",
@@ -2408,7 +2928,19 @@
       "status": "target",
       "owning_issue": 4342,
       "consumers": [
-        "frontend/src/services/api-threads.ts"
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/issue-2725-queue-virtualization-blank-region.spec.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/unit/api-threads.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/threads",
@@ -2431,12 +2963,29 @@
     {
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 5702,
+      "owning_issue": 5703,
       "consumers": [
-        "frontend/src/services/api-threads.ts"
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api-threads.test.ts"
       ],
-      "method": "POST",
-      "path": "/api/v2/threads",
+      "method": "PATCH",
+      "path": "/api/v2/threads/{thread_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5706,
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-issues-coverage.test.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/creatorCredits",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
@@ -2446,7 +2995,8 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-issues.ts"
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
       ],
       "method": "PUT",
       "path": "/api/v2/threads/{thread_id}/issue-order",
@@ -2469,7 +3019,9 @@
       "status": "target",
       "owning_issue": 4684,
       "consumers": [
-        "frontend/src/services/api-issues.ts"
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-issues-coverage.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/threads/{thread_id}/issues",
@@ -2488,11 +3040,39 @@
       "verified_against": "vercel.json"
     },
     {
+      "method": "POST",
+      "path": "/api/v2/threads/{thread_id}/issues/preview",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/threads/{thread_id}/issues/structure-preview",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": null,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4841,
       "consumers": [
-        "frontend/src/services/api-dependency-groups.ts"
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/reading-order-group-memberships",
@@ -2503,9 +3083,40 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/readingOrders",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5705,
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/unit/api-threads.test.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/threads:checkDuplicates",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4839,
       "consumers": [
-        "frontend/src/services/api-undo.ts"
+        "frontend/src/services/api-undo.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/retired-session-callers.test.ts"
       ],
       "method": "GET",
       "path": "/api/v2/undo/{session_id}/snapshots",
@@ -2518,7 +3129,9 @@
       "status": "target",
       "owning_issue": 4839,
       "consumers": [
-        "frontend/src/services/api-undo.ts"
+        "frontend/src/services/api-undo.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/retired-session-callers.test.ts"
       ],
       "method": "POST",
       "path": "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
@@ -2531,7 +3144,16 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-preferences.ts"
+        "frontend/src/services/api-preferences.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/Navigation.sidebar-polish.test.tsx",
+        "frontend/src/unit/Navigation.theme-picker.test.tsx",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/auth-provider-query-outage.test.tsx",
+        "frontend/src/unit/auth-provider-recovery.test.tsx",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/theme-runtime.test.tsx"
       ],
       "method": "GET",
       "path": "/api/v2/users/me/preferences",
@@ -2544,7 +3166,15 @@
       "status": "target",
       "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-preferences.ts"
+        "frontend/src/services/api-preferences.ts",
+        "frontend/src/unit/Navigation.sidebar-polish.test.tsx",
+        "frontend/src/unit/Navigation.theme-picker.test.tsx",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/auth-provider-query-outage.test.tsx",
+        "frontend/src/unit/auth-provider-recovery.test.tsx",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/theme-runtime.test.tsx"
       ],
       "method": "PATCH",
       "path": "/api/v2/users/me/preferences",
@@ -2563,15 +3193,15 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 22,
+      "v1_total": 65,
       "v1_shadowed_by_rust": 0,
       "v1_live_python": 0,
       "v1_orphaned": 0,
-      "unversioned_total": 0,
+      "unversioned_total": 12,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 22,
+      "total_python_surface": 77,
       "total_shadowed_by_rust": 0,
       "total_live_python": 0,
       "total_orphaned": 0
@@ -2582,9 +3212,111 @@
     },
     "v1_operations": [
       {
+        "method": "GET",
+        "path": "/api/v1/auth/csrf",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4842,
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/forgot-password",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/logout",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/auth/me",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/refresh",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/register",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/reset-password",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/bug-reports/",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5718,
+        "consumers": [
+          "frontend/src/services/api-bug-reports.ts",
+          "frontend/src/unit/api.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5716,
         "consumers": [
           "frontend/src/services/api-series-mapping.ts"
         ],
@@ -2595,14 +3327,25 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4842,
+        "owning_issue": 4835,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5715,
         "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts",
           "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-graph.ts",
+          "frontend/src/services/api-reading-orders.ts"
         ],
         "method": "POST",
         "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
@@ -2611,13 +3354,180 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/continuity-rules/",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4842,
+        "owning_issue": 4335,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/continuity-rules/{rule_id}",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4335,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/creators",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4836,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/creators/",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4836,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/creators/summaries",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4836,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/cron/release-sync",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5276,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5712,
         "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-cbl-sources.ts",
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/browse",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5712,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5712,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/issue-identity/cbl-sources/compare",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5713,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/folders",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5712,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5712,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5714,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5714,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5714,
+        "consumers": [
           "frontend/src/services/api-reading-graph.ts"
         ],
         "method": "POST",
@@ -2627,87 +3537,33 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
         "method": "GET",
-        "path": "/api/v1/reading-order-groups/",
+        "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5713,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts"
+        ],
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/reading-order-groups/",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "method": "DELETE",
-        "path": "/api/v1/reading-order-groups/{group_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
         "method": "GET",
-        "path": "/api/v1/reading-order-groups/{group_id}",
+        "path": "/api/v1/issues/{issue_id}/comicvine",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4623,
+        "consumers": [],
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "method": "PATCH",
-        "path": "/api/v1/reading-order-groups/{group_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/reading-order-groups/{group_id}/detail",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4841,
+        "status": "target",
+        "owning_issue": 5711,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
         ],
@@ -2718,16 +3574,98 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "PUT",
+        "path": "/api/v1/releases/",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 4849,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/releases/source",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4849,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/releases/{release_id}",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4849,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/releases/{release_id}/retract",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4849,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/roll/events/{event_id}/recommendation-explanation",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4595,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/taste/discoveries",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5717,
         "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/services/api-taste.ts",
+          "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+          "frontend/src/unit/api-taste.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5717,
+        "consumers": [
+          "frontend/src/services/api-taste.ts",
+          "frontend/src/unit/api-taste.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5702,
+        "consumers": [
+          "frontend/src/test/core-views-request-budget.spec.ts",
+          "frontend/src/unit/api-auth-recovery.test.ts",
+          "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
+          "frontend/src/unit/httpClient.test.ts"
         ],
         "method": "POST",
         "path": "/api/v1/threads/",
@@ -2738,13 +3676,8 @@
       {
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 5705,
         "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
           "frontend/src/services/api-threads.ts"
         ],
         "method": "POST",
@@ -2754,16 +3687,32 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/threads/completed/threads",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 5701,
         "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+          "frontend/src/unit/api.test.ts",
+          "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5704,
+        "consumers": [
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+          "frontend/src/test/p0-snooze-unsnooze.spec.ts",
+          "frontend/src/unit/api.test.ts",
+          "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
+          "frontend/src/unit/coreRouteRequestBudget.test.tsx"
         ],
         "method": "GET",
         "path": "/api/v1/threads/excluded/threads",
@@ -2772,15 +3721,23 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "POST",
+        "path": "/api/v1/threads/groups:batch",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 5711,
         "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5704,
+        "consumers": [
           "frontend/src/services/api-threads.ts"
         ],
         "method": "POST",
@@ -2792,14 +3749,10 @@
       {
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 5701,
         "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/test/cbl-replace-review.spec.ts"
         ],
         "method": "GET",
         "path": "/api/v1/threads/stale",
@@ -2810,14 +3763,17 @@
       {
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 5703,
         "consumers": [
           "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
           "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/test/cbl-replace-review.spec.ts",
+          "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+          "frontend/src/unit/api-auth-failure-isolation.test.ts",
+          "frontend/src/unit/api-issues-coverage.test.ts",
+          "frontend/src/unit/api-issues.test.ts",
+          "frontend/src/unit/api.test.ts"
         ],
         "method": "DELETE",
         "path": "/api/v1/threads/{thread_id}",
@@ -2826,16 +3782,62 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5701,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/test/cbl-replace-review.spec.ts",
+          "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+          "frontend/src/unit/api-auth-failure-isolation.test.ts",
+          "frontend/src/unit/api-issues-coverage.test.ts",
+          "frontend/src/unit/api-issues.test.ts",
+          "frontend/src/unit/api.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}",
         "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4832,
         "consumers": [
           "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
           "frontend/src/services/api-issues.ts",
           "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/test/cbl-replace-review.spec.ts",
+          "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+          "frontend/src/unit/api-auth-failure-isolation.test.ts",
+          "frontend/src/unit/api-issues-coverage.test.ts",
+          "frontend/src/unit/api-issues.test.ts",
+          "frontend/src/unit/api.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5703,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/test/cbl-replace-review.spec.ts",
+          "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+          "frontend/src/unit/api-auth-failure-isolation.test.ts",
+          "frontend/src/unit/api-issues-coverage.test.ts",
+          "frontend/src/unit/api-issues.test.ts",
+          "frontend/src/unit/api.test.ts"
         ],
         "method": "PUT",
         "path": "/api/v1/threads/{thread_id}",
@@ -2844,16 +3846,52 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/connected",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 5709,
         "consumers": [
           "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/unit/ThreadDetailView.request-budget.test.tsx"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/dependencies",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5709,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+          "frontend/src/unit/api.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/dependency-order-check",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5709,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5704,
+        "consumers": [
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/unit/api.test.ts"
         ],
         "method": "POST",
         "path": "/api/v1/threads/{thread_id}/exclude",
@@ -2862,16 +3900,66 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/issue-dependencies",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 5709,
         "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/services/api-dependencies.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/issues",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5706,
+        "consumers": [
+          "frontend/src/test/cbl-replace-review.spec.ts",
+          "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
+          "frontend/src/test/continuity-parallel-lanes.spec.ts",
+          "frontend/src/test/custom-cbl-create-cycle.spec.ts",
+          "frontend/src/test/helpers.ts",
+          "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+          "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
+          "frontend/src/test/issue-2104-zero-readiness.spec.ts",
+          "frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts",
+          "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
+          "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+          "frontend/src/test/reading-list-gate-authoring.spec.ts",
+          "frontend/src/test/reading-plan-reader.spec.ts",
+          "frontend/src/unit/api-issues-coverage.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}/issues",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5706,
+        "consumers": [
+          "frontend/src/test/fixtures.ts",
+          "frontend/src/test/helpers.ts",
+          "frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts",
+          "frontend/src/unit/api-issues-coverage.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5706,
+        "consumers": [
+          "frontend/src/unit/api-issues-coverage.test.ts"
         ],
         "method": "GET",
         "path": "/api/v1/threads/{thread_id}/issues/creators",
@@ -2880,16 +3968,45 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}/issues:reorder",
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 5706,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5706,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/reading-orders",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5715,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5704,
         "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/unit/api.test.ts"
         ],
         "method": "POST",
         "path": "/api/v1/threads/{thread_id}/restore",
@@ -2900,14 +4017,12 @@
       {
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 4344,
         "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
+          "frontend/src/services/api-threads.ts",
+          "frontend/src/test/cbl-replace-review.spec.ts",
+          "frontend/src/test/helpers.ts",
+          "frontend/src/test/issue-1885-roll-target-sizes.spec.ts"
         ],
         "method": "POST",
         "path": "/api/v1/threads/{thread_id}/set-pending",
@@ -2918,7 +4033,7 @@
       {
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4832,
+        "owning_issue": 4335,
         "consumers": [
           "frontend/src/services/api-dependencies.ts",
           "frontend/src/services/api-dependency-groups.ts",
@@ -2932,9 +4047,182 @@
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/threads:getBlockingInfo",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5709,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+          "frontend/src/unit/useReadingBoundaries.request-budget.test.tsx"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/users/me/taste-signals",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5717,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5717,
+        "consumers": [
+          "frontend/src/services/api-taste.ts",
+          "frontend/src/unit/api-taste.test.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
       }
     ],
-    "unversioned_operations": []
+    "unversioned_operations": [
+      {
+        "method": "GET",
+        "path": "/api/auth/csrf",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/forgot-password",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/logout",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth/me",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/register",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/reset-password",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4549,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/bug-reports/",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5718,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/metrics",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4335,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/roll/events/{event_id}/recommendation-explanation",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4595,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/threads/{thread_id}",
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 5701,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      }
+    ]
   },
   "retired_legacy_operations": [
     {
