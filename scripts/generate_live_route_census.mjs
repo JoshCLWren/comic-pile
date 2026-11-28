@@ -765,6 +765,16 @@ export function validate(census, allowlist, dispositions, callers, aipBaseline =
   );
   const allowKeys = new Set(allowlist.entries.map(entry => `${entry.method} ${entry.path}`));
   const v1Routes = census.routes.filter(route => route.version === 'v1' || route.version === 'unversioned');
+  // Stale first-party callers already owned by an open migration are explicit
+  // debt, not new v1 drift. #5958 removes the legacy registration they used to
+  // match without touching work owned by #5707; the owner removes the callers.
+  const staleCallerPaths = new Set(
+    (Array.isArray(dispositions.known_stale_callers)
+      ? dispositions.known_stale_callers
+      : [])
+      .filter(entry => isObject(entry) && isString(entry.path) && Number.isInteger(entry.owner_issue))
+      .map(entry => entry.path),
+  );
 
   for (const route of census.routes) {
     const key = `${route.method} ${route.path}`;
