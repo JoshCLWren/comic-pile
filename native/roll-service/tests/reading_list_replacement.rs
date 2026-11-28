@@ -42,9 +42,7 @@ async fn setup() -> Fixture {
     let state = Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-            "RUST_ROLL_JWT_SECRET" => {
-                Some(test_support::TEST_JWT_SECRET.into())
-            }
+            "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
             "RUST_ROLL_POOL_SIZE" => Some("2".into()),
             _ => None,
         })
@@ -62,7 +60,10 @@ async fn setup() -> Fixture {
         .uri("/api/v2/auth/register")
         .header(
             "x-forwarded-for",
-            format!("2001:db8::{:x}", NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)),
+            format!(
+                "2001:db8::{:x}",
+                NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
+            ),
         )
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(
@@ -246,10 +247,17 @@ async fn preview_is_read_only_and_targets_explicit_owned_list() {
     assert_eq!(body["revision_sha"], REVISION, "{body}");
     assert_eq!(body["before"].as_array().unwrap().len(), 2, "{body}");
     assert_eq!(body["after"].as_array().unwrap().len(), 3, "{body}");
-    assert_eq!(body["omitted_manual_issue_ids"], json!([ISSUE_MANUAL]), "{body}");
+    assert_eq!(
+        body["omitted_manual_issue_ids"],
+        json!([ISSUE_MANUAL]),
+        "{body}"
+    );
 
     // A canceled preview writes nothing at all.
-    assert_eq!(list_ids(&fixture.state, TARGET_LIST_ID).await, before_target);
+    assert_eq!(
+        list_ids(&fixture.state, TARGET_LIST_ID).await,
+        before_target
+    );
     assert_eq!(list_ids(&fixture.state, OTHER_LIST_ID).await, before_other);
 }
 
@@ -306,7 +314,10 @@ async fn stale_version_and_stale_source_are_atomic_no_ops() {
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{status} {body}");
-    assert_eq!(body["detail"]["code"], "reading_list_replacement_stale", "{body}");
+    assert_eq!(
+        body["detail"]["code"], "reading_list_replacement_stale",
+        "{body}"
+    );
 
     let token = updated_at(&fixture.state, TARGET_LIST_ID).await;
     let (status, body) = post(
@@ -322,7 +333,10 @@ async fn stale_version_and_stale_source_are_atomic_no_ops() {
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{status} {body}");
-    assert_eq!(body["detail"]["code"], "cbl_source_revision_stale", "{body}");
+    assert_eq!(
+        body["detail"]["code"], "cbl_source_revision_stale",
+        "{body}"
+    );
     assert_eq!(list_ids(&fixture.state, TARGET_LIST_ID).await, before);
     let conn = fixture.state.pool.get().await.unwrap();
     let snapshots: i64 = conn
@@ -354,8 +368,7 @@ async fn omitted_manual_entry_requires_explicit_approval() {
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{status} {body}");
     assert_eq!(
-        body["detail"]["code"],
-        "manual_entry_removal_requires_confirmation",
+        body["detail"]["code"], "manual_entry_removal_requires_confirmation",
         "{body}"
     );
     assert_eq!(
@@ -379,7 +392,10 @@ async fn omitted_manual_entry_requires_explicit_approval() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{status} {body}");
-    assert_eq!(list_ids(&fixture.state, TARGET_LIST_ID).await, vec![ISSUE_A, ISSUE_B]);
+    assert_eq!(
+        list_ids(&fixture.state, TARGET_LIST_ID).await,
+        vec![ISSUE_A, ISSUE_B]
+    );
 }
 
 #[tokio::test]
@@ -423,7 +439,11 @@ async fn undo_restores_only_list_membership_and_keeps_later_read_event() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{status} {body}");
-    assert_eq!(body["restored_issue_ids"], json!([ISSUE_MANUAL, ISSUE_B]), "{body}");
+    assert_eq!(
+        body["restored_issue_ids"],
+        json!([ISSUE_MANUAL, ISSUE_B]),
+        "{body}"
+    );
     assert_eq!(
         list_ids(&fixture.state, TARGET_LIST_ID).await,
         vec![ISSUE_MANUAL, ISSUE_B]
@@ -436,7 +456,10 @@ async fn undo_restores_only_list_membership_and_keeps_later_read_event() {
 
     let conn = fixture.state.pool.get().await.unwrap();
     let events: i64 = conn
-        .query_one("SELECT COUNT(*)::bigint FROM events WHERE issue_id = $1", &[&ISSUE_A])
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM events WHERE issue_id = $1",
+            &[&ISSUE_A],
+        )
         .await
         .unwrap()
         .get(0);
