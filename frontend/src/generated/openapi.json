@@ -4236,7 +4236,7 @@
             "type": "array"
           },
           "rated_population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorRatedPopulationScope"
           },
           "rating_distribution": {
             "oneOf": [
@@ -4294,7 +4294,10 @@
           "rated_population_scope",
           "headline_roles",
           "read_unrated_issues",
-          "upcoming_issues"
+          "upcoming_issues",
+          "next_cursor",
+          "rating_distribution",
+          "insights"
         ],
         "type": "object"
       },
@@ -4623,9 +4626,13 @@
         "required": [
           "min_series_sample",
           "series_sample_met",
+          "series_message",
           "excluded_incomplete_series_count",
           "individual_issue_limit",
           "individual_issues_combined",
+          "strongest_series",
+          "weakest_series",
+          "most_rated_series",
           "highest_rated_issues",
           "lowest_rated_issues"
         ],
@@ -4721,6 +4728,8 @@
           "thread_title",
           "status",
           "roles",
+          "effective_rating",
+          "rating_timestamp",
           "sort_key"
         ],
         "type": "object"
@@ -4755,6 +4764,7 @@
           "canonical_creator_key",
           "display_name",
           "normalized_roles",
+          "average_rating",
           "ratings_count"
         ],
         "type": "object"
@@ -5125,7 +5135,8 @@
         "required": [
           "role",
           "issue_count",
-          "rated_issue_count"
+          "rated_issue_count",
+          "average_rating"
         ],
         "type": "object"
       },
@@ -5156,7 +5167,7 @@
             "type": "boolean"
           },
           "population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorSeriesPopulationScope"
           },
           "rated_issue_count": {
             "format": "int64",
@@ -5195,6 +5206,9 @@
           "thread_id",
           "thread_title",
           "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
           "roles",
           "unread_issue_count",
           "read_unrated_issue_count",
@@ -5306,7 +5320,7 @@
             "type": "integer"
           },
           "population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorSeriesPopulationScope"
           },
           "rated_issue_count": {
             "format": "int64",
@@ -5339,12 +5353,16 @@
           "thread_title",
           "roles",
           "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
           "metadata_complete",
           "population_scope",
           "issues",
           "total",
           "limit",
-          "offset"
+          "offset",
+          "next_cursor"
         ],
         "type": "object"
       },
@@ -5463,6 +5481,7 @@
           "canonical_creator_key",
           "display_name",
           "normalized_roles",
+          "average_rating",
           "ratings_count",
           "read_unrated_count",
           "upcoming_count"
@@ -9422,578 +9441,6 @@
           "needs_mapping_count",
           "needs_review_count",
           "metadata_missing_count"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorDetailResponse": {
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/CreatorSummaryCoverage"
-          },
-          "headline_roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "insights": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeCreatorInsights"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "rated_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueRow"
-            },
-            "type": "array"
-          },
-          "rated_population_scope": {
-            "$ref": "#/components/schemas/CreatorRatedPopulationScope"
-          },
-          "rating_distribution": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorRatingDistribution"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "read_unrated_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueRow"
-            },
-            "type": "array"
-          },
-          "role_stats": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorRoleStat"
-            },
-            "type": "array"
-          },
-          "series_groups": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorSeriesGroup"
-            },
-            "type": "array"
-          },
-          "series_groups_complete": {
-            "type": "boolean"
-          },
-          "series_groups_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/NativeCreatorSummaryItem"
-          },
-          "upcoming_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueRow"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "summary",
-          "coverage",
-          "role_stats",
-          "series_groups",
-          "series_groups_total",
-          "series_groups_complete",
-          "rated_issues",
-          "rated_population_scope",
-          "headline_roles",
-          "read_unrated_issues",
-          "upcoming_issues",
-          "next_cursor",
-          "rating_distribution",
-          "insights"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorInsights": {
-        "properties": {
-          "excluded_incomplete_series_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "highest_rated_issues": {
-            "items": {
-              "$ref": "#/components/schemas/CreatorIssueInsight"
-            },
-            "type": "array"
-          },
-          "individual_issue_limit": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "individual_issues_combined": {
-            "type": "boolean"
-          },
-          "lowest_rated_issues": {
-            "items": {
-              "$ref": "#/components/schemas/CreatorIssueInsight"
-            },
-            "type": "array"
-          },
-          "min_series_sample": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "most_rated_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "series_message": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "series_sample_met": {
-            "type": "boolean"
-          },
-          "strongest_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "weakest_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "min_series_sample",
-          "series_sample_met",
-          "series_message",
-          "excluded_incomplete_series_count",
-          "individual_issue_limit",
-          "individual_issues_combined",
-          "strongest_series",
-          "weakest_series",
-          "most_rated_series",
-          "highest_rated_issues",
-          "lowest_rated_issues"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorIssueRow": {
-        "properties": {
-          "effective_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "issue_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "rating_timestamp": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "issue_number",
-          "thread_id",
-          "thread_title",
-          "status",
-          "roles",
-          "effective_rating",
-          "rating_timestamp",
-          "sort_key"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorListItem": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "normalized_roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "ratings_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "normalized_roles",
-          "average_rating",
-          "ratings_count"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorListResponse": {
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/CreatorSummaryCoverage"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorListItem"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "offset": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "total": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset",
-          "coverage"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorRoleStat": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "role": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "role",
-          "issue_count",
-          "rated_issue_count",
-          "average_rating"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSeriesGroup": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "highest_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "lowest_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "metadata_complete": {
-            "type": "boolean"
-          },
-          "population_scope": {
-            "$ref": "#/components/schemas/CreatorSeriesPopulationScope"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "read_unrated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "series_key": {
-            "type": "string"
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          },
-          "unread_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "series_key",
-          "thread_id",
-          "thread_title",
-          "rated_issue_count",
-          "average_rating",
-          "lowest_rating",
-          "highest_rating",
-          "roles",
-          "unread_issue_count",
-          "read_unrated_issue_count",
-          "metadata_complete",
-          "sort_key",
-          "population_scope"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSeriesIssueListResponse": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "highest_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueRow"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "lowest_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "metadata_complete": {
-            "type": "boolean"
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "offset": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "population_scope": {
-            "$ref": "#/components/schemas/CreatorSeriesPopulationScope"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "series_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          },
-          "total": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "series_key",
-          "thread_id",
-          "thread_title",
-          "roles",
-          "rated_issue_count",
-          "average_rating",
-          "lowest_rating",
-          "highest_rating",
-          "metadata_complete",
-          "population_scope",
-          "issues",
-          "total",
-          "limit",
-          "offset",
-          "next_cursor"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSummariesResponse": {
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/CreatorSummaryCoverage"
-          },
-          "summaries": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/NativeCreatorSummaryItem"
-            },
-            "propertyNames": {
-              "type": "string"
-            },
-            "type": "object"
-          }
-        },
-        "required": [
-          "summaries",
-          "coverage"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSummaryItem": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "normalized_roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "ratings_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "read_unrated_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "upcoming_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "normalized_roles",
-          "average_rating",
-          "ratings_count",
-          "read_unrated_count",
-          "upcoming_count"
         ],
         "type": "object"
       },
@@ -25610,7 +25057,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorListResponse"
+                  "$ref": "#/components/schemas/CreatorListResponse"
                 }
               }
             },
@@ -25720,7 +25167,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorSummariesResponse"
+                  "$ref": "#/components/schemas/CreatorSummariesResponse"
                 }
               }
             },
@@ -25808,7 +25255,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorDetailResponse"
+                  "$ref": "#/components/schemas/CreatorDetailResponse"
                 }
               }
             },
@@ -26192,7 +25639,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorSeriesIssueListResponse"
+                  "$ref": "#/components/schemas/CreatorSeriesIssueListResponse"
                 }
               }
             },
