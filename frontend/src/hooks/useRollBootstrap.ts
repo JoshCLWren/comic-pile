@@ -60,8 +60,9 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   const die = useRollDieState()
   const snoozedIds = useMemo(() => readRollSnoozes(), [])
   const eligible = useRollEligibleIssueIds(snoozedIds)
-  const cards = useRollIssueCards(eligible.data?.issue_ids ?? [])
-  const issueIds = eligible.data?.issue_ids ?? []
+  const issueIds = useMemo(() => eligible.data?.issue_ids ?? [], [eligible.data])
+  const threadIds = useMemo(() => eligible.data?.thread_ids ?? [], [eligible.data])
+  const cards = useRollIssueCards(issueIds)
 
   // A pending issue missing from the eligible pool may be continuity-blocked.
   // Only then is one bounded, owner-scoped issue-edge GET needed; a cold idle
@@ -92,7 +93,6 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   })
 
   const composed = useMemo<RollBootstrapResponse>(() => {
-    const threadIds = eligible.data?.thread_ids ?? []
     const cardByIssue = new Map((cards.data?.items ?? []).map((card) => [card.issue_id, card]))
     const rollPool: RollBootstrapThread[] = issueIds.flatMap((issueId, index) => {
       const card = cardByIssue.get(issueId)
@@ -147,16 +147,17 @@ export function useRollBootstrap(): UseRollBootstrapResult {
       last_read: rateQuery.data?.roll_reconciliation?.last_read ?? null,
     }
   }, [
-    eligible.data,
     cards.data,
     pending,
     snoozedIds,
     issueIds,
+    threadIds,
     blockedIssueId,
     dependencyQuery.data,
     prerequisiteCards.data,
     graphQuery.data,
     rateQuery.data,
+    eligible.data?.pool_reason,
   ])
 
   // Callers still handle a null view while the scoped queries settle.
