@@ -106,7 +106,12 @@ export function buildRollRecovery({
 
   const title = originalTitle ?? `Issue ${pending.issue_number ?? pending.issue_id}`
   const chains: RollRecoveryChainNode[][] = readablePrerequisites.map((prerequisite) => [
-    prerequisite,
+    {
+      node_type: 'issue',
+      node_id: prerequisite.node_id,
+      label: prerequisite.label,
+      is_readable: prerequisite.is_readable === true,
+    },
     {
       node_type: 'issue',
       node_id: pending.issue_id,

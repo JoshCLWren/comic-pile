@@ -81,7 +81,7 @@ export function useRollBootstrap() {
     queryFn: skipToken,
   })
 
-  const data = useMemo<RollBootstrapResponse>(() => {
+  const composed = useMemo<RollBootstrapResponse>(() => {
     const threadIds = eligible.data?.thread_ids ?? []
     const cardByIssue = new Map((cards.data?.items ?? []).map((card) => [card.issue_id, card]))
     const rollPool: RollBootstrapThread[] = issueIds.flatMap((issueId, index) => {
@@ -149,9 +149,11 @@ export function useRollBootstrap() {
     rateQuery.data,
   ])
 
+  // Callers still handle a null view while the scoped queries settle.
+  const data: RollBootstrapResponse | null = composed
   const isPending = die.isPending
     || eligible.isPending
-    || (data.roll_pool.length > 0 && cards.isPending)
+    || (composed.roll_pool.length > 0 && cards.isPending)
     || (blockedIssueId != null && dependencyQuery.isPending)
 
   const refetch = useCallback(async (): Promise<RollBootstrapResponse> => {

@@ -1,4 +1,9 @@
-import { createNativeV2Client, type GetIssueDependenciesResponse, type IssueCardsResponse } from '../generated/nativeV2Client'
+import {
+  createNativeV2Client,
+  type GetIssueDependenciesResponse,
+  type IssueCardsResponse,
+  type ReadingGraphResponse,
+} from '../generated/nativeV2Client'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import { readRollSnoozes } from './api-roll'
 import { readPendingSelection } from './rollPendingSelection'
