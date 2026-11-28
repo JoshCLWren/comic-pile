@@ -1,32 +1,32 @@
-utc: 2026-11-28T02:38:53Z
-uptime: 1819.72s load: 0.10 0.14 0.15
+utc: 2026-11-28T02:39:10Z
+uptime: 1836.16s load: 0.07 0.13 0.14
 processes: 165
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1227       11984          53        3151       14755
+Mem:           15983        1253       11958          53        3152       14729
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   60G   85G  42% /
 /dev/root       145G   60G   85G  42% /
 --- top rss (KiB, name only)
-318540 opencode.exe
-165752 Runner.Worker
-120088 Runner.Listener
-116932 provjobd8427028
-89344 opencode
+349476 opencode.exe
+165748 Runner.Worker
+120092 Runner.Listener
+116248 provjobd8427028
+89520 opencode
 82564 dockerd
 55936 php-fpm8.5
 48424 ExtHandler
 45492 containerd
-40468 opencode-pty
+40492 opencode-pty
 37044 Daemon
 29880 networkd-dispat
 21396 php-fpm8.5
 21396 php-fpm8.5
-17920 systemd-journal
+17936 systemd-journal
 --- top cpu (name only)
- 4.0 opencode.exe
+ 3.8 opencode.exe
  1.5 provjobd8427028
  0.5 Runner.Worker
  0.2 opencode
