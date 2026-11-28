@@ -22,7 +22,7 @@ Runs automatically before each commit. It:
 - Runs `bash scripts/lint.sh --staged`.
 
 `scripts/lint.sh` performs Python compilation, prohibited-ignore/`Any` checks,
-JavaScript/frontend ESLint, and HTML lint when applicable. It does **not** invoke
+and the canonical frontend ESLint command via `pnpm run lint` when applicable. It does **not** invoke
 Ruff or ty.
 
 ### Pre-push hook
