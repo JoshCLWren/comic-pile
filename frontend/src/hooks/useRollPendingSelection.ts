@@ -10,11 +10,19 @@ import {
   type RollPendingSelection,
 } from '../services/rollPendingSelection'
 
-/** The minimal offer shape needed to seed an exact browser-owned selection. */
-export type RollOfferSeed = Pick<
-  RollResponse,
-  'thread_id' | 'issue_id' | 'issue_number' | 'result'
->
+/**
+ * The minimal offer shape needed to seed an exact browser-owned selection.
+ *
+ * `thread_id`, `issue_id` and `result` are nullable here because the roll wire
+ * response can omit an exact selection; the seeder validates them before use.
+ */
+export type RollOfferSeed = Omit<
+  Pick<RollResponse, 'thread_id' | 'issue_id' | 'issue_number' | 'result'>,
+  'thread_id' | 'result'
+> & {
+  thread_id: number | null
+  result: number | null
+}
 
 export interface UseRollPendingSelectionResult {
   /** The exact issue restored from browser storage, or null when idle. */

@@ -145,7 +145,7 @@ describe('useRollPendingSelection', () => {
     const { result } = renderHook(() => useRollPendingSelection())
     act(() => result.current.seedFromOffer({
       ...OFFER,
-      thread_id: null as unknown as number,
+      thread_id: null,
     }))
     expect(result.current.pending).toBeNull()
 
@@ -159,7 +159,7 @@ describe('useRollPendingSelection', () => {
       thread_id: 7,
       issue_id: 43,
       issue_number: null,
-      result: null as unknown as number,
+      result: null,
     }))
     expect(result.current.pending).toEqual({
       thread_id: 7,
