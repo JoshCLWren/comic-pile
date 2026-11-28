@@ -23,6 +23,7 @@ import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
+import { NIGHT_SHIFT_DIE_COLOR } from '../../components/diceRenderConfig'
 import { threadsApi } from '../../services/api-threads'
 import { readRollSnoozes } from '../../services/api-roll'
 import type { Thread } from '../../types'
@@ -485,7 +486,7 @@ export default function RollPage() {
                       value={Math.max(1, Math.min(state.rolledResult ?? 1, displayDie))}
                       isRolling={state.isRolling}
                       showValue={false}
-                      color={0xffffff}
+                      color={NIGHT_SHIFT_DIE_COLOR}
                     />
                   </div>
                 </div>

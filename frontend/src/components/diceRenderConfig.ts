@@ -6,6 +6,9 @@ import type {
 } from './diceTypes'
 import { isBoolean, isString } from '../utils/runtimeChecks'
 
+/** Numeric form of the canonical `--die-light` role for Three.js materials. */
+export const NIGHT_SHIFT_DIE_COLOR = 0xc2e9f1
+
 const DEFAULT_GLOBAL_CONFIG = {
   tileSize: 256,
   uvInset: 0.045,

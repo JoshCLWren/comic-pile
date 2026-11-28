@@ -319,5 +319,6 @@ describe('Night Shift boot and storage contract (#5980)', () => {
     expect(config).toContain(`textColor: '${resolveToken(tokens, '--theme-primary-action-text')}'`)
     expect(config).toContain(`borderColor: '${resolveToken(tokens, '--die-dark')}'`)
     expect(config).toContain(`backgroundColor: '${resolveToken(tokens, '--die-light')}'`)
+    expect(config).toContain(`NIGHT_SHIFT_DIE_COLOR = 0x${resolveToken(tokens, '--die-light').slice(1)}`)
   })
 })

@@ -141,6 +141,7 @@ function QueueControlsInner({
               key={sort}
               type="button"
               onClick={() => onSortChange(sort)}
+              aria-pressed={sortBy === sort}
               className={`px-2.5 md:px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${
                 sortBy === sort
                   ? 'bg-[var(--theme-bg-hover)] text-[var(--theme-comic-accent)] border border-[var(--theme-comic-accent)]/40'

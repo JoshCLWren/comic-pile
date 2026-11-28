@@ -2,8 +2,6 @@ import { defaultHttpClient, type HttpClient } from './httpClient'
 
 export interface UserPreferencesResponse {
   user_id: number
-  /** Legacy server field. Night Shift is the only identity; clients ignore it (#5980). */
-  theme?: string
 }
 
 /**

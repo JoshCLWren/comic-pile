@@ -1,7 +1,7 @@
 import { useRef, useEffect, useLayoutEffect } from 'react'
 import * as THREE from 'three'
 import { buildD10Faces } from './d10Geometry'
-import { getDiceRenderConfigForSides } from './diceRenderConfig'
+import { getDiceRenderConfigForSides, NIGHT_SHIFT_DIE_COLOR } from './diceRenderConfig'
 import type { Dice3DProps, DiceRenderGlobalConfig, DiceSide } from './diceTypes'
 import { isDiceSide } from './diceTypes'
 
@@ -953,7 +953,7 @@ export default function Dice3D({
   isRolling = false,
   freeze = false,
   lockMotion = false,
-  color = 0xffffff,
+  color = NIGHT_SHIFT_DIE_COLOR,
   onRollComplete = null,
   renderConfig = null,
 }: Dice3DProps) {

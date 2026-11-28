@@ -2,6 +2,7 @@ import LazyDice3D from '../../../components/LazyDice3D'
 import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
+import { NIGHT_SHIFT_DIE_COLOR } from '../../../components/diceRenderConfig'
 import type { DiceSide } from '../../../components/diceTypes'
 import type { RollBootstrapResponse, RollBootstrapThread, SessionModeState } from '../../../types/rollBootstrap'
 import {
@@ -208,7 +209,7 @@ export function RollHeader({
                       value={1}
                       isRolling={false}
                       showValue={false}
-                      color={0xffffff}
+                      color={NIGHT_SHIFT_DIE_COLOR}
                     />
                   </div>
                 </div>
