@@ -1701,10 +1701,7 @@ pub(crate) async fn set_current_issue(
 
     let queue_position = display_position(&tx, user, thread_id, option_e).await?;
     let meta = tx
-        .query_one(
-            "SELECT title FROM threads WHERE id = $1",
-            &[&thread_id],
-        )
+        .query_one("SELECT title FROM threads WHERE id = $1", &[&thread_id])
         .await
         .map_err(db::query_error)?;
     let title: String = meta.get(0);

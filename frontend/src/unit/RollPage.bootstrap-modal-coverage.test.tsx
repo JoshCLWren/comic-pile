@@ -122,7 +122,7 @@ describe('RollPage bootstrap modal coverage', () => {
     const picker = screen.getByRole('combobox')
     await user.click(picker)
     expect(screen.getByRole('option', { name: 'Saga' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: /Watchmen \(Comic\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Watchmen/ })).toBeInTheDocument()
 
     await user.click(screen.getByRole('option', { name: 'Saga' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
