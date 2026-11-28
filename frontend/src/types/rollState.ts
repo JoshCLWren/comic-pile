@@ -1,13 +1,5 @@
-import type {
-  ReadingBandwidth,
-  ReadingIntent,
-  RollLastReadPayload,
-  SessionMode,
-  SessionThread,
-} from './index'
+import type { RollLastReadPayload } from './index'
 import type { Tag } from '../services/api-tags'
-
-export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectionGuidance } from './index'
 
 /**
  * Why the Roll pool has no in-play faces. One minimal reason derived from the
@@ -20,7 +12,7 @@ export type RollPoolReason =
   | 'all_completed'
   | 'all_out_of_pool'
 
-/** Lightweight thread summary returned by the Roll bootstrap endpoint. */
+/** Lightweight owner-scoped thread summary used by the Roll view. */
 export interface RollThreadSummary {
   id: number
   title: string
@@ -33,6 +25,21 @@ export interface RollThreadSummary {
   last_activity_at?: string | null
   /** Visible direct tags, so a die face shows tag context before rolling (#3425). */
   tags?: Tag[]
+}
+
+export interface RollThreadMetadata extends RollThreadSummary {
+  notes?: string | null
+  issues_remaining?: number
+  queue_position?: number
+  total_issues?: number | null
+  reading_progress?: string | null
+  issue_number_alias?: string | null
+  provider_issue_number?: string | null
+  next_issue_id?: number | null
+  next_issue_number?: string | null
+  last_rolled_result?: number | null
+  issues_read?: number | null
+  last_rating?: number | null
 }
 
 /** One direct continuity blocker for a pending roll. */
@@ -97,67 +104,19 @@ export interface RollPrerequisiteSwitchResponse {
   changed: boolean
 }
 
-/**
- * Canonical session reading-mode snapshot returned by Roll bootstrap.
- * Raw confidence is metadata for other surfaces and must not render in compact controls.
- */
-export interface SessionModeState {
-  bandwidth: ReadingBandwidth | string | null
-  intent: ReadingIntent | string | null
-  source?: string | null
-  confidence?: number | null
-  version?: string | number | null
-}
-
-/** Human-readable label for a bandwidth or intent value; falls back to the raw value. */
-export function readingModeLabel(value: string | null | undefined): string {
-  if (!value) return ''
-  const normalized = value.trim().toLowerCase()
-  if (normalized === 'balanced') return 'Balanced'
-  if (normalized === 'light') return 'Light'
-  if (normalized === 'deep') return 'Deep'
-  if (normalized === 'momentum') return 'Momentum'
-  if (normalized === 'familiar') return 'Familiar'
-  if (normalized === 'explore') return 'Explore'
-  if (normalized === 'random') return 'Random'
-  return value.trim()
-}
-
-/** Compact `Bandwidth · Intent` summary for header-scale mode controls. */
-export function formatSessionMode(mode: SessionModeState | null | undefined): string {
-  if (!mode) return ''
-  const parts = [readingModeLabel(mode.bandwidth), readingModeLabel(mode.intent)].filter(Boolean)
-  return parts.join(' · ')
-}
-
-/** Bounded bootstrap payload for the Roll initial render. */
+/** Sessionless local Roll view assembled from scoped resources and browser pending. */
 export interface RollState {
-  /**
-   * Retired session identity (#4350). The browser owns pending selection, so a
-   * client view model must never synthesize one; kept optional only for legacy
-   * fixtures that still describe the retired server payload.
-   */
-  session_id?: number
-  user_id?: number
   pending_thread_id: number | null
   last_rolled_result: number | null
-  session_mode: SessionMode
-  active_thread: SessionThread | null
+  active_thread: RollThreadMetadata | null
   roll_recovery?: RollRecoveryInfo | null
   roll_pool: RollThreadSummary[]
   snoozed_threads: RollThreadSummary[]
   snoozed_count: number
-  /** Complete, uncapped snoozed series ids; `snoozed_threads` is a 20-row display summary. */
+  /** Complete browser snooze ids; summaries contain only the bounded display rows. */
   snoozed_thread_ids?: number[]
-  skipped_thread_ids: number[]
-  skipped_threads: RollThreadSummary[]
-  /** Minimal empty-pool explanation; absent only for legacy fixtures. */
+  /** Minimal empty-pool explanation from the scoped eligible resource. */
   pool_reason?: RollPoolReason
-  timezone?: string | null
-  /**
-   * Session last-read projection (#2720). The retained v1 bootstrap does not
-   * send it, so the field stays optional; the dedicated `roll.lastRead` cache
-   * seeded by a rate response is the authoritative client-side fallback.
-   */
+  /** Durable last-read record from the scoped resource, with a rate-cache fallback. */
   last_read?: RollLastReadPayload | null
 }
