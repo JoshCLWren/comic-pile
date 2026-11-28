@@ -27,6 +27,8 @@ import {
 import {
   canonicalListId,
   forgetOwnedCblList,
+  parseCommittedOverlapDecisions,
+  parseCommittedSelections,
   readOwnedCblList,
   restoreCommittedChoices,
   restoreOverlapChoices,
@@ -519,10 +521,13 @@ export default function CblBrowserPage() {
       setConfirmOpen(false)
       return
     }
-    const restored = restoreCommittedChoices(previewQuery.data, detail.selections)
+    const restored = restoreCommittedChoices(
+      previewQuery.data,
+      parseCommittedSelections(detail.selections),
+    )
     setSeriesDecisions(restored.series)
     setEntryDecisions(restored.entries)
-    setOverlapChoices(restoreOverlapChoices(detail.overlap_decisions))
+    setOverlapChoices(restoreOverlapChoices(parseCommittedOverlapDecisions(detail.overlap_decisions)))
     setAmbiguousCommit(false)
   }, [ownedLink, previewQuery.data, ownedListQuery.data])
 

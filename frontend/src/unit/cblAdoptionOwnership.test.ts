@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { CBLAdoptionPreview } from '../services/api-cbl-sources'
+import type { CBLAdoptionCommitResult, CBLAdoptionPreview } from '../services/api-cbl-sources'
 import {
   canonicalListId,
   forgetOwnedCblList,
@@ -9,6 +9,12 @@ import {
   saveOwnedCblList,
 } from '../utils/cblAdoptionOwnership'
 
+function commitResult(overrides: Partial<CBLAdoptionCommitResult>): CBLAdoptionCommitResult {
+  // SAFETY: test fixture only exercises canonicalListId's custom_cbl_list_id read.
+  return { id: 0, ...overrides } as CBLAdoptionCommitResult
+}
+
+// SAFETY: preview fixture supplies the fields the ownership helpers read.
 const preview = {
   source: {
     source_list_id: 7,

@@ -89,7 +89,7 @@ export function canonicalListId(result: CBLAdoptionCommitResult): number | null 
   return isNumber(value) && Number.isSafeInteger(value) && value > 0 ? value : null
 }
 
-function decisionMap(value: unknown): Record<string, boolean> {
+function decisionMap(value: unknown) {
   if (!isObject(value)) return {}
   const decisions: Record<string, boolean> = {}
   for (const [key, raw] of Object.entries(value)) {
@@ -102,9 +102,49 @@ function decisionMap(value: unknown): Record<string, boolean> {
   return decisions
 }
 
+export interface CblDecisionMap {
+  [key: string]: boolean
+}
+
 export interface RestoredCblChoices {
-  series: Record<string, boolean>
-  entries: Record<string, boolean>
+  series: CblDecisionMap
+  entries: CblDecisionMap
+}
+
+/** Committed CBL selection document shape as persisted by the server. */
+export interface CommittedCblSelections {
+  entry_decisions?: unknown
+  series_overrides?: unknown
+  series_decisions?: unknown
+}
+
+export interface CommittedOverlapDecision {
+  overlap_id: string
+  choice: string
+}
+
+export function parseCommittedSelections(value: unknown): CommittedCblSelections | null {
+  if (!isObject(value)) return null
+  return {
+    entry_decisions: value.entry_decisions,
+    series_overrides: value.series_overrides,
+    series_decisions: value.series_decisions,
+  }
+}
+
+export function parseCommittedOverlapDecisions(
+  value: unknown,
+): ReadonlyArray<CommittedOverlapDecision> | null {
+  if (!Array.isArray(value)) return null
+  const decisions: CommittedOverlapDecision[] = []
+  for (const item of value) {
+    if (!isObject(item)) continue
+    const { overlap_id: overlapId, choice } = item
+    if (isString(overlapId) && isString(choice)) {
+      decisions.push({ overlap_id: overlapId, choice })
+    }
+  }
+  return decisions
 }
 
 /**
@@ -114,15 +154,15 @@ export interface RestoredCblChoices {
  */
 export function restoreCommittedChoices(
   preview: CBLAdoptionPreview,
-  selections: unknown,
+  selections: CommittedCblSelections | null | undefined,
 ): RestoredCblChoices {
-  if (!isObject(selections)) return { series: {}, entries: {} }
+  if (!selections) return { series: {}, entries: {} }
   const entryOverrides = decisionMap(selections.entry_decisions)
   const positionOverrides = decisionMap(selections.series_overrides)
   const nameDecisions = decisionMap(selections.series_decisions)
 
-  const series: Record<string, boolean> = {}
-  const entries: Record<string, boolean> = {}
+  const series: CblDecisionMap = {}
+  const entries: CblDecisionMap = {}
   for (const group of buildCblSeriesGroups(preview)) {
     // A volume-level choice is only real when the server stored one for the
     // whole volume (or the backend's series-name decision). A lone unchecked
@@ -163,12 +203,14 @@ export function restoreCommittedChoices(
 }
 
 /** Restore reader-approved reading-graph answers from the committed document. */
-export function restoreOverlapChoices(overlapDecisions: unknown): ReadingGraphChoices {
-  if (!Array.isArray(overlapDecisions)) return {}
+export function restoreOverlapChoices(
+  overlapDecisions: ReadonlyArray<CommittedOverlapDecision> | null | undefined,
+): ReadingGraphChoices {
+  if (!overlapDecisions) return {}
   const choices: ReadingGraphChoices = {}
   for (const item of overlapDecisions) {
-    if (!isObject(item)) continue
-    const { overlap_id: overlapId, choice } = item
+    const overlapId = item.overlap_id
+    const choice = item.choice
     if (
       isString(overlapId)
       && isString(choice)
