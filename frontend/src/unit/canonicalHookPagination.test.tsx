@@ -1,9 +1,16 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PropsWithChildren } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAllThreads, useCrossoverIssuesForRange } from '../hooks/useCrossovers'
 import { useThreadIssuesForDependency } from '../hooks/useDependencies'
+import {
+  useAllThreads as usePlannerThreads,
+  useThreadIssues as usePlannerThreadIssues,
+} from '../hooks/useContinuityPlannerData'
+import { useThreadAllIssues } from '../hooks/useThreadIssues'
+import { issuesApi } from '../services/api-issues'
+import { threadsApi } from '../services/api-threads'
 import { COLLECT_ALL_DEFAULT_MAX_PAGES } from '../pagination/collectAllPages'
 import type { Issue, IssueListResponse, ThreadListItem } from '../types'
 
@@ -43,6 +50,8 @@ function issuePage(
 }
 
 describe('canonical hook pagination', () => {
+  afterEach(() => vi.restoreAllMocks())
+
   it('drains unread dependency issues using the same filter and opaque cursor on every page', async () => {
     const list = vi.fn()
       .mockResolvedValueOnce(issuePage([firstIssue], 'opaque-next'))
@@ -180,5 +189,53 @@ describe('canonical hook pagination', () => {
     expect(list).toHaveBeenCalledTimes(COLLECT_ALL_DEFAULT_MAX_PAGES)
     expect(list).toHaveBeenNthCalledWith(1, { page_size: 100 }, null)
     expect(list).toHaveBeenNthCalledWith(2, { page_size: 100 }, '1')
+  })
+
+  it('drains planner threads through the shared collector with the original first-call shape', async () => {
+    const list = vi.spyOn(threadsApi, 'list')
+      .mockResolvedValueOnce({ threads: [thread], active_count: 2, next_page_token: 'planner-2' })
+      .mockResolvedValueOnce({
+        threads: [{ ...thread, id: 2 }],
+        active_count: 2,
+        next_page_token: null,
+      })
+    const { result } = renderHook(() => usePlannerThreads(), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.data).toHaveLength(2))
+    expect(list).toHaveBeenNthCalledWith(1, { page_size: 100 }, null)
+    expect(list).toHaveBeenNthCalledWith(2, { page_size: 100 }, 'planner-2')
+  })
+
+  it('stops planner thread draining when the API repeats a token', async () => {
+    const list = vi.spyOn(threadsApi, 'list')
+      .mockResolvedValueOnce({ threads: [thread], active_count: 2, next_page_token: 'same' })
+      .mockResolvedValueOnce({
+        threads: [{ ...thread, id: 2 }],
+        active_count: 2,
+        next_page_token: 'same',
+      })
+    const { result } = renderHook(() => usePlannerThreads(), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.data).toHaveLength(2))
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('drains planner issues with unchanged page size and cursor arguments', async () => {
+    const list = vi.spyOn(issuesApi, 'list')
+      .mockResolvedValueOnce(issuePage([firstIssue], 'planner-issues-2'))
+      .mockResolvedValueOnce(issuePage([secondIssue], null))
+    const { result } = renderHook(() => usePlannerThreadIssues(7), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.data).toEqual([firstIssue, secondIssue]))
+    expect(list).toHaveBeenNthCalledWith(1, 7, { page_size: 100 })
+    expect(list).toHaveBeenNthCalledWith(2, 7, { page_size: 100, page_token: 'planner-issues-2' })
+  })
+
+  it('drains the shared all-issues query with repeated-token protection', async () => {
+    const list = vi.spyOn(issuesApi, 'list')
+      .mockResolvedValueOnce(issuePage([firstIssue], 'repeat'))
+      .mockResolvedValueOnce(issuePage([secondIssue], 'repeat'))
+    const { result } = renderHook(() => useThreadAllIssues(7), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.data).toEqual([firstIssue, secondIssue]))
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(list).toHaveBeenNthCalledWith(1, 7, { page_size: 100 })
+    expect(list).toHaveBeenNthCalledWith(2, 7, { page_size: 100, page_token: 'repeat' })
   })
 })
