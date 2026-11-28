@@ -50,7 +50,6 @@ pub mod openapi;
 pub mod option_e_setting;
 pub mod option_inputs;
 pub mod outbound;
-pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 mod preview_validation;
 pub(crate) mod python_text;

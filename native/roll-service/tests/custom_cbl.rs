@@ -442,7 +442,7 @@ async fn strict_list_reports_partial_coverage_warnings() {
 }
 
 #[tokio::test]
-async fn apply_rebuilds_membership_and_compiled_rules() {
+async fn apply_rebuilds_membership_without_compiling_edges() {
     let fixture = setup().await;
     let conn = fixture.state.pool.get().await.unwrap();
     conn.execute(
@@ -460,6 +460,15 @@ async fn apply_rebuilds_membership_and_compiled_rules() {
     )
     .await
     .expect("seed owned continuity plan");
+    // An explicitly authored prerequisite is the sole eligibility authority;
+    // an unrelated list edit must not rewrite or duplicate it.
+    conn.execute(
+        "INSERT INTO dependencies (source_issue_id, target_issue_id, note, created_at)
+         VALUES (910201, 910203, 'authored:prerequisite', NOW())",
+        &[],
+    )
+    .await
+    .expect("seed authored prerequisite");
     drop(conn);
 
     let (status, list) = post(
@@ -503,19 +512,21 @@ async fn apply_rebuilds_membership_and_compiled_rules() {
         "membership overlay must mirror merged plan nodes"
     );
 
-    let rule = conn
+    let compiled_rules: i64 = conn
         .query_one(
-            "SELECT source_id, target_id, checkpoint_issue_id FROM continuity_rules
-             WHERE user_id=$1 AND note='continuity-plan:920001' AND satisfaction_type='checkpoint'",
+            "SELECT count(*) FROM continuity_rules
+             WHERE user_id=$1 AND note='continuity-plan:920001'",
             &[&fixture.user_id],
         )
         .await
-        .expect("compiled checkpoint rule");
-    assert_eq!(rule.get::<_, i32>(0), 910201);
-    assert_eq!(rule.get::<_, i32>(1), 910203);
-    assert_eq!(rule.get::<_, Option<i32>>(2), Some(910201));
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        compiled_rules, 0,
+        "a list/CBL edit must not compile continuity rules"
+    );
 
-    let dependencies: i64 = conn
+    let compiled_edges: i64 = conn
         .query_one(
             "SELECT count(*) FROM dependencies
              WHERE source_issue_id=910201 AND target_issue_id=910203
@@ -526,8 +537,23 @@ async fn apply_rebuilds_membership_and_compiled_rules() {
         .unwrap()
         .get(0);
     assert_eq!(
-        dependencies, 1,
-        "compiled rule must create a canonical edge"
+        compiled_edges, 0,
+        "a list/CBL edit must not compile dependency edges"
+    );
+
+    let authored: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM dependencies
+             WHERE source_issue_id=910201 AND target_issue_id=910203
+               AND note='authored:prerequisite'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        authored, 1,
+        "the canonical authored prerequisite must survive a list edit"
     );
     drop(conn);
 }
@@ -845,15 +871,19 @@ async fn apply_reuse_clears_stale_checkpoint_target_ref_id() {
         stale_edges, 0,
         "stale singular checkpoint target must not compile into an edge"
     );
-    let rule = conn
+    let compiled_rules: i64 = conn
         .query_one(
-            "SELECT target_id FROM continuity_rules
-             WHERE user_id=$1 AND note='continuity-plan:920004' AND satisfaction_type='checkpoint'",
+            "SELECT count(*) FROM continuity_rules
+             WHERE user_id=$1 AND note='continuity-plan:920004'",
             &[&fixture.user_id],
         )
         .await
-        .expect("compiled checkpoint rule");
-    assert_eq!(rule.get::<_, i32>(0), 910203);
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        compiled_rules, 0,
+        "reusing a checkpoint node must not compile a continuity rule"
+    );
     drop(conn);
 }
 

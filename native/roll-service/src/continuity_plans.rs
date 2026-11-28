@@ -680,141 +680,6 @@ impl ContinuityPlanWrite {
     }
 }
 
-// ============================================================================
-// Compiled-rule writer — ports app/services/continuity_plan_writer.py.
-//
-// A plan is not merely a stored JSON document. Saving it must compile its
-// strict/checkpoint/convergence intent into `continuity_rules` rows and the
-// canonical `dependencies` edges that Roll actually enforces, rebuild the
-// normalized `reading_plan_issues` membership, and refresh the derived
-// blocked state atomically. Deleting it must retire only the edges it owned.
-// These helpers keep that contract on the native write path (#4838 P1 #3).
-// ============================================================================
-
-const RULE_NOTE_PREFIX: &str = "canonical:rule:";
-const RULE_BACKFILL_NOTE_PREFIX: &str = "canonical:rule-backfill:";
-
-fn plan_rule_marker(plan_id: i32) -> String {
-    format!("continuity-plan:{plan_id}")
-}
-
-/// Identity of one plan graph node: `(node_type, ref_id)`.
-type PlanNodeKey = (String, i32);
-
-/// One edge the plan compiler wants to enforce.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum EdgeExtra {
-    Checkpoint(i32),
-    Converged(Vec<(String, i32)>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct CompiledEdge {
-    source_type: String,
-    source_id: i32,
-    target_type: String,
-    target_id: i32,
-    satisfaction: String,
-    extra: Option<EdgeExtra>,
-}
-
-impl CompiledEdge {
-    /// Canonical `(source_issue_id, target_issue_id)` pairs this rule compiles to.
-    /// Mirrors `canonical_constraint_compiler.rule_edge_pairs`.
-    fn pairs(&self) -> Vec<(i32, i32)> {
-        match self.satisfaction.as_str() {
-            "item_read" | "checkpoint"
-                if self.source_type == "issue" && self.target_type == "issue" =>
-            {
-                let source = match &self.extra {
-                    Some(EdgeExtra::Checkpoint(id)) => *id,
-                    _ => self.source_id,
-                };
-                vec![(source, self.target_id)]
-            }
-            "converged" if self.target_type == "issue" => {
-                let mut pairs = Vec::new();
-                if let Some(EdgeExtra::Converged(targets)) = &self.extra {
-                    for (kind, id) in targets {
-                        if kind == "issue" && *id != self.target_id {
-                            pairs.push((*id, self.target_id));
-                        }
-                    }
-                }
-                pairs
-            }
-            _ => Vec::new(),
-        }
-    }
-}
-
-/// Cycle detection over the plan's own issue/crossover graph.
-/// Ports `_detect_plan_cycles` in `continuity_plan_writer.py`.
-fn detect_plan_cycles(
-    nodes: &[PlanNodeKey],
-    edges: &[(PlanNodeKey, PlanNodeKey)],
-) -> Option<PlanNodeKey> {
-    use std::collections::{BTreeMap, BTreeSet};
-
-    let mut adjacency: BTreeMap<PlanNodeKey, Vec<PlanNodeKey>> = BTreeMap::new();
-    for node in nodes {
-        adjacency.insert(node.clone(), Vec::new());
-    }
-    for (source, target) in edges {
-        if adjacency.contains_key(source) && adjacency.contains_key(target) {
-            if let Some(targets) = adjacency.get_mut(source) {
-                targets.push(target.clone());
-            }
-        }
-    }
-    for targets in adjacency.values_mut() {
-        targets.sort();
-    }
-
-    let mut color: BTreeMap<PlanNodeKey, u8> = nodes.iter().map(|n| (n.clone(), 0)).collect();
-    let mut in_cycle: BTreeSet<PlanNodeKey> = BTreeSet::new();
-    let mut ordered = nodes.to_vec();
-    ordered.sort();
-
-    for start in ordered {
-        if color.get(&start).copied().unwrap_or(0) != 0 {
-            continue;
-        }
-        let mut stack: Vec<(PlanNodeKey, u8)> = vec![(start.clone(), 0)];
-        let mut path: Vec<PlanNodeKey> = Vec::new();
-        while let Some((node, state)) = stack.pop() {
-            if state == 0 {
-                if matches!(color.get(&node).copied(), Some(1 | 2)) {
-                    continue;
-                }
-                color.insert(node.clone(), 1);
-                path.push(node.clone());
-                stack.push((node.clone(), 1));
-                let nexts = adjacency.get(&node).cloned().unwrap_or_default();
-                for next in nexts.into_iter().rev() {
-                    match color.get(&next).copied() {
-                        Some(0) => stack.push((next, 0)),
-                        Some(1) => {
-                            if let Some(index) = path.iter().position(|item| item == &next) {
-                                for item in &path[index..] {
-                                    in_cycle.insert(item.clone());
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            } else {
-                if path.last() == Some(&node) {
-                    path.pop();
-                }
-                color.insert(node, 2);
-            }
-        }
-    }
-    in_cycle.into_iter().next()
-}
-
 /// Advisory source metadata from one node — mirrors `_source_metadata_for_node`.
 fn source_metadata_for_node(node: &ContinuityPlanNode) -> Option<serde_json::Value> {
     let mut map = serde_json::Map::new();
@@ -1203,540 +1068,6 @@ async fn editor_nodes_for_plan(
     Ok(nodes)
 }
 
-/// A persisted plan-owned rule, decoded by column name.
-struct StoredRule {
-    id: i32,
-    edge: CompiledEdge,
-}
-
-fn decode_rule(row: &tokio_postgres::Row) -> StoredRule {
-    let satisfaction: String = row.get("satisfaction_type");
-    let extra = match satisfaction.as_str() {
-        "checkpoint" => row
-            .get::<_, Option<i32>>("checkpoint_issue_id")
-            .map(EdgeExtra::Checkpoint),
-        "converged" => {
-            let raw: Option<serde_json::Value> = row.get("convergence_targets");
-            let targets = raw
-                .and_then(|value| value.as_array().cloned())
-                .unwrap_or_default()
-                .iter()
-                .filter_map(|item| {
-                    let kind = item.get("type")?.as_str()?.to_string();
-                    let id = item.get("id")?.as_i64()? as i32;
-                    Some((kind, id))
-                })
-                .collect();
-            Some(EdgeExtra::Converged(targets))
-        }
-        _ => None,
-    };
-    StoredRule {
-        id: row.get("id"),
-        edge: CompiledEdge {
-            source_type: row.get("source_type"),
-            source_id: row.get("source_id"),
-            target_type: row.get("target_type"),
-            target_id: row.get("target_id"),
-            satisfaction,
-            extra,
-        },
-    }
-}
-
-fn checkpoint_edges(nodes: &[ContinuityPlanNode]) -> Vec<CompiledEdge> {
-    use std::collections::{BTreeSet, HashMap};
-
-    let mut by_lane: HashMap<&str, Vec<&ContinuityPlanNode>> = HashMap::new();
-    for node in nodes {
-        by_lane.entry(node.lane_id.as_str()).or_default().push(node);
-    }
-    for lane in by_lane.values_mut() {
-        lane.sort_by_key(|node| (node.position, node.id.clone()));
-    }
-    let by_issue: HashMap<i32, &ContinuityPlanNode> = nodes
-        .iter()
-        .filter(|node| node.node_type == "issue")
-        .map(|node| (node.ref_id, node))
-        .collect();
-
-    let mut edges = Vec::new();
-    for node in nodes {
-        if !node.is_checkpoint {
-            continue;
-        }
-        let mut explicit: BTreeSet<i32> = node.checkpoint_target_ref_ids.iter().copied().collect();
-        if let Some(target) = node.checkpoint_target_ref_id {
-            explicit.insert(target);
-        }
-        let checkpoint_issue_id = if node.node_type == "issue" {
-            Some(node.ref_id)
-        } else {
-            None
-        };
-        if !explicit.is_empty() {
-            for target in explicit {
-                let target_node = match by_issue.get(&target) {
-                    Some(value) => *value,
-                    None => continue,
-                };
-                if target_node.ref_id == node.ref_id {
-                    continue;
-                }
-                edges.push(CompiledEdge {
-                    source_type: node.node_type.clone(),
-                    source_id: node.ref_id,
-                    target_type: target_node.node_type.clone(),
-                    target_id: target_node.ref_id,
-                    satisfaction: "checkpoint".into(),
-                    extra: checkpoint_issue_id.map(EdgeExtra::Checkpoint),
-                });
-            }
-            continue;
-        }
-        let lane_nodes = by_lane
-            .get(node.lane_id.as_str())
-            .cloned()
-            .unwrap_or_default();
-        let index = lane_nodes
-            .iter()
-            .position(|candidate| candidate.id == node.id);
-        let Some(index) = index else { continue };
-        if index + 1 >= lane_nodes.len() {
-            continue;
-        }
-        let next = lane_nodes[index + 1];
-        if next.node_type == node.node_type && next.ref_id == node.ref_id {
-            continue;
-        }
-        edges.push(CompiledEdge {
-            source_type: node.node_type.clone(),
-            source_id: node.ref_id,
-            target_type: next.node_type.clone(),
-            target_id: next.ref_id,
-            satisfaction: "checkpoint".into(),
-            extra: checkpoint_issue_id.map(EdgeExtra::Checkpoint),
-        });
-    }
-    edges
-}
-
-/// Compile a plan's stored JSON into rules, canonical edges and membership.
-/// The caller owns the surrounding transaction and must roll it back on error.
-async fn compile_plan_rules(
-    tx: &Transaction<'_>,
-    user_id: i32,
-    plan_id: i32,
-    nodes: &[ContinuityPlanNode],
-    ordering_mode: &str,
-    prior_ordering_mode: Option<&str>,
-) -> Result<(), ApiError> {
-    use std::collections::{HashMap, HashSet};
-
-    let marker = plan_rule_marker(plan_id);
-    let incoming_ids: HashSet<i32> = nodes
-        .iter()
-        .filter(|node| node.node_type == "issue")
-        .map(|node| node.ref_id)
-        .collect();
-
-    // Snapshot membership and plan-owned rules before any rebuild.
-    let prior_membership: HashSet<i32> = tx
-        .query(
-            "SELECT DISTINCT issue_id FROM reading_plan_issues WHERE plan_id = $1",
-            &[&plan_id],
-        )
-        .await
-        .map_err(db::query_error)?
-        .iter()
-        .map(|row| row.get::<_, i32>(0))
-        .collect();
-
-    let old_rows = tx
-        .query(
-            "SELECT id, source_type, source_id, target_type, target_id, satisfaction_type,
-             checkpoint_issue_id, convergence_targets
-             FROM continuity_rules WHERE user_id = $1 AND note = $2 ORDER BY id",
-            &[&user_id, &marker],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let old_rules: Vec<StoredRule> = old_rows.iter().map(decode_rule).collect();
-    let old_pairs: HashSet<(i32, i32)> = old_rules
-        .iter()
-        .flat_map(|rule| rule.edge.pairs())
-        .collect();
-    let old_identities: HashSet<&CompiledEdge> = old_rules.iter().map(|rule| &rule.edge).collect();
-
-    let unchanged_strict_save = ordering_mode == "strict_sequential"
-        && incoming_ids == prior_membership
-        && prior_ordering_mode == Some("strict_sequential");
-
-    let mut edges_to_add: Vec<CompiledEdge> = Vec::new();
-
-    // 1. Strict item_read pairs: retain in-plan pairs already owned by the plan.
-    //    Never infer adjacency from thread position (that is a legacy projection).
-    if ordering_mode == "strict_sequential" {
-        for rule in &old_rules {
-            if rule.edge.satisfaction != "item_read" {
-                continue;
-            }
-            if incoming_ids.contains(&rule.edge.source_id)
-                && incoming_ids.contains(&rule.edge.target_id)
-            {
-                edges_to_add.push(rule.edge.clone());
-            }
-        }
-    }
-
-    // 2. Checkpoint rules from explicitly flagged nodes.
-    edges_to_add.extend(checkpoint_edges(nodes));
-
-    // 3. Convergence rules: a node waits for every gate target.
-    let nodes_by_id: HashMap<&str, &ContinuityPlanNode> =
-        nodes.iter().map(|node| (node.id.as_str(), node)).collect();
-    for node in nodes {
-        if node.convergence_gate.is_empty() {
-            continue;
-        }
-        let mut targets: Vec<(String, i32)> = Vec::new();
-        for gate in &node.convergence_gate {
-            let target_id = match gate.get("node_id").and_then(|value| value.as_str()) {
-                Some(value) => value,
-                None => {
-                    return Err(domain_conflict(serde_json::json!({
-                        "code": "invalid_convergence_gate",
-                        "node_id": node.id,
-                    })))
-                }
-            };
-            let target_node = nodes_by_id.get(target_id).ok_or_else(|| {
-                domain_conflict(serde_json::json!({
-                    "code": "invalid_convergence_gate",
-                    "node_id": node.id,
-                }))
-            })?;
-            let entry = (target_node.node_type.clone(), target_node.ref_id);
-            if !targets.contains(&entry) {
-                targets.push(entry);
-            }
-        }
-        if targets.is_empty() {
-            continue;
-        }
-        targets.sort();
-        edges_to_add.push(CompiledEdge {
-            source_type: node.node_type.clone(),
-            source_id: node.ref_id,
-            target_type: node.node_type.clone(),
-            target_id: node.ref_id,
-            satisfaction: "converged".into(),
-            extra: Some(EdgeExtra::Converged(targets)),
-        });
-    }
-
-    // Rebuild normalized membership in the same transaction.
-    rebuild_plan_membership(tx, plan_id, nodes).await?;
-
-    let desired_identities: HashSet<&CompiledEdge> = edges_to_add.iter().collect();
-    if unchanged_strict_save && desired_identities == old_identities {
-        // No rule churn, but repair a missing canonical edge for a surviving
-        // plan-owned rule so Roll eligibility cannot silently change.
-        for rule in &old_rules {
-            for pair in rule.edge.pairs() {
-                let exists: bool = tx
-                    .query_one(
-                        "SELECT EXISTS(SELECT 1 FROM dependencies
-                          WHERE source_issue_id = $1 AND target_issue_id = $2
-                            AND (note LIKE $3 OR note LIKE $4))",
-                        &[
-                            &pair.0,
-                            &pair.1,
-                            &format!("{RULE_NOTE_PREFIX}%"),
-                            &format!("{RULE_BACKFILL_NOTE_PREFIX}%"),
-                        ],
-                    )
-                    .await
-                    .map_err(db::query_error)?
-                    .get(0);
-                if !exists {
-                    crate::continuity_rules::compile_edges(tx, &[pair], rule.id).await?;
-                }
-            }
-        }
-        return Ok(());
-    }
-
-    // Cycle detection over the plan graph before any rule is persisted.
-    let plan_keys: Vec<PlanNodeKey> = nodes
-        .iter()
-        .filter(|node| matches!(node.node_type.as_str(), "issue" | "crossover"))
-        .map(|node| (node.node_type.clone(), node.ref_id))
-        .collect();
-    let key_set: HashSet<&PlanNodeKey> = plan_keys.iter().collect();
-    let mut graph_edges: Vec<(PlanNodeKey, PlanNodeKey)> = Vec::new();
-    for edge in &edges_to_add {
-        let source = (edge.source_type.clone(), edge.source_id);
-        match &edge.extra {
-            Some(EdgeExtra::Converged(targets)) => {
-                for (kind, id) in targets {
-                    let target = (kind.clone(), *id);
-                    if key_set.contains(&target) && target != source {
-                        graph_edges.push((target, source.clone()));
-                    }
-                }
-            }
-            _ => {
-                let target = (edge.target_type.clone(), edge.target_id);
-                if key_set.contains(&source) && key_set.contains(&target) && source != target {
-                    graph_edges.push((source, target));
-                }
-            }
-        }
-    }
-    if let Some((node_type, node_id)) = detect_plan_cycles(&plan_keys, &graph_edges) {
-        return Err(domain_conflict(serde_json::json!({
-            "code": "plan_convergence_cycle",
-            "node_type": node_type,
-            "node_id": node_id,
-        })));
-    }
-
-    tx.execute(
-        "DELETE FROM continuity_rules WHERE user_id = $1 AND note = $2",
-        &[&user_id, &marker],
-    )
-    .await
-    .map_err(db::query_error)?;
-
-    if edges_to_add.is_empty() {
-        // Retire all previously compiled pairs so orphaned edges stop blocking.
-        let pairs: Vec<(i32, i32)> = old_pairs.into_iter().collect();
-        if !pairs.is_empty() {
-            crate::continuity_rules::retire_edges(tx, user_id, &pairs, -1).await?;
-        }
-        return Ok(());
-    }
-
-    let mut created: Vec<(i32, Vec<(i32, i32)>)> = Vec::new();
-    let mut new_pairs: HashSet<(i32, i32)> = HashSet::new();
-    for edge in &edges_to_add {
-        // A colliding rule owned by somebody else is a 409, never overwritten.
-        let existing: Option<i32> = tx
-            .query_opt(
-                "SELECT id FROM continuity_rules
-                 WHERE user_id = $1 AND source_type = $2 AND source_id = $3
-                   AND target_type = $4 AND target_id = $5",
-                &[
-                    &user_id,
-                    &edge.source_type,
-                    &edge.source_id,
-                    &edge.target_type,
-                    &edge.target_id,
-                ],
-            )
-            .await
-            .map_err(db::query_error)?
-            .map(|row| row.get(0));
-        if existing.is_some() {
-            return Err(domain_conflict(serde_json::json!({
-                "code": "plan_rule_conflict",
-                "source_node_id": format!("{}-{}", edge.source_type, edge.source_id),
-                "target_node_id": format!("{}-{}", edge.target_type, edge.target_id),
-            })));
-        }
-        if edge.satisfaction != "converged"
-            && crate::continuity_rules::would_create_cycle(
-                tx,
-                user_id,
-                &edge.source_type,
-                edge.source_id,
-                &edge.target_type,
-                edge.target_id,
-                None,
-            )
-            .await?
-        {
-            return Err(domain_conflict(serde_json::json!({
-                "code": "continuity_cycle",
-                "source_node_id": format!("{}-{}", edge.source_type, edge.source_id),
-                "target_node_id": format!("{}-{}", edge.target_type, edge.target_id),
-            })));
-        }
-
-        let (checkpoint_issue_id, convergence_targets): (Option<i32>, Option<serde_json::Value>) =
-            match &edge.extra {
-                Some(EdgeExtra::Checkpoint(id)) => (Some(*id), None),
-                Some(EdgeExtra::Converged(targets)) => (
-                    None,
-                    Some(serde_json::Value::Array(
-                        targets
-                            .iter()
-                            .map(|(kind, id)| serde_json::json!({"type": kind, "id": id}))
-                            .collect(),
-                    )),
-                ),
-                None => (None, None),
-            };
-        let id: i32 = tx
-            .query_one(
-                "INSERT INTO continuity_rules
-                 (user_id, source_type, source_id, target_type, target_id,
-                  satisfaction_type, checkpoint_issue_id, convergence_targets, note,
-                  created_at, updated_at)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
-                 RETURNING id",
-                &[
-                    &user_id,
-                    &edge.source_type,
-                    &edge.source_id,
-                    &edge.target_type,
-                    &edge.target_id,
-                    &edge.satisfaction,
-                    &checkpoint_issue_id,
-                    &convergence_targets,
-                    &marker,
-                ],
-            )
-            .await
-            .map_err(db::query_error)?
-            .get(0);
-        let pairs = edge.pairs();
-        new_pairs.extend(pairs.iter().copied());
-        created.push((id, pairs));
-    }
-
-    // Retire edges the new rule set no longer intends, then compile all new
-    // pairs. compile_edges upserts notes so surviving edges reference live IDs.
-    let retired: Vec<(i32, i32)> = old_pairs.difference(&new_pairs).copied().collect();
-    if !retired.is_empty() {
-        crate::continuity_rules::retire_edges(tx, user_id, &retired, -1).await?;
-    }
-    for (rule_id, pairs) in &created {
-        if !pairs.is_empty() {
-            crate::continuity_rules::compile_edges(tx, pairs, *rule_id).await?;
-        }
-    }
-    Ok(())
-}
-
-/// Retire canonical edges compiled by one plan before its rules are deleted.
-/// Mirrors `retire_plan_edges_for_deletion`: a pair survives when another
-/// rule or another plan still links it, otherwise it is deleted so orphaned
-/// Dependency rows cannot keep blocking Roll.
-async fn retire_plan_edges_for_deletion(
-    tx: &Transaction<'_>,
-    user_id: i32,
-    plan_id: i32,
-) -> Result<(), ApiError> {
-    use std::collections::HashSet;
-
-    let marker = plan_rule_marker(plan_id);
-    let plan_rules = tx
-        .query(
-            "SELECT id, source_type, source_id, target_type, target_id, satisfaction_type,
-             checkpoint_issue_id, convergence_targets
-             FROM continuity_rules WHERE user_id = $1 AND note = $2",
-            &[&user_id, &marker],
-        )
-        .await
-        .map_err(db::query_error)?
-        .iter()
-        .map(decode_rule)
-        .collect::<Vec<_>>();
-    let deleted_ids: HashSet<i32> = plan_rules.iter().map(|rule| rule.id).collect();
-    let mut pairs: HashSet<(i32, i32)> = plan_rules
-        .iter()
-        .flat_map(|rule| rule.edge.pairs())
-        .collect();
-
-    // Pairs this plan explicitly links through reading_plan_dependencies.
-    let linked = tx
-        .query(
-            "SELECT d.source_issue_id, d.target_issue_id
-             FROM dependencies d
-             JOIN reading_plan_dependencies rpd ON rpd.dependency_id = d.id
-             WHERE rpd.plan_id = $1",
-            &[&plan_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    for row in &linked {
-        pairs.insert((row.get(0), row.get(1)));
-    }
-    if pairs.is_empty() {
-        return Ok(());
-    }
-
-    // Survivors: other rules owned by this user, and other plans' links.
-    let mut keep: HashSet<(i32, i32)> = HashSet::new();
-    let survivor_rows = tx
-        .query(
-            "SELECT id, source_type, source_id, target_type, target_id, satisfaction_type,
-             checkpoint_issue_id, convergence_targets
-             FROM continuity_rules
-             WHERE user_id = $1 AND satisfaction_type IN ('item_read','checkpoint','converged')",
-            &[&user_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    for row in &survivor_rows {
-        let rule = decode_rule(row);
-        if !deleted_ids.contains(&rule.id) {
-            keep.extend(rule.edge.pairs());
-        }
-    }
-    let other_plan_rows = tx
-        .query(
-            "SELECT d.source_issue_id, d.target_issue_id
-             FROM dependencies d
-             JOIN reading_plan_dependencies rpd ON rpd.dependency_id = d.id
-             WHERE rpd.plan_id <> $1",
-            &[&plan_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    for row in &other_plan_rows {
-        let pair = (row.get::<_, i32>(0), row.get::<_, i32>(1));
-        if pairs.contains(&pair) {
-            keep.insert(pair);
-        }
-    }
-
-    for (source, target) in pairs.difference(&keep) {
-        tx.execute(
-            "DELETE FROM dependencies
-             WHERE source_issue_id = $1 AND target_issue_id = $2
-               AND (note LIKE $3 OR note LIKE $4)",
-            &[
-                source,
-                target,
-                &format!("{RULE_NOTE_PREFIX}%"),
-                &format!("{RULE_BACKFILL_NOTE_PREFIX}%"),
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
-    Ok(())
-}
-
-/// Persist the derived blocked projection after a plan write, mirroring
-/// Python `_refresh_blocked_state` (which commits its own transaction).
-async fn refresh_blocked_state(state: &AppState, user_id: i32) -> Result<(), ApiError> {
-    let mut conn = db::checkout(state).await?;
-    let tx = conn
-        .build_transaction()
-        .start()
-        .await
-        .map_err(db::query_error)?;
-    if let Err(error) = crate::issue_service::refresh_blocked_threads(&tx, user_id).await {
-        let _ = tx.rollback().await;
-        return Err(error);
-    }
-    tx.commit().await.map_err(db::query_error)
-}
-
 // ============================================================================
 // GET /api/v2/continuity-plans/ - List plans
 // ============================================================================
@@ -1954,22 +1285,10 @@ pub async fn create_continuity_plan(
     let created_at = iso_utc(row.get::<_, DateTime<Utc>>(6));
     let updated_at = iso_utc(row.get::<_, DateTime<Utc>>(7));
 
-    // Compile the plan's strict/checkpoint/convergence intent into rules and
-    // canonical edges, and rebuild normalized membership, in this transaction.
-    // Python also calls `ensure_new_plan_has_authority` here, but that adapter
-    // is gated on `OPTION_E_ENABLED` (default false) plus an owner-approved
-    // preview; it is a no-op in the deployed configuration and the native
-    // service deliberately does not expose that experimental switch.
-    if let Err(error) = compile_plan_rules(
-        &tx,
-        user.id(),
-        plan_id,
-        &payload.nodes,
-        &payload.ordering_mode,
-        None,
-    )
-    .await
-    {
+    // Rebuild normalized membership in the same transaction. The Reading List
+    // engine is the sole eligibility evaluator: saving a plan never compiles
+    // continuity rules or canonical dependency edges.
+    if let Err(error) = rebuild_plan_membership(&tx, plan_id, &payload.nodes).await {
         let _ = tx.rollback().await;
         return Err(error);
     }
@@ -1988,7 +1307,6 @@ pub async fn create_continuity_plan(
     };
 
     tx.commit().await.map_err(db::query_error)?;
-    refresh_blocked_state(&state, user.id()).await?;
     Ok((StatusCode::CREATED, Json(plan_response)))
 }
 
@@ -2101,7 +1419,6 @@ pub async fn update_continuity_plan(
     let expected_version: Option<String> = payload.expected_updated_at.clone();
     let current_updated_at: DateTime<Utc> = existing.get(4);
     let current_updated_at_iso = iso_utc(current_updated_at);
-    let prior_ordering_mode: String = existing.get(3);
     let prior_lanes: serde_json::Value = existing.get(1);
     let prior_nodes: serde_json::Value = existing.get(2);
 
@@ -2229,16 +1546,7 @@ pub async fn update_continuity_plan(
         .await
         .map_err(db::query_error)?;
 
-    if let Err(error) = compile_plan_rules(
-        &tx,
-        user.id(),
-        plan_id,
-        &payload.nodes,
-        &payload.ordering_mode,
-        Some(&prior_ordering_mode),
-    )
-    .await
-    {
+    if let Err(error) = rebuild_plan_membership(&tx, plan_id, &payload.nodes).await {
         let _ = tx.rollback().await;
         return Err(error);
     }
@@ -2257,7 +1565,6 @@ pub async fn update_continuity_plan(
     };
 
     tx.commit().await.map_err(db::query_error)?;
-    refresh_blocked_state(&state, user.id()).await?;
 
     Ok(Json(plan_response))
 }
@@ -2302,13 +1609,10 @@ pub async fn delete_continuity_plan(
     .map_err(db::query_error)?
     .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
-    // Retire canonical edges compiled by this plan before its rules vanish.
-    // After the Roll cutover those Dependency rows are the only authority, so
-    // orphaned edges would otherwise keep blocking issues forever.
-    retire_plan_edges_for_deletion(&tx, user.id(), plan_id).await?;
-
-    // Get marker for deleting plan rules
-    let marker = plan_rule_marker(plan_id);
+    // Remove any legacy plan-owned rule rows left by earlier releases. The
+    // Reading List engine compiled no new rules, so there are no edges to
+    // retire here.
+    let marker = format!("continuity-plan:{plan_id}");
 
     // Tag assignments point at polymorphic ids with no foreign key.
     tx.execute(
@@ -2356,7 +1660,6 @@ pub async fn delete_continuity_plan(
         .map_err(db::query_error)?;
 
     tx.commit().await.map_err(db::query_error)?;
-    refresh_blocked_state(&state, user.id()).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -4170,7 +3473,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_compiles_checkpoint_rule_and_delete_retires_edge() {
+    async fn create_saves_membership_without_compiling_rules_or_edges() {
         let (state, user, _guard) = plan_db_fixture().await;
         let mut second = node("n2", "issue", 483802, "l1", 1);
         second.is_checkpoint = true;
@@ -4195,7 +3498,7 @@ mod tests {
             .await
             .expect("rule count")
             .get(0);
-        assert_eq!(rule_count, 1);
+        assert_eq!(rule_count, 0, "plan save must not compile continuity rules");
         let membership: i64 = conn
             .query_one(
                 "SELECT count(*) FROM reading_plan_issues WHERE plan_id = $1",
@@ -4215,7 +3518,10 @@ mod tests {
             .await
             .expect("compiled edge")
             .map(|row| row.get(0));
-        assert!(edge.is_some(), "checkpoint must compile a canonical edge");
+        assert!(
+            edge.is_none(),
+            "plan save must not compile a canonical edge"
+        );
         drop(conn);
 
         let status =
@@ -4235,7 +3541,10 @@ mod tests {
             .await
             .expect("edge after delete")
             .map(|row| row.get(0));
-        assert!(edge_after.is_none(), "deleting a plan must retire its edge");
+        assert!(
+            edge_after.is_none(),
+            "no compiled rule-derived edge may exist"
+        );
         let rule_after: i64 = conn
             .query_one(
                 "SELECT count(*) FROM continuity_rules WHERE note = $1",
@@ -4248,7 +3557,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_with_convergence_cycle_returns_structured_409_and_rolls_back() {
+    async fn convergence_gates_do_not_compile_legacy_edges_on_save() {
         let (state, user, _guard) = plan_db_fixture().await;
         let mut first = node("n1", "issue", 483801, "l1", 0);
         first.convergence_gate = vec![serde_json::json!({"node_type": "issue", "node_id": "n2"})];
@@ -4256,25 +3565,35 @@ mod tests {
         second.convergence_gate = vec![serde_json::json!({"node_type": "issue", "node_id": "n1"})];
         let write = payload("informational", vec![lane("l1", 0)], vec![first, second]);
 
-        let error = create_continuity_plan(State(state.clone()), user, Json(write))
-            .await
-            .expect_err("a convergence cycle must be rejected");
-        assert_eq!(error.status(), StatusCode::CONFLICT);
-        assert_eq!(
-            error.structured_detail().expect("structured detail")["code"],
-            "plan_convergence_cycle"
-        );
+        // Cycle eligibility belongs to the canonical Reading List evaluator,
+        // not to a plan-save compiler. The document is saved without compiling
+        // any rule-derived dependency edge.
+        let (status, Json(created)) =
+            create_continuity_plan(State(state.clone()), user, Json(write))
+                .await
+                .expect("create plan");
+        assert_eq!(status, StatusCode::CREATED);
 
         let conn = db::checkout(&state).await.expect("verify connection");
-        let plans: i64 = conn
+        let edges: i64 = conn
             .query_one(
-                "SELECT count(*) FROM continuity_plans WHERE user_id = $1",
-                &[&user.id()],
+                "SELECT count(*) FROM dependencies WHERE note LIKE 'canonical:rule:%'",
+                &[],
             )
             .await
-            .expect("plan count")
+            .expect("compiled edge count")
             .get(0);
-        assert_eq!(plans, 0, "a failed write must leave no plan behind");
+        assert_eq!(edges, 0, "plan save must not compile rule-derived edges");
+        let rules: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM continuity_rules WHERE note = $1",
+                &[&format!("continuity-plan:{}", created.id)],
+            )
+            .await
+            .expect("rule count")
+            .get(0);
+        assert_eq!(rules, 0, "plan save must not compile continuity rules");
+        drop(conn);
     }
 
     #[tokio::test]
