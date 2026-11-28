@@ -175,7 +175,6 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
       setEditingThread(thread)
       setEditForm({
         title: thread.title,
-        format: thread.format,
         issuesRemaining: thread.issues_remaining,
         notes: thread.notes || '',
         issues: '',

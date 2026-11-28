@@ -6,7 +6,6 @@ import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import AddSeriesFromComicVineDialog from '../../components/AddSeriesFromComicVineDialog'
 import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
-import { FormatSelect } from './FormatSelect'
 import { PotentialDuplicateAdvisory } from './PotentialDuplicateAdvisory'
 import { usePotentialDuplicates } from '../../hooks/usePotentialDuplicates'
 import { getManualCreatorCreditList } from '../../types'
@@ -663,21 +662,6 @@ export function QueueModals({
               />
             </div>
 
-            <div className="space-y-2">
-              <label
-                htmlFor="edit-thread-format"
-                className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
-              >
-                Format
-              </label>
-              <FormatSelect
-                id="edit-thread-format"
-                value={editForm.format}
-                onChange={(value) => setEditForm({ ...editForm, format: value })}
-                required
-              />
-            </div>
-
             {editingThread != null && editingThread.total_issues == null && (
               <div className="space-y-2">
                 <label
@@ -782,7 +766,7 @@ export function QueueModals({
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--theme-text-muted)]">
-            Your unsaved title, format, notes, creator, or issue changes will be discarded.
+            Your unsaved title, notes, creator, or issue changes will be discarded.
           </p>
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <button
@@ -827,7 +811,7 @@ export function QueueModals({
               <option value="">Select a series...</option>
               {completedThreads.map((thread) => (
                 <option key={thread.id} value={String(thread.id)}>
-                  {thread.title} ({thread.format})
+                  {thread.title}
                 </option>
               ))}
             </select>
