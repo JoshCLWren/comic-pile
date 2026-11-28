@@ -194,6 +194,9 @@ export const queryKeys = {
     recovery: (issueId: number, snoozedThreadIds: readonly number[] = []) =>
       ['roll', 'recovery', issueId, [...new Set(snoozedThreadIds)].sort((a, b) => a - b)] as const,
   },
+  readingMode: {
+    state: () => ['readingMode', 'state'] as const,
+  },
   demo: {
     /**
      * Guest demo (#2757) keys. The demo reads seeded product-owned sample data

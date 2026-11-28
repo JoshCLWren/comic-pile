@@ -1,21 +1,16 @@
-import { formatSessionMode, type SessionModeState } from '../../../types/rollState'
+import { formatReadingMode, type ReadingModeDisplay } from '../../../types/readingMode'
 
 interface ReadingModeControlProps {
-  mode: SessionModeState | null | undefined
+  mode: ReadingModeDisplay | null | undefined
 }
 
 /**
- * Compact `Light · Momentum` session-mode indicator for the Roll header.
- * Purely presentational: it reads the active bandwidth/intent carried by the
- * bootstrap payload and never exposes raw confidence scores. Renders nothing
- * on legacy bootstrap responses without mode state.
- *
- * The session-mode write route is retired (#4354), so this is a status chip
- * only: the reader's active bandwidth/intent stay visible, but the Roll header
- * no longer offers a toggle that no longer has a server to write to.
+ * Compact `Light · Momentum` indicator for the Roll header.
+ * Purely presentational: it reads the canonical scoped reading-mode resource
+ * and never exposes raw confidence scores. Renders nothing while unavailable.
  */
 export function ReadingModeControl({ mode }: ReadingModeControlProps) {
-  const label = formatSessionMode(mode)
+  const label = formatReadingMode(mode)
   if (!mode || !label) return null
 
   return (

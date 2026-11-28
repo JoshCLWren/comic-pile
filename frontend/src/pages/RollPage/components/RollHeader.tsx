@@ -3,7 +3,9 @@ import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { DiceSide } from '../../../components/diceTypes'
-import type { RollState, RollThreadSummary, SessionModeState } from '../../../types/rollState'
+import type { RollState, RollThreadSummary } from '../../../types/rollState'
+import type { ReadingModeDisplay } from '../../../types/readingMode'
+import { useReadingMode } from '../../../hooks/useReadingMode'
 import {
   ROLL_WORKSPACE_GUTTER,
   ROLL_WORKSPACE_MAX_WIDTH,
@@ -71,14 +73,12 @@ export function RollHeader({
   const effectiveLadder =
     dieState?.ladder && dieState.ladder.length > 0 ? dieState.ladder : DICE_LADDER
   const maxLadderDie = effectiveLadder[effectiveLadder.length - 1]
-  const rawMode = bootstrap.session_mode
-  const sessionMode: SessionModeState | null | undefined = rawMode
+  const { data: readingMode } = useReadingMode()
+  const mode: ReadingModeDisplay | null | undefined = readingMode
     ? {
-        bandwidth: rawMode.active_bandwidth,
-        intent: rawMode.active_intent,
-        source: rawMode.bandwidth_source,
-        confidence: rawMode.bandwidth_confidence,
-        version: rawMode.bandwidth_version,
+        bandwidth: readingMode.bandwidth,
+        intent: readingMode.intent,
+        source: readingMode.source,
       }
     : null
 
@@ -235,7 +235,7 @@ export function RollHeader({
             >
               Reset Dice
             </button>
-            <ReadingModeControl mode={sessionMode} />
+            <ReadingModeControl mode={mode} />
             <Tooltip content="Pick a specific series for the next result.">
               <button
                 type="button"
