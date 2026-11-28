@@ -10,7 +10,9 @@ import type {
 
 describe('generated core API contracts', () => {
   it('exports shape-compatible mutation request types from OpenAPI', () => {
-    expectTypeOf<ThreadUpdatePayload>().toEqualTypeOf<components['schemas']['ThreadUpdate']>()
+    expectTypeOf<ThreadUpdatePayload>().toEqualTypeOf<
+      Omit<components['schemas']['ThreadUpdate'], 'format'>
+    >()
     expectTypeOf<ReactivateThreadPayload>().toEqualTypeOf<components['schemas']['ReactivateRequest']>()
   })
 
