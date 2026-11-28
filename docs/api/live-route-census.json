@@ -24,11 +24,7 @@
     "v1_with_owner": 57,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-<<<<<<< HEAD
-    "first_party_call_sites": 928,
-=======
-    "first_party_call_sites": 920,
->>>>>>> origin/main
+    "first_party_call_sites": 930,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
