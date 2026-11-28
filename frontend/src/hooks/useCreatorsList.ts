@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
 import { creatorsApi } from '../services/api-creators'
 import type { CreatorListItem, CreatorListResponse } from '../services/api-creators'
 import { queryKeys } from '../query/queryKeys'
@@ -86,41 +86,35 @@ export function useCreatorsList(
   selection: CreatorListSelection,
   listApi: CreatorsListApi = creatorsApi,
 ): CreatorsListState {
-  const query = useInfiniteQuery({
+  const query = useInfiniteCollection<CreatorListItem, CreatorListResponse, number>({
     ...creatorListQueryOptions(selection, listApi),
+    selectPage: (page) => page.items,
+    // Boundary repeats are removed by the shared paginator, not a local set.
+    selectId: (item) => item.canonical_creator_key,
     retry: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   })
 
-  const pages = query.data?.pages ?? []
+  const pages = query.pages
   const firstPage = pages[0] ?? null
 
-  const seen = new Set<string>()
-  const items = pages.flatMap((page) =>
-    page.items.filter((item) => {
-      if (seen.has(item.canonical_creator_key)) return false
-      seen.add(item.canonical_creator_key)
-      return true
-    }),
-  )
-
   const loadMore = useCallback((): Promise<void> => {
-    if (!query.hasNextPage || query.isFetchingNextPage) {
+    if (!query.hasNextPage || query.isNextPageLoading) {
       return Promise.resolve()
     }
-    return query.fetchNextPage().then(() => undefined)
+    return query.fetchNextPage()
   }, [query])
 
   return {
-    items,
+    items: query.items,
     total: firstPage?.total ?? 0,
     coverage: firstPage?.coverage ?? null,
-    isPending: query.isPending,
-    isFetchingMore: query.isFetchingNextPage,
+    isPending: query.isInitialLoading,
+    isFetchingMore: query.isNextPageLoading,
     isError: query.isError,
     error: query.error,
-    hasMore: query.hasNextPage ?? false,
+    hasMore: query.hasNextPage,
     loadMore,
     refetch: () => {
       void query.refetch()
