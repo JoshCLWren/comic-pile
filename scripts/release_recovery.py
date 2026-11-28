@@ -42,6 +42,11 @@ from pathlib import Path
 
 PRODUCTION_HEALTH_URL = "https://comic-pile.vercel.app/api/v2/health"
 GITHUB_API_BASE = "https://api.github.com"
+PRODUCTION_HEALTH_HOST = urllib.parse.urlsplit(PRODUCTION_HEALTH_URL).hostname or ""
+GITHUB_API_HOST = urllib.parse.urlsplit(GITHUB_API_BASE).hostname or ""
+GITHUB_API_URL_KIND = "GitHub API URL"
+PRODUCTION_HEALTH_URL_KIND = "production health URL"
+GENERIC_URL_KIND = "release recovery URL"
 NATIVE_BUILD_PACKAGE = "comicpile-vercel-native"
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 DEFAULT_LOOKBACK_HOURS = 72
@@ -116,55 +121,145 @@ def _parse_timestamp(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
-def _read_json(request: urllib.request.Request) -> object:
+def _url_kind(url: str) -> str:
+    """Classify a recovery URL as a coarse, secret-free label for errors.
+
+    Args:
+        url: Absolute request URL.
+
+    Returns:
+        ``production health URL``, ``GitHub API URL``, or a generic label.
+        The URL itself is never included, because it may carry a token.
+    """
+    try:
+        host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return GENERIC_URL_KIND
+    if host == GITHUB_API_HOST:
+        return GITHUB_API_URL_KIND
+    if host == PRODUCTION_HEALTH_HOST:
+        return PRODUCTION_HEALTH_URL_KIND
+    return GENERIC_URL_KIND
+
+
+def _validate_request_url(url: str, kind: str) -> None:
+    """Reject a malformed URL before it reaches the network.
+
+    Args:
+        url: Absolute HTTP(S) URL.
+        kind: Coarse URL label used in the error.
+
+    Raises:
+        RecoveryError: The URL has no usable scheme, host, or valid port.
+    """
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        host = parsed.hostname
+        _ = parsed.port  # Raises ValueError for a non-numeric port.
+    except ValueError:
+        raise RecoveryError(f"{kind} URL is invalid") from None
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not host
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise RecoveryError(f"{kind} URL is invalid")
+
+
+def _is_github_api_url(url: str) -> bool:
+    """Report whether a URL targets the canonical GitHub API host.
+
+    Args:
+        url: Absolute URL supplied by a caller or an injected loader.
+
+    Returns:
+        ``True`` only for a credential-free HTTPS URL on ``api.github.com``.
+    """
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        return (
+            parsed.scheme == "https"
+            and (parsed.hostname or "").lower() == GITHUB_API_HOST
+            and parsed.username is None
+            and parsed.password is None
+        )
+    except ValueError:
+        return False
+
+
+def _read_json(
+    request: urllib.request.Request, source_name: str | None = None
+) -> object:
     """Perform one bounded JSON GET.
 
     Args:
         request: Fully prepared request.
+        source_name: Optional coarse URL label override used in errors.
 
     Returns:
         The decoded JSON payload.
 
     Raises:
-        RecoveryError: The request failed or did not return valid JSON.
+        RecoveryError: The URL is malformed, the request failed, or the
+            response is not valid JSON. Errors name the URL kind, never the
+            URL itself, because URLs may carry credentials.
     """
+    kind = source_name or _url_kind(request.full_url)
+    _validate_request_url(request.full_url, kind)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
-        raise RecoveryError(
-            f"HTTP {exc.code} from release recovery source: {detail[:500]}"
-        ) from exc
+        raise RecoveryError(f"HTTP {exc.code} from {kind}: {detail[:500]}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise RecoveryError(f"Release recovery request failed: {exc}") from exc
+        reason = getattr(exc, "reason", None) or exc
+        raise RecoveryError(
+            f"Release recovery request failed for {kind}: {reason}"
+        ) from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RecoveryError("Release recovery source returned invalid JSON") from exc
+        raise RecoveryError(f"{kind} returned invalid JSON") from exc
 
 
-def _read_url_json(url: str) -> object:
+def _read_url_json(url: str, source_name: str | None = None) -> object:
     """Read one JSON document from an absolute URL.
 
     Args:
         url: Absolute HTTP URL.
+        source_name: Optional coarse URL label override used in errors.
 
     Returns:
         The decoded JSON payload.
     """
     return _read_json(
-        urllib.request.Request(url, headers={"Accept": "application/json"})
+        urllib.request.Request(url, headers={"Accept": "application/json"}),
+        source_name=source_name,
     )
 
 
-def _github_request(path: str) -> object:
-    """Read one GitHub REST path with the workflow token when available.
+def _github_request(path_or_url: str) -> object:
+    """Read one GitHub REST path or absolute API URL with the workflow token.
+
+    Callers pass either a REST path (``/repos/...``) or the absolute URL built
+    by discovery. Accepting both prevents double-prefixing ``GITHUB_API_BASE``,
+    which used to request the unresolvable host ``api.github.comhttps``.
 
     Args:
-        path: REST path beginning with ``/``.
+        path_or_url: REST path beginning with ``/`` or an absolute GitHub API URL.
 
     Returns:
         The decoded GitHub response.
+
+    Raises:
+        RecoveryError: An absolute URL does not target the GitHub API host.
     """
+    if path_or_url.startswith("/"):
+        url = f"{GITHUB_API_BASE}{path_or_url}"
+    elif _is_github_api_url(path_or_url):
+        url = path_or_url
+    else:
+        raise RecoveryError("GitHub API URL is invalid")
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "ComicPile-release-recovery",
@@ -174,7 +269,8 @@ def _github_request(path: str) -> object:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return _read_json(
-        urllib.request.Request(f"{GITHUB_API_BASE}{path}", headers=headers)
+        urllib.request.Request(url, headers=headers),
+        source_name=GITHUB_API_URL_KIND,
     )
 
 
@@ -556,13 +652,11 @@ def select_sources(
     shas = [source.merge_commit_sha for source in deployed]
     existing = lookup(repository, numbers, shas)
     missing = select_missing_source(deployed, existing)
-    missing_count = sum(
-        1
+    missing_sources = [
+        source
         for source in deployed
-        if not any(
-            row == (source.number, source.merge_commit_sha) for row in existing
-        )
-    )
+        if not any(row == (source.number, source.merge_commit_sha) for row in existing)
+    ]
     return {
         "needed": missing is not None,
         "pr_number": missing.number if missing else None,
@@ -570,7 +664,8 @@ def select_sources(
         "deployed_revision": live_sha,
         "candidates": len(candidates),
         "deployed_candidates": len(deployed),
-        "missing_count": missing_count,
+        "missing_count": len(missing_sources),
+        "missing_pr_numbers": [source.number for source in missing_sources],
     }
 
 
@@ -697,10 +792,14 @@ def _write_outputs(outputs: JsonObject) -> None:
     Args:
         outputs: Mapping of output names to values.
     """
-    rendered = {
-        key: str(value).lower() if isinstance(value, bool) else str(value)
-        for key, value in outputs.items()
-    }
+    rendered: dict[str, str] = {}
+    for key, value in outputs.items():
+        if isinstance(value, bool):
+            rendered[key] = str(value).lower()
+        elif isinstance(value, (list, dict)):
+            rendered[key] = json.dumps(value, separators=(",", ":"))
+        else:
+            rendered[key] = str(value)
     destination = os.getenv("GITHUB_OUTPUT", "").strip()
     if destination:
         with Path(destination).open("a", encoding="utf-8") as output:
@@ -797,6 +896,17 @@ def main() -> int:
         print(json.dumps({"rewritten": rewritten}))
         return 0
     except RecoveryError as exc:
+        # Emit machine-readable failure outputs so the workflow summary can
+        # still report the URL kind and that no source was selected. The text
+        # is safe by construction (URL kinds only, no raw URLs or secrets) and
+        # is flattened to one line for GITHUB_OUTPUT.
+        _write_outputs(
+            {
+                "needed": False,
+                "selection_error": " ".join(str(exc).split()),
+                "missing_pr_numbers": [],
+            }
+        )
         print(f"release recovery failed: {exc}", file=sys.stderr)
         return 1
 
