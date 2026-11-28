@@ -1665,8 +1665,8 @@ mod tests {
                 .iter()
                 .map(|f| (f.queue_position, f.issue_id, f.unsatisfied.len()))
                 .collect::<Vec<_>>(),
-            vec![(1, 9401, 0)],
-            "B's frontier stays at its first unread issue: {b_blockers:?}"
+            vec![(2, 9401, 0)],
+            "B's frontier stays at its first unread issue in its distinct queue position: {b_blockers:?}"
         );
         let b_frontiers = b_validated.eligible_frontiers().expect("B frontiers");
         assert_eq!(
