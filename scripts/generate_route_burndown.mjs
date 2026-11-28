@@ -230,7 +230,47 @@ function _validatedNamedOperations(value, context) {
   return operations;
 }
 
-function _mergeRouteFragments(inventory, fragments) {
+/**
+ * Enumerate the actual native router through the all-version census builder.
+ *
+ * Fragments remain the editable ownership source, but they are not proof that
+ * a route is live: excluded legacy aliases and newly registered native routes
+ * must still appear in the generated audit. Returning null for a missing
+ * router keeps the small hermetic generator fixtures independent of Rust.
+ */
+export function _loadNativeOperations(routerPath, inventory, vercel) {
+  if (!existsSync(routerPath)) return null;
+  const root = path.resolve(path.dirname(routerPath), '../../..');
+  const dispositionsPath = path.join(root, DISPOSITIONS_PATH);
+  const aipBaselinePath = path.join(root, AIP_BASELINE_PATH);
+  const routerText = readFileSync(routerPath, 'utf8');
+  const dispositions = existsSync(dispositionsPath)
+    ? loadJson(dispositionsPath)
+    : {overrides: {}, families: [], known_unowned_baseline: []};
+  const aipBaseline = existsSync(aipBaselinePath) ? loadJson(aipBaselinePath) : {entries: []};
+  const census = buildCensus({
+    routerText,
+    inventory,
+    dispositions,
+    aipBaseline,
+    vercel,
+    callers: scanCallers(root),
+    sourceOwners: sourceRouteOwners(root),
+  });
+  return census.routes.map(route => ({
+    bucket: route.version === 'v2'
+      ? 'operations'
+      : route.version === 'v1' ? 'v1_operations' : 'unversioned_operations',
+    method: route.method,
+    path: route.path,
+    runtime: 'native-rust',
+    status: 'target',
+    owning_issue: route.owner_issue,
+    consumers: route.consumers,
+  }));
+}
+
+function _mergeRouteFragments(inventory, fragments, nativeOperations = null) {
   const merged = {...inventory};
   const rawOperations = _validatedOperations(inventory).filter(
     operation => operation.runtime !== 'python-fastapi',
