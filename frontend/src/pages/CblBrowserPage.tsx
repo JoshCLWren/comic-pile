@@ -395,6 +395,7 @@ export default function CblBrowserPage() {
     saveOwnedCblList(link)
     setOwnedLink(link)
     restoredLinkRef.current = `${link.sourceId}:${link.listId}`
+    delete idempotencyKeys.current[variables.source.id]
     // The write is real no matter which source the view shows, so the caches
     // must learn the canonical list. Navigation still belongs to the view the
     // reader was on: Back during the awaits must not hijack it.
@@ -413,6 +414,7 @@ export default function CblBrowserPage() {
       // Only surface messages or navigate for the view that made the request:
       // Back while a commit is in flight must not hijack the new view.
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
+        delete idempotencyKeys.current[variables.source.id]
         if (viewedSourceIdRef.current === variables.source.id) setStaleReview(true)
         return
       }
@@ -1035,20 +1037,6 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          <CblAdoptionTargetFieldset
-            plans={matchingPlans}
-            selectedPlanId={adoptionTargetId}
-            sourceAlreadyAdopted={sourceAlreadyAdopted}
-            disabled={isCommitting}
-            planCheckFailed={planCheckFailed}
-            onChoose={(planId) => {
-              setAdoptionTargetId(planId)
-              setConfirmOpen(false)
-              commitMutation.reset()
-            }}
-            onRetry={() => void plansQuery.refetch()}
-          />
-
           {graphUnavailable && (
             <p role="status" className="text-xs text-[var(--theme-warning)]">
               ComicPile could not load the reading graph, so it cannot check overlapping series
@@ -1088,9 +1076,9 @@ export default function CblBrowserPage() {
                 }`}
               >
                 {isCommitting
-                  ? 'Adding reading order…'
-                  : selectedAdoptionTarget
-                    ? 'Update selected Reading Plan'
+                  ? 'Saving Reading List…'
+                  : ownedLink
+                    ? 'Update this Reading List'
                     : 'Add this reading order'}
               </button>
               {commitBlockedReason && (
@@ -1481,9 +1469,20 @@ export default function CblBrowserPage() {
 
       <CblAdoptionConfirmModal
         isOpen={confirmOpen}
-        target={selectedAdoptionTarget}
+        listId={ownedLink?.listId ?? null}
+        listName={ownedListQuery.data?.name ?? null}
         sourceTitle={selectedSourceTitle}
         consequenceLine={consequenceLine}
+        beforeLine={
+          ownedLink
+            ? `Reading List #${ownedLink.listId} · ${ownedListQuery.data?.issue_count ?? 'saved'} issues`
+            : 'No Reading List has been created for this source yet.'
+        }
+        afterLine={
+          summary
+            ? `${summary.final_adopted_count} issues in the owned Reading List · read status, ratings and manual entries preserved`
+            : null
+        }
         onClose={() => setConfirmOpen(false)}
         onConfirm={confirmCommit}
       />
