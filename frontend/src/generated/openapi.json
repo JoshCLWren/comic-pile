@@ -9290,6 +9290,46 @@
         ],
         "type": "object"
       },
+      "MigrateToIssuesRequest": {
+        "description": "Schema for migrating thread to issue tracking.",
+        "properties": {
+          "last_issue_read": {
+            "description": "The issue number user just finished reading (e.g., 15)",
+            "minimum": 0.0,
+            "title": "Last Issue Read",
+            "type": "integer"
+          },
+          "total_issues": {
+            "description": "Total number of issues in the series (e.g., 25)",
+            "minimum": 1.0,
+            "title": "Total Issues",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "last_issue_read",
+          "total_issues"
+        ],
+        "title": "MigrateToIssuesRequest",
+        "type": "object"
+      },
+      "MigrateToIssuesSimpleRequest": {
+        "description": "Schema for simplified migration (infers total_issues from current state).",
+        "properties": {
+          "issue_number": {
+            "description": "The issue number user just read (e.g., '5', 'Annual 1')",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Issue Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
+        ],
+        "title": "MigrateToIssuesSimpleRequest",
+        "type": "object"
+      },
       "MinimalReleaseResponse": {
         "description": "Minimal release data for reconciliation endpoints (no body).",
         "properties": {
@@ -16718,6 +16758,123 @@
         ],
         "type": "object"
       },
+      "SetCurrentIssueRequest": {
+        "additionalProperties": false,
+        "description": "Schema for atomically correcting the current issue in an active thread.",
+        "properties": {
+          "issue_number": {
+            "description": "Target issue number to set as current",
+            "minLength": 1,
+            "title": "Issue Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
+        ],
+        "title": "SetCurrentIssueRequest",
+        "type": "object"
+      },
+      "SetCurrentIssueResponse": {
+        "description": "Response after atomically correcting the current issue.",
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
+          },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
+          "issues_remaining": {
+            "title": "Issues Remaining",
+            "type": "integer"
+          },
+          "next_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Issue Id"
+          },
+          "next_issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Issue Number"
+          },
+          "queue_position": {
+            "title": "Queue Position",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Progress"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_issues": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Issues"
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position"
+        ],
+        "title": "SetCurrentIssueResponse",
+        "type": "object"
+      },
       "SourceSyncFailure": {
         "properties": {
           "error": {
@@ -22251,6 +22408,183 @@
         "summary": "Documentation-only operation for the single-thread blocking explanation.",
         "tags": [
           "dependencies"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:migrateToIssues": {
+      "post": {
+        "description": "Migrate an old-style thread to issue tracking (#1..total_issues).\n\nMarks #1 through ``last_issue_read`` as read and updates the thread's\nissue-tracking fields.\n\nRaises:\n    HTTPException: 404 if thread not found, 400 if validation fails.",
+        "operationId": "migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateToIssuesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Migrate Thread To Issues",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:migrateToIssuesSimple": {
+      "post": {
+        "description": "Simplified migration inferred from the issue just rated.\n\nMarks earlier issues read, keeps the rated issue unread so the rating\nflow can mark it read, and points ``next_unread_issue_id`` at it.\n\nRaises:\n    HTTPException: 404 if thread not found, 400 if validation fails.",
+        "operationId": "migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateToIssuesSimpleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Migrate Thread To Issues Simple",
+        "tags": [
+          "threads",
+          "threads"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:setCurrentIssue": {
+      "post": {
+        "description": "Atomically correct the current issue for an active thread.\n\nMarks every earlier issue read, ensures the target is unread, updates\n``thread.next_unread_issue_id``, and pins ``session.pending_issue_id``.\n\nRaises:\n    HTTPException: 404 if thread or issue not found, 400 for validation errors.",
+        "operationId": "set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCurrentIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Current Issue",
+        "tags": [
+          "threads",
+          "threads"
         ]
       }
     },
