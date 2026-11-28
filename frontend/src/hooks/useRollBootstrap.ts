@@ -21,6 +21,16 @@ export function resolveBrowserTimezone(): string | undefined {
   }
 }
 
+export interface UseRollBootstrapResult {
+  data: RollBootstrapResponse | null
+  isPending: boolean
+  isError: boolean
+  error: unknown
+  failureCount: number
+  isRetrying: boolean
+  refetch: () => Promise<RollBootstrapResponse>
+}
+
 const EMPTY_SESSION_MODE: SessionMode = {
   active_bandwidth: null,
   predicted_bandwidth: null,
@@ -45,7 +55,7 @@ const EMPTY_SESSION_MODE: SessionMode = {
  * the page's local view model so feature modules share one snapshot; it is
  * never sent to, or fetched from, a bootstrap/session endpoint.
  */
-export function useRollBootstrap() {
+export function useRollBootstrap(): UseRollBootstrapResult {
   const { pending } = useRollPendingSelection()
   const die = useRollDieState()
   const snoozedIds = useMemo(() => readRollSnoozes(), [])
@@ -166,8 +176,8 @@ export function useRollBootstrap() {
       eligible.refetch(),
       cards.refetch(),
     ])
-    return queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()) ?? data
-  }, [die, eligible, cards, data])
+    return queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()) ?? composed
+  }, [die, eligible, cards, composed])
 
   return {
     data,
