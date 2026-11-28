@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { skipToken, useQuery } from '@tanstack/react-query'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
 import type { RateResponsePayload, SessionMode } from '../types'
@@ -60,7 +60,7 @@ const EMPTY_SESSION_MODE: SessionMode = {
  * never sent to, or fetched from, a bootstrap/session endpoint.
  */
 export function useRollBootstrap(): UseRollBootstrapResult {
-  const { pending } = useRollPendingSelection()
+  const { pending: storedPending, clear: clearPending } = useRollPendingSelection()
   const die = useRollDieState()
   // Read the cookie on every render: a committed snooze/unsnooze changes it
   // without remounting the Roll page, and the composed pool/chips must follow
@@ -70,6 +70,26 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   const issueIds = useMemo(() => eligible.data?.issue_ids ?? [], [eligible.data])
   const threadIds = useMemo(() => eligible.data?.thread_ids ?? [], [eligible.data])
   const cards = useRollIssueCards(issueIds)
+  const pendingCardIds = useMemo(
+    () => storedPending != null && !issueIds.includes(storedPending.issue_id)
+      ? [storedPending.issue_id]
+      : [],
+    [storedPending, issueIds],
+  )
+  const pendingCards = useRollIssueCards(pendingCardIds)
+  const pendingCard = storedPending != null
+    ? cards.data?.items.find((card) => card.issue_id === storedPending.issue_id)
+      ?? pendingCards.data?.items.find((card) => card.issue_id === storedPending.issue_id)
+    : undefined
+  const pending = storedPending != null && pendingCard != null && pendingCard.status !== 'read'
+    ? storedPending
+    : null
+
+  useEffect(() => {
+    if (storedPending == null || !pendingCards.isSuccess) return
+    const card = pendingCards.data?.items.find((item) => item.issue_id === storedPending.issue_id)
+    if (card == null || card.status === 'read') clearPending(storedPending.issue_id)
+  }, [storedPending, pendingCards.isSuccess, pendingCards.data, clearPending])
 
   // A pending issue missing from the eligible pool may be continuity-blocked.
   // Only then is one bounded, owner-scoped issue-edge GET needed; a cold idle
@@ -92,7 +112,10 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   // replaces the snoozed section of the retired aggregate; no per-series fetch.
   const snoozedSummaries = useQuery({
     queryKey: queryKeys.roll.snoozedSummaries(),
-    queryFn: () => threadsApi.list({ page_size: 200 }),
+    queryFn: () => threadsApi.list({
+      ids: snoozedIds.join(','),
+      page_size: snoozedIds.length,
+    }),
     enabled: snoozedIds.length > 0,
     staleTime: 60_000,
   })
@@ -107,32 +130,45 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     queryKey: queryKeys.readingGraph.status(),
     queryFn: skipToken,
   })
+  const reconciled = useQuery<RollBootstrapResponse | null>({
+    queryKey: queryKeys.roll.bootstrap(),
+    queryFn: skipToken,
+  })
 
   const composed = useMemo<RollBootstrapResponse>(() => {
-    const cardByIssue = new Map((cards.data?.items ?? []).map((card) => [card.issue_id, card]))
+    const cardByIssue = new Map([
+      ...(cards.data?.items ?? []),
+      ...(pendingCards.data?.items ?? []),
+    ].map((card) => [card.issue_id, card]))
     const rollPool: RollBootstrapThread[] = issueIds.flatMap((issueId, index) => {
       const card = cardByIssue.get(issueId)
       if (!card) return []
       return [{
         id: card.thread_id ?? threadIds[index] ?? 0,
         title: card.thread_title,
-        format: '',
+        format: card.thread_format ?? '',
         issue_id: card.issue_id,
         issue_number: card.display_issue_number ?? card.issue_number,
-        tags: [],
-        route_labels: [],
-        overflow_routes_count: 0,
+        tags: card.tags ?? [],
+        route_labels: card.route_labels?.slice(0, 3) ?? [],
+        overflow_routes_count: card.overflow_routes_count ?? 0,
       }]
     })
 
     const activeThread: RollBootstrapThread | null = pending
-      ? rollPool.find((thread) => thread.issue_id === pending.issue_id) ?? {
-          id: pending.thread_id,
-          title: '',
-          format: '',
-          issue_id: pending.issue_id,
-          issue_number: pending.issue_number ?? null,
-        }
+      ? rollPool.find((thread) => thread.issue_id === pending.issue_id) ?? (() => {
+          const card = cardByIssue.get(pending.issue_id)
+          return card ? {
+            id: card.thread_id,
+            title: card.thread_title,
+            format: card.thread_format ?? '',
+            issue_id: card.issue_id,
+            issue_number: card.display_issue_number ?? card.issue_number,
+            tags: card.tags ?? [],
+            route_labels: card.route_labels?.slice(0, 3) ?? [],
+            overflow_routes_count: card.overflow_routes_count ?? 0,
+          } : null
+        })()
       : null
 
     const snoozedThreads: RollBootstrapThread[] = snoozedIds.flatMap((id) => {
@@ -174,6 +210,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     }
   }, [
     cards.data,
+    pendingCards.data,
     pending,
     snoozedIds,
     issueIds,
@@ -188,11 +225,12 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   ])
 
   // Callers still handle a null view while the scoped queries settle.
-  const data: RollBootstrapResponse | null = composed
+  const data: RollBootstrapResponse | null = reconciled.data ?? composed
   const isPending = die.isPending
     || eligible.isPending
     || (issueIds.length > 0 && cards.isPending)
-  const recoveryIsPending = blockedIssueId != null && (
+    || (pendingCardIds.length > 0 && pendingCards.isPending)
+  const recoveryIsPending = reconciled.data == null && blockedIssueId != null && (
     dependencyQuery.isPending
     || (prerequisiteIds.length > 0 && prerequisiteCards.isPending)
   )
@@ -232,8 +270,8 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   return {
     data,
     isPending,
-    isError: die.isError || eligible.isError || cards.isError,
-    error: die.error ?? eligible.error ?? cards.error ?? null,
+    isError: die.isError || eligible.isError || cards.isError || pendingCards.isError,
+    error: die.error ?? eligible.error ?? cards.error ?? pendingCards.error ?? null,
     failureCount: 0,
     isRetrying: false,
     recoveryIsPending,

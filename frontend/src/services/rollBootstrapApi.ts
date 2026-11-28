@@ -74,7 +74,9 @@ export function createRollBootstrapApi(client: HttpClient) {
         })).items[0]
         if (pendingCard) cardByIssue.set(pendingCard.issue_id, pendingCard)
       }
-      const pending = storedPending != null && pendingCard?.status !== 'read' ? storedPending : null
+      const pending = storedPending != null && pendingCard != null && pendingCard.status !== 'read'
+        ? storedPending
+        : null
       const blockedIssueId = pending != null && !issueIds.includes(pending.issue_id)
         ? pending.issue_id
         : null
