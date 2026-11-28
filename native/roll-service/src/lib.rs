@@ -507,7 +507,7 @@ impl IntoResponse for ApiError {
 /// (Python parity: `ScheduledSyncResponse{truncated: true}`) instead of a 503.
 fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
     match path {
-        "/api/v1/cron/release-sync" => {
+        "/api/v2/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
         // Series import fetches the volume and its full roster, then adopts
@@ -701,14 +701,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
-        .route(
-            "/api/v1/roll/events/{event_id}/recommendation-explanation",
-            get(recommendation_explanation::get_recommendation_explanation),
-        )
-        .route(
-            "/api/roll/events/{event_id}/recommendation-explanation",
-            get(recommendation_explanation::get_recommendation_explanation),
-        )
+        // #5958: the v1 and bare /api recommendation-explanation aliases are
+        // retired. The explanation is part of the scoped v2 Roll resources.
         .route(
             "/api/v2/roll/switch-prerequisite",
             post(roll_switch_prerequisite::switch_prerequisite),
@@ -761,8 +755,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
         )
+        // #5958: the scheduled release-sync cron now targets a canonical v2
+        // path. The handler, CRON_SECRET gate and wire response are unchanged.
         .route(
-            "/api/v1/cron/release-sync",
+            "/api/v2/cron/release-sync",
             get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
@@ -1493,7 +1489,7 @@ mod tests {
     #[test]
     fn release_sync_ingress_deadline_exceeds_handler_budget() {
         let default = Duration::from_secs(3);
-        let bound = request_timeout_for("/api/v1/cron/release-sync", default);
+        let bound = request_timeout_for("/api/v2/cron/release-sync", default);
         assert!(
             bound > reading_plan_sync::CRON_MAX_DURATION,
             "the release-sync ingress deadline must be reachable after the handler budget"
