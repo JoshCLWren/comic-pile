@@ -590,3 +590,107 @@ async fn duplicate_commit_replays_one_snapshot_and_undo_is_stale_guarded() {
         vec![ISSUE_A, ISSUE_B, ISSUE_MANUAL]
     );
 }
+
+#[tokio::test]
+async fn duplicate_undo_replays_the_original_restoration() {
+    let fixture = setup().await;
+    let token = updated_at(&fixture.state, TARGET_LIST_ID).await;
+    let (status, commit) = post(
+        &fixture,
+        &format!("/api/v2/reading-lists/{TARGET_LIST_ID}/replacements"),
+        json!({
+            "source_list_id": SOURCE_LIST_ID,
+            "content_hash": HASH,
+            "revision_sha": REVISION,
+            "expected_updated_at": token,
+            "issue_ids": [ISSUE_A, ISSUE_B, ISSUE_MANUAL],
+            "idempotency_key": "undo-retry-commit",
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{status} {commit}");
+
+    let undo_body = json!({
+        "expected_updated_at": commit["updated_at"],
+        "snapshot_id": commit["snapshot_id"],
+        "idempotency_key": "undo-retry-key",
+    });
+    let uri = format!("/api/v2/reading-lists/{TARGET_LIST_ID}/replacements:undo");
+    let (first_status, first) = post(&fixture, &uri, undo_body.clone()).await;
+    assert_eq!(first_status, StatusCode::OK, "{first_status} {first}");
+    assert_eq!(first["replayed"], false, "{first}");
+
+    // The first Undo advanced `updated_at`, but an exact retry must replay the
+    // stored Undo response rather than fail the stale-version guard.
+    let (second_status, second) = post(&fixture, &uri, undo_body).await;
+    assert_eq!(second_status, StatusCode::OK, "{second_status} {second}");
+    for field in ["snapshot_id", "updated_at", "restored_issue_ids"] {
+        assert_eq!(second[field], first[field], "{field}: {first} vs {second}");
+    }
+    assert_eq!(second["replayed"], true, "{second}");
+    assert_eq!(
+        list_ids(&fixture.state, TARGET_LIST_ID).await,
+        vec![ISSUE_MANUAL, ISSUE_B],
+        "a replayed Undo must not write the list again"
+    );
+
+    let conn = fixture.state.pool.get().await.unwrap();
+    let undone: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_replacement_snapshots
+             WHERE list_id = $1 AND undone_at IS NOT NULL",
+            &[&TARGET_LIST_ID],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(undone, 1, "{undone}");
+}
+
+#[tokio::test]
+async fn sibling_commit_writers_racing_one_key_replay_one_snapshot() {
+    let fixture = setup().await;
+    let token = updated_at(&fixture.state, TARGET_LIST_ID).await;
+    let body = json!({
+        "source_list_id": SOURCE_LIST_ID,
+        "content_hash": HASH,
+        "revision_sha": REVISION,
+        "expected_updated_at": token,
+        "issue_ids": [ISSUE_A, ISSUE_B, ISSUE_MANUAL],
+        "idempotency_key": "concurrent-sibling-writers",
+    });
+    let uri = format!("/api/v2/reading-lists/{TARGET_LIST_ID}/replacements");
+
+    // The user-row lock must serialize sibling writers and let the loser replay
+    // the winner's snapshot instead of racing a second replacement.
+    let (first, second) = tokio::join!(
+        post(&fixture, &uri, body.clone()),
+        post(&fixture, &uri, body)
+    );
+    assert_eq!(first.0, StatusCode::OK, "{} {}", first.0, first.1);
+    assert_eq!(second.0, StatusCode::OK, "{} {}", second.0, second.1);
+    assert_eq!(
+        first.1["snapshot_id"], second.1["snapshot_id"],
+        "both sibling writers must observe one snapshot: {:?} {:?}",
+        first.1, second.1
+    );
+    assert!(
+        first.1["replayed"] == true || second.1["replayed"] == true,
+        "exactly one sibling must replay the committed snapshot"
+    );
+
+    let conn = fixture.state.pool.get().await.unwrap();
+    let snapshots: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_replacement_snapshots WHERE list_id = $1",
+            &[&TARGET_LIST_ID],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(snapshots, 1, "{snapshots}");
+    assert_eq!(
+        list_ids(&fixture.state, TARGET_LIST_ID).await,
+        vec![ISSUE_A, ISSUE_B, ISSUE_MANUAL]
+    );
+}

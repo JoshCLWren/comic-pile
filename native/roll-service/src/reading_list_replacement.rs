@@ -1068,10 +1068,9 @@ pub async fn undo_replacement(
             .await
             .map_err(db::query_error)?;
         if let Some(row) = replay {
-            let mut response: ReplacementUndoResponse = serde_json::from_str(
-                &row.get::<_, String>(0),
-            )
-            .map_err(|error| ApiError::Internal(error.to_string()))?;
+            let mut response: ReplacementUndoResponse =
+                serde_json::from_str(&row.get::<_, String>(0))
+                    .map_err(|error| ApiError::Internal(error.to_string()))?;
             response.replayed = true;
             tx.commit().await.map_err(db::query_error)?;
             return Ok(Json(response));
