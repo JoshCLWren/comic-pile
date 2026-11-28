@@ -506,8 +506,8 @@ pub async fn get_thread_detail(
     // The canonical ranking is NULL for completed / non-queued threads, which
     // are reached through the owning read but are not in the active queue.
     // Keep their stored position rather than panicking on a NULL -> i32 read.
-    let computed_position: Option<i32> = row.get(17);
-    let stored_position: i32 = row.get(4);
+    let computed_position: Option<i32> = row.get(16);
+    let stored_position: i32 = row.get(3);
     let queue_position = computed_position.unwrap_or(stored_position);
     // Position and visibility must use the same Option E answer as Queue. A
     // stale stored flag must not make a strictly blocked frontier look readable
@@ -515,29 +515,28 @@ pub async fn get_thread_detail(
     let is_blocked = if option_e {
         !candidates.contains(&thread_id)
     } else {
-        row.get(10)
+        row.get(9)
     };
 
     Ok(Json(ThreadDetailResponse {
         id: row.get(0),
         title: row.get(1),
-        format: normalize_format(row.get(2)),
-        issues_remaining: row.get(3),
+        issues_remaining: row.get(2),
         queue_position,
-        status: row.get(5),
-        last_rating: row.get(6),
-        last_activity_at: row.get(7),
-        notes: row.get(8),
-        is_test: row.get(9),
+        status: row.get(4),
+        last_rating: row.get(5),
+        last_activity_at: row.get(6),
+        notes: row.get(7),
+        is_test: row.get(8),
         is_blocked,
         blocking_reasons: Vec::new(),
-        created_at: row.get(11),
-        total_issues: row.get(12),
-        reading_progress: row.get(13),
-        next_unread_issue_id: row.get(14),
-        next_unread_issue_number: row.get::<_, Option<String>>(16),
+        created_at: row.get(10),
+        total_issues: row.get(11),
+        reading_progress: row.get(12),
+        next_unread_issue_id: row.get(13),
+        next_unread_issue_number: row.get::<_, Option<String>>(15),
         manual_creator_credits: row
-            .get::<_, Option<String>>(15)
+            .get::<_, Option<String>>(14)
             .as_deref()
             .and_then(|s| serde_json::from_str::<Value>(s).ok())
             .unwrap_or_else(|| Value::Array(Vec::new())),
@@ -788,7 +787,6 @@ struct MappingHealthRow {
 struct PageRow {
     id: i32,
     title: String,
-    format: String,
     issues_remaining: i32,
     queue_position: i32,
     stored_position: i32,
@@ -846,7 +844,6 @@ impl PageRow {
         Ok(ThreadListItem {
             id: self.id,
             title: self.title.clone(),
-            format: normalize_format(&self.format),
             issues_remaining,
             queue_position: self.queue_position,
             status: self.status,
@@ -891,15 +888,6 @@ fn mapping_status(health: &MappingHealthRow, total_issues: Option<i32>) -> &'sta
         "partial"
     } else {
         "unresolved"
-    }
-}
-
-fn normalize_format(format: &str) -> String {
-    let trimmed = format.trim();
-    match trimmed.to_ascii_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => trimmed.to_string(),
     }
 }
 
@@ -1179,7 +1167,7 @@ ranked AS (
     WHERE t.status = 'active'
 ),
 page AS (
-    SELECT t.id, t.next_unread_issue_id, t.title, t.format, t.queue_position, t.status,
+    SELECT t.id, t.next_unread_issue_id, t.title, t.queue_position, t.status,
            t.last_activity_at, t.is_blocked, t.total_issues, t.notes, t.created_at,
            t.manual_creator_credits,
            r.display_position,
@@ -1312,7 +1300,6 @@ SELECT json_build_object(
         SELECT json_agg(json_build_object(
             'id', p.id,
             'title', p.title,
-            'format', p.format,
             'issues_remaining', p.issues_remaining,
             'queue_position', p.display_position,
             'stored_position', p.queue_position,
@@ -1669,7 +1656,6 @@ mod tests {
         let detail = ThreadDetailResponse {
             id: 7,
             title: "Saga".to_string(),
-            format: "Comic".to_string(),
             issues_remaining: 3,
             queue_position: 1,
             status: "active".to_string(),
@@ -1690,7 +1676,6 @@ mod tests {
         for field in [
             "id",
             "title",
-            "format",
             "issues_remaining",
             "queue_position",
             "status",
@@ -1772,13 +1757,6 @@ mod tests {
             .expect("metadata")
             .volume
             .is_none());
-    }
-
-    #[test]
-    fn format_normalization_matches_the_python_vocabulary() {
-        assert_eq!(normalize_format("comics"), "Comic");
-        assert_eq!(normalize_format(" digital "), "Digital");
-        assert_eq!(normalize_format("Manga"), "Manga");
     }
 
     #[test]
