@@ -564,9 +564,7 @@ fn decode_reference(raw: &str) -> Result<String, IngestError> {
         "gt" => Ok(">".to_string()),
         "quot" => Ok("\"".to_string()),
         "apos" => Ok("'".to_string()),
-        numeric if numeric.starts_with("#x") || numeric.starts_with("#X") => {
-            decode_numeric_reference(&numeric[2..], 16)
-        }
+        numeric if numeric.starts_with("#x") => decode_numeric_reference(&numeric[1..], 16),
         numeric if numeric.starts_with('#') => decode_numeric_reference(&numeric[1..], 10),
         other => Err(IngestError::new(format!(
             "unresolved XML entity: &{other};"
@@ -1478,7 +1476,15 @@ mod tests {
     fn rejects_unresolved_entities_and_oversized_persisted_fields() {
         let unknown_entity = b"<ReadingList><Name>Batman &bogus;</Name><Books /></ReadingList>";
         assert!(parse_cbl_bytes(unknown_entity, "DC/Entity.cbl").is_err());
-        for reference in ["&#0;", "&#x0;", "&#+1;", "&#x+1;", "&#xD800;", "&#x110000;"] {
+        for reference in [
+            "&#0;",
+            "&#x0;",
+            "&#+1;",
+            "&#x+1;",
+            "&#xD800;",
+            "&#x110000;",
+            "&#X41;",
+        ] {
             let xml = format!("<ReadingList><Name>Bad {reference}</Name><Books /></ReadingList>");
             assert!(
                 parse_cbl_bytes(xml.as_bytes(), "DC/Entity.cbl").is_err(),
