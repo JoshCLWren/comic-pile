@@ -313,10 +313,10 @@ WITH primaries AS (
             OR strpos(lower(coalesce(e.issue_number, '')), lower($5)) > 0
             OR strpos(lower(e.type), lower($5)) > 0)
        AND ($6::text IS NULL OR strpos(lower(coalesce(t.title, '')), lower($6)) > 0)
-       AND ($8::date IS NULL
-            OR e.timestamp >= ((($8::date)::timestamp) AT TIME ZONE $10))
-       AND ($9::date IS NULL
-            OR e.timestamp < (((($9::date + 1)::timestamp)) AT TIME ZONE $10))
+       AND ($8::text::date IS NULL
+            OR e.timestamp >= ((($8::text::date)::timestamp) AT TIME ZONE $10))
+       AND ($9::text::date IS NULL
+            OR e.timestamp < (((($9::text::date + 1)::timestamp)) AT TIME ZONE $10))
        AND NOT (
              e.type = 'roll'
          AND e.context->>'roll_offer_key' IS NOT NULL
