@@ -175,6 +175,7 @@ async function installCblRoutes(page: Page, commits: CommitPayload[]): Promise<v
     }),
   )
   await page.route(/\/api\/v2\/reading-lists\/42\/adoption-commits(?:\?|$)/, async (route) => {
+    // SAFETY: Playwright route body is the JSON sent by the app under test.
     const payload = route.request().postDataJSON() as CommitPayload
     commits.push(payload)
     const version = commits.length

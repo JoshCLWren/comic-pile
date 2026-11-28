@@ -307,24 +307,36 @@ export function createCblSourcesApi(client: HttpClient) {
     const seriesOverrides = [...overridesByPosition.entries()]
       .sort(([left], [right]) => left - right)
       .map(([cbl_position, decision]) => ({ cbl_position, decision }))
-    const entryDecisions = Object.fromEntries(
+    const entryDecisions: Record<string, string> = Object.fromEntries(
       Object.entries(choices.entry_decisions).map(([entryId, include]) => [
         entryId,
         include ? 'include' : 'exclude',
       ]),
-    ) as Record<string, string>
-    return {
+    )
+    const payload: {
+      entry_decisions: Record<string, string>
+      series_decisions: never[]
+      series_overrides: Array<{ cbl_position: number; decision: 'include' | 'exclude' }>
+      overlap_decisions: CBLOverlapDecision[]
+      content_hash: string
+      revision_sha: string
+      list_version?: number | null
+      idempotency_key?: string | null
+    } = {
       entry_decisions: entryDecisions,
       series_decisions: [],
       series_overrides: seriesOverrides,
       overlap_decisions: choices.overlap_decisions ?? [],
       content_hash: preview.source.content_hash,
       revision_sha: preview.source.revision_sha,
-      ...(choices.list_version === undefined || choices.list_version === null
-        ? {}
-        : { list_version: choices.list_version }),
-      ...(choices.idempotency_key ? { idempotency_key: choices.idempotency_key } : {}),
     }
+    if (choices.list_version !== undefined && choices.list_version !== null) {
+      payload.list_version = choices.list_version
+    }
+    if (choices.idempotency_key) {
+      payload.idempotency_key = choices.idempotency_key
+    }
+    return payload
   }
   return {
     discover: (query: string, limit = 25) =>

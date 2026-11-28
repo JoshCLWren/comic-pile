@@ -253,6 +253,7 @@ describe('cblSourcesApi.commitSource', () => {
       series_decisions: { bprd: false },
       entry_decisions: { '101': true },
     })
+    // SAFETY: test double captures the JSON body passed to the mock client.
     const payload = client.post.mock.calls[0][1] as {
       entry_decisions: Record<string, string>
       series_overrides: Array<{ cbl_position: number; decision: string }>
@@ -270,7 +271,11 @@ describe('cblSourcesApi.commitSource', () => {
       series_decisions: {},
       entry_decisions: {},
     })
-    const payload = client.post.mock.calls[0][1] as Record<string, unknown>
+    // SAFETY: test double captures the JSON body passed to the mock client.
+    const payload = client.post.mock.calls[0][1] as {
+      list_version?: number
+      idempotency_key?: string
+    }
     expect(payload).not.toHaveProperty('list_version')
     expect(payload).not.toHaveProperty('idempotency_key')
   })
