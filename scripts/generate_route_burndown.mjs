@@ -745,8 +745,8 @@ function _renderFullSurface(inventory, routes, v2Operations) {
   };
 }
 
-function _renderInventory(inventory, routes, fragments) {
-  const sourceInventory = _mergeRouteFragments(inventory, fragments);
+function _renderInventory(inventory, routes, fragments, nativeOperations = null) {
+  const sourceInventory = _mergeRouteFragments(inventory, fragments, nativeOperations);
   const budgetSources = loadJson(SQL_BUDGET_SOURCES_PATH);
   const budgetEntries = budgetSources.operations;
   if (!Array.isArray(budgetEntries)) {
