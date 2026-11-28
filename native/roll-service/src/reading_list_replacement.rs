@@ -954,6 +954,16 @@ pub async fn commit_replacement(
         .await
         .map_err(db::query_error)?
         .get(0);
+    let mut after_state = state_json(
+        &list_row.get::<_, String>(0),
+        list_row.get::<_, Option<String>>(1).as_deref(),
+        &list_row.get::<_, String>(2),
+        &after_entries,
+        &new_overlaps,
+    );
+    if let JsonValue::Object(map) = &mut after_state {
+        map.insert("updated_at".to_string(), json!(updated_at));
+    }
 
     let response = ReplacementCommitResponse {
         target_list_id: list_id,
@@ -1083,8 +1093,6 @@ pub async fn undo_replacement(
             .await
             .map_err(db::query_error)?;
         if let Some(row) = replay {
-            let entries = entries_from_state(&JsonValue::Null).unwrap_or_default();
-            let _ = entries;
             let before: JsonValue = serde_json::from_str(&row.get::<_, String>(1))
                 .map_err(|error| ApiError::Internal(error.to_string()))?;
             let ids = before
