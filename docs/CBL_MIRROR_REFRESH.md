@@ -21,17 +21,20 @@ starts ComicVine background hydration.
 Check out the intended mirror revision locally and record its exact SHA:
 
 ```bash
+COMIC_PILE_ROOT="/path/to/comic-pile"
 cd /path/to/CBL-ReadingLists
 git fetch origin
 git checkout <pinned-sha>
+test -z "$(git status --porcelain)" || { echo "mirror worktree must be clean" >&2; exit 1; }
 MIRROR_SHA="$(git rev-parse HEAD)"
 MIRROR_ROOT="$(pwd)"
 ```
 
-Run the database-free inventory:
+Run the database-free inventory from the Comic Pile workspace, not from the mirror:
 
 ```bash
-cargo run --locked -p comicpile-roll-service --bin cbl_ingest -- \
+cargo run --locked --manifest-path "$COMIC_PILE_ROOT/Cargo.toml" \
+  -p comicpile-roll-service --bin cbl_ingest -- \
   "$MIRROR_ROOT" --revision-sha "$MIRROR_SHA" --inventory-only
 ```
 

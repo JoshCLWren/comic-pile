@@ -1218,12 +1218,7 @@ async fn delete_entries<C: GenericClient>(client: &C, list_ids: &[i32]) -> Resul
     Ok(())
 }
 
-/// Insert missing (provider, entity type, external id) identities in batches.
-async fn upsert_identities<C: GenericClient>(
-    client: &C,
-    pending: &[&CBLList],
-    synced_at: DateTime<Utc>,
-) -> Result<usize, IngestError> {
+fn pending_identity_ids(pending: &[&CBLList]) -> (Vec<String>, Vec<String>) {
     let mut series_ids = BTreeSet::new();
     let mut issue_ids = BTreeSet::new();
     for list in pending {
@@ -1236,8 +1231,48 @@ async fn upsert_identities<C: GenericClient>(
             }
         }
     }
-    let series_ids: Vec<String> = series_ids.into_iter().collect();
-    let issue_ids: Vec<String> = issue_ids.into_iter().collect();
+    (
+        series_ids.into_iter().collect(),
+        issue_ids.into_iter().collect(),
+    )
+}
+
+/// Count identities that an applying run would create without writing any rows.
+async fn count_missing_identities<C: GenericClient>(
+    client: &C,
+    pending: &[&CBLList],
+) -> Result<usize, IngestError> {
+    let (series_ids, issue_ids) = pending_identity_ids(pending);
+    let mut missing = 0usize;
+    for (entity_type, ids) in [("series", &series_ids), ("issue", &issue_ids)] {
+        for chunk in ids.chunks(BATCH_SIZE) {
+            let row = client
+                .query_one(
+                    "SELECT COUNT(*) FROM external_identities
+                     WHERE provider = 'comicvine' AND entity_type = $1::text
+                       AND external_id = ANY($2::text[])",
+                    &[&entity_type, &chunk],
+                )
+                .await
+                .map_err(|error| {
+                    IngestError::new(format!("cbl identity dry-run lookup failed: {error}"))
+                })?;
+            let existing = row.get::<_, i64>(0);
+            let existing = usize::try_from(existing)
+                .map_err(|_| IngestError::new("invalid CBL identity count"))?;
+            missing = missing.saturating_add(chunk.len().saturating_sub(existing));
+        }
+    }
+    Ok(missing)
+}
+
+/// Insert missing (provider, entity type, external id) identities in batches.
+async fn upsert_identities<C: GenericClient>(
+    client: &C,
+    pending: &[&CBLList],
+    synced_at: DateTime<Utc>,
+) -> Result<usize, IngestError> {
+    let (series_ids, issue_ids) = pending_identity_ids(pending);
     let mut inserted = 0;
     for (entity_type, ids) in [("series", &series_ids), ("issue", &issue_ids)] {
         for chunk in ids.chunks(BATCH_SIZE) {
@@ -1271,20 +1306,7 @@ async fn resolve_identity_ids<C: GenericClient>(
     client: &C,
     pending: &[&CBLList],
 ) -> Result<IdentityIds, IngestError> {
-    let mut series_ids = BTreeSet::new();
-    let mut issue_ids = BTreeSet::new();
-    for list in pending {
-        for book in &list.books {
-            if let Some(id) = &book.comicvine_series_id {
-                series_ids.insert(id.clone());
-            }
-            if let Some(id) = &book.comicvine_issue_id {
-                issue_ids.insert(id.clone());
-            }
-        }
-    }
-    let series_ids: Vec<String> = series_ids.into_iter().collect();
-    let issue_ids: Vec<String> = issue_ids.into_iter().collect();
+    let (series_ids, issue_ids) = pending_identity_ids(pending);
     let mut result = IdentityIds::default();
     for chunk in series_ids.chunks(BATCH_SIZE) {
         let rows = client

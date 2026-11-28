@@ -35,6 +35,10 @@ fn print_payload(payload: &serde_json::Value) {
     );
 }
 
+fn command_succeeded(failures: &[CBLParseFailure]) -> bool {
+    failures.is_empty()
+}
+
 async fn run() -> Result<(bool, serde_json::Value), String> {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     let options = parse_options(&arguments).map_err(|error| error.to_string())?;
@@ -73,7 +77,7 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
 
     if options.inventory_only {
         return Ok((
-            failures.is_empty(),
+            command_succeeded(&failures),
             serde_json::json!({
                 "mode": mode,
                 "repository": repository,
@@ -95,8 +99,15 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
         .map(|failure| failure.source_path.clone())
         .collect();
     let summary = if options.dry_run {
-        sync_cbl_lists(
-            &client,
+        let transaction = client
+            .build_transaction()
+            .read_only(true)
+            .isolation_level(tokio_postgres::IsolationLevel::RepeatableRead)
+            .start()
+            .await
+            .map_err(|error| format!("dry-run transaction start failed: {error}"))?;
+        let summary = sync_cbl_lists(
+            &transaction,
             &repository,
             &revision,
             &parsed_lists,
@@ -106,7 +117,12 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
             synced_at,
         )
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| format!("dry-run transaction commit failed: {error}"))?;
+        summary
     } else {
         let transaction = client
             .transaction()
@@ -148,7 +164,22 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
             object.insert(key.clone(), value.clone());
         }
     }
-    Ok((true, payload))
+    Ok((command_succeeded(&failures), payload))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_failures_make_every_command_mode_fail() {
+        let failure = CBLParseFailure {
+            source_path: "DC/Broken.cbl".to_string(),
+            message: "malformed".to_string(),
+        };
+        assert!(!command_succeeded(&[failure]));
+        assert!(command_succeeded(&[]));
+    }
 }
 
 #[tokio::main]
