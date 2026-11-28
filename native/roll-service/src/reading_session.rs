@@ -816,7 +816,6 @@ async fn checkpoint(
         let mut capture = serde_json::Map::new();
         for key in [
             "title",
-            "format",
             "issues_remaining",
             "last_rating",
             "last_activity_at",

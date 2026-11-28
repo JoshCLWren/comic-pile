@@ -8,7 +8,6 @@ use serde::Serialize;
 pub struct DemoRoll {
     pub thread_id: i32,
     pub title: &'static str,
-    pub format: &'static str,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub die_size: i32,
@@ -29,7 +28,6 @@ pub async fn read_demo_roll() -> Json<DemoRoll> {
     Json(DemoRoll {
         thread_id: 999,
         title: "Sample: The Dark Knight Returns (Demo)",
-        format: "comic",
         issues_remaining: 3,
         queue_position: 1,
         die_size: 6,

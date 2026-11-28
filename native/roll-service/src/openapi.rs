@@ -969,7 +969,6 @@ mod tests {
             &[
                 "id",
                 "title",
-                "format",
                 "issues_remaining",
                 "queue_position",
                 "last_rolled_result",

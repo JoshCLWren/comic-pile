@@ -1550,15 +1550,8 @@ pub async fn undo_to_snapshot(
                                         );
                                         internal()
                                     })?;
-                                    let format: String = thread_row.try_get(2).map_err(|e| {
-                                        tracing::debug!(
-                                            error_kind = crate::error_kind(&e),
-                                            "preserved underlying error before mapping"
-                                        );
-                                        internal()
-                                    })?;
                                     let stored_remaining: i32 =
-                                        thread_row.try_get(3).map_err(|e| {
+                                        thread_row.try_get(2).map_err(|e| {
                                             tracing::debug!(
                                                 error_kind = crate::error_kind(&e),
                                                 "preserved underlying error before mapping"
@@ -1566,7 +1559,7 @@ pub async fn undo_to_snapshot(
                                             internal()
                                         })?;
                                     let total_issues: Option<i32> =
-                                        thread_row.try_get(4).map_err(|e| {
+                                        thread_row.try_get(3).map_err(|e| {
                                             tracing::debug!(
                                                 error_kind = crate::error_kind(&e),
                                                 "preserved underlying error before mapping"
@@ -1574,7 +1567,7 @@ pub async fn undo_to_snapshot(
                                             internal()
                                         })?;
                                     let reading_progress: Option<String> =
-                                        thread_row.try_get(5).map_err(|e| {
+                                        thread_row.try_get(4).map_err(|e| {
                                             tracing::debug!(
                                                 error_kind = crate::error_kind(&e),
                                                 "preserved underlying error before mapping"
@@ -1582,7 +1575,7 @@ pub async fn undo_to_snapshot(
                                             internal()
                                         })?;
                                     let next_unread_issue_id: Option<i32> =
-                                        thread_row.try_get(6).map_err(|e| {
+                                        thread_row.try_get(5).map_err(|e| {
                                             tracing::debug!(
                                                 error_kind = crate::error_kind(&e),
                                                 "preserved underlying error before mapping"
@@ -1725,7 +1718,6 @@ pub async fn undo_to_snapshot(
                                     Some(SessionActiveThread {
                                         id: thread_id_value,
                                         title,
-                                        format: normalize_format(&format),
                                         issues_remaining,
                                         queue_position,
                                         last_rolled_result: safe_result,
