@@ -30,6 +30,7 @@ vi.mock('../services/api-cbl-sources', () => ({
     preview: vi.fn(),
     plan: vi.fn(),
     commit: vi.fn(),
+    commitSource: vi.fn(),
     commitNew: vi.fn(),
     compare: vi.fn(),
     findByComicvineIssue: vi.fn(),

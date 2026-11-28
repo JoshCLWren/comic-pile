@@ -54,7 +54,7 @@ import {
   type CblSeriesGroup,
 } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
-import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
+import { displayCblRepository, displayCblSourceTitle } from '../utils/cblSourceDisplay'
 import { catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
@@ -938,43 +938,13 @@ export default function CblBrowserPage() {
           className="space-y-4 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4"
           aria-labelledby="cbl-preview-heading"
         >
-          <div>
-            <h2
-              id="cbl-preview-heading"
-              className="text-base font-black text-[var(--theme-text-primary)]"
-            >
-              {selectedSourceTitle}
-            </h2>
-            {preview && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs font-bold text-[var(--theme-text-muted)]">
-                  Source details
-                </summary>
-                <div className="mt-2 space-y-1 text-xs text-[var(--theme-text-dim)]">
-                  {displayCblSourcePath(preview.source.source_path) && (
-                    <p>{displayCblSourcePath(preview.source.source_path)}</p>
-                  )}
-                  {displayCblRepository(preview.source.source_repository) && (
-                    <p>{displayCblRepository(preview.source.source_repository)}</p>
-                  )}
-                  <p>Revision {preview.source.revision_sha.slice(0, 8)}</p>
-                </div>
-              </details>
-            )}
-          </div>
-
-          {ownedLink && (
-            <p
-              data-testid="cbl-owned-list"
-              role="status"
-              className="rounded-lg border border-[var(--theme-border)] px-3 py-2 text-xs text-[var(--theme-text-muted)]"
-            >
-              <span className="font-bold text-[var(--theme-text-primary)]">Previously added.</span>{' '}
-              Linked to Reading List #{ownedLink.listId}
-              {ownedListQuery.data?.name ? ` · ${ownedListQuery.data.name}` : ''}. Your saved
-              customize choices were restored from that list.
-            </p>
-          )}
+          <CblSourceHeading
+            title={selectedSourceTitle}
+            preview={preview}
+            ownedListId={ownedLink?.listId ?? null}
+            ownedListName={ownedListQuery.data?.name ?? null}
+            choicesRestored={restoredLinkRef.current !== null}
+          />
 
           {isPreviewing && !preview && (
             <p role="status" className="text-sm text-[var(--theme-text-muted)]">
@@ -988,42 +958,7 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          {preview && summary && (
-            <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
-              <div>
-                <dt className="text-[var(--theme-text-dim)]">
-                  {preview.total_positions === 1 ? 'Entry' : 'Entries'}
-                </dt>
-                <dd className="font-bold text-[var(--theme-text-primary)]">
-                  {preview.total_positions}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[var(--theme-text-dim)]">Already in ComicPile</dt>
-                <dd className="font-bold text-[var(--theme-text-primary)]">
-                  {summary.reused_existing_count}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[var(--theme-text-dim)]">Will be added</dt>
-                <dd className="font-bold text-[var(--theme-text-primary)]">
-                  {summary.missing_would_create_count}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[var(--theme-text-dim)]">Need attention</dt>
-                <dd className="font-bold text-[var(--theme-text-primary)]">
-                  {needsAttentionCount}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[var(--theme-text-dim)]">Final list size</dt>
-                <dd className="font-bold text-[var(--theme-text-primary)]">
-                  {summary.final_adopted_count}
-                </dd>
-              </div>
-            </dl>
-          )}
+          {preview && summary && <CblAdoptionSummary preview={preview} needsAttentionCount={needsAttentionCount} />}
 
           {needsAttentionCount > 0 && (
             <p className="text-xs text-[var(--theme-warning)]">
