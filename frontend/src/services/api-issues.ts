@@ -377,26 +377,8 @@ export function createIssuesApi(client: HttpClient) {
      * @param totalIssues - Total number of issues in the series
      * @returns The updated thread object
      */
-    migrateThread: async (threadId: number, lastIssueRead: number, totalIssues: number): Promise<Thread> => {
-      return client.post(`/v1/threads/${threadId}:migrateToIssues`, {
-        last_issue_read: lastIssueRead,
-        total_issues: totalIssues,
-      })
-    },
-
-  /**
-   * Atomically set the current issue for an active thread
-   * Marks all issues before the target as read, sets target as unread,
-   * and updates the session's pending issue.
-   * @param threadId - The thread to correct
-   * @param issueNumber - The target issue number to set as current
-   * @returns Response with corrected thread and issue info
-   */
-    setCurrentIssue: async (threadId: number, issueNumber: string): Promise<SetCurrentIssueResponse> => {
-      return client.post(`/v1/threads/${threadId}:setCurrentIssue`, {
-        issue_number: issueNumber,
-      })
-    },
+    migrateThread: async (threadId: number, lastIssueRead: number, totalIssues: number): Promise<Thread> =>
+      migrateThreadToIssues(client, threadId, lastIssueRead, totalIssues),
 
     /**
      * Get reader-context for an issue

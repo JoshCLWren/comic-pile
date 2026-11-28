@@ -1,4 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
+import { migrateThreadToIssues } from './api-issues'
 import type { Thread } from '../types'
 
 export interface MigrateThreadRequest {
@@ -14,11 +15,13 @@ export interface MigrateThreadRequest {
  */
 export function createMigrationApi(client: HttpClient) {
   return {
-    migrateThread: (threadId: number, data: MigrateThreadRequest) =>
-      client.post<Thread, MigrateThreadRequest>(
-        `/v1/threads/${threadId}:migrateToIssues`,
-        data,
-      ),
+    /**
+     * Compose the retired one-shot migration from scoped v2 issue resources.
+     * The request shape and returned Thread contract stay unchanged for the
+     * migration dialog, dependency builder and Roll flows (issue #5707).
+     */
+    migrateThread: (threadId: number, data: MigrateThreadRequest): Promise<Thread> =>
+      migrateThreadToIssues(client, threadId, data.last_issue_read, data.total_issues),
   }
 }
 
