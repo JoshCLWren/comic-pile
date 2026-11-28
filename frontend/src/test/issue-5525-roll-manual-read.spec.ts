@@ -22,7 +22,12 @@ test.describe('P0 #5525 Roll manual selection', () => {
     page.on('request', (request) => {
       if (request.method() === 'GET') return
       const path = new URL(request.url()).pathname
-      if (path.includes('/roll/offers') || path.includes('/issues/')) {
+      // POST /api/v2/issues/cards is a bulk read used to hydrate the direct
+      // issue panel, not a pending-offer or issue-mutation write.
+      if (
+        (path.includes('/roll/offers') || path.includes('/issues/')) &&
+        !path.includes('/issues/cards')
+      ) {
         rollRequests.push(`${request.method()} ${path}`)
       }
     })

@@ -92,7 +92,7 @@ test.describe('P0 #5525: Queue manual issue reading', () => {
 
     await page.goto('/queue', { waitUntil: 'domcontentloaded' })
     await waitForQueueReady(page)
-    await page.route(`**/api/v1/threads/${thread.id}/issues?*`, async (route) =>
+    await page.route(`**/api/v2/threads/${thread.id}/issues*`, async (route) =>
       route.fulfill({ status: 503, json: { detail: 'Issue lookup temporarily unavailable' } }),
     )
     const row = page.locator(SELECTORS.threadList.threadItem).filter({ hasText: title })
