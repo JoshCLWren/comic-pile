@@ -160,7 +160,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
 
   const hasNextPage = !!query.hasNextPage
   const nextPageToken: TToken | null = hasNextPage && lastPage
-    ? (resolveNextToken(lastPage, pages, query.data?.pageParams ?? []) ?? null)
+    ? (resolveNextToken(lastPage, pages, (query.data as InfiniteData<TPage, TToken> | undefined)?.pageParams ?? []) ?? null)
     : null
 
   const fetchNextPage = useCallback(async (): Promise<void> => {
@@ -179,7 +179,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
 
   return {
     items,
-    data: query.data,
+    data: query.data as InfiniteData<TPage, TToken> | undefined,
     pages,
     isInitialLoading,
     isNextPageLoading,
