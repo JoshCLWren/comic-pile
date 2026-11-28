@@ -743,16 +743,9 @@ fn has_complete_provider_payload(metadata: &Value) -> bool {
 }
 
 fn cached_has_credits(metadata: &Value) -> bool {
-    let creator = metadata
-        .get("creator_credits")
-        .and_then(|v| v.as_array())
-        .is_some_and(|v| !v.is_empty());
-    let raw = metadata
-        .get("raw_provider_payload")
-        .and_then(|v| v.get("person_credits"))
-        .and_then(|v| v.as_array())
-        .is_some_and(|v| !v.is_empty());
-    creator || raw
+    retained_creator_credits(metadata)
+        .as_array()
+        .is_some_and(|credits| !credits.is_empty())
 }
 
 /// Creator credits actually usable from a metadata object: the normalized
@@ -772,7 +765,7 @@ fn retained_creator_credits(metadata: &Value) -> Value {
         .and_then(|raw| raw.get("person_credits"))
         .and_then(Value::as_array)
         .filter(|credits| !credits.is_empty())
-        .map(|credits| compact_refs(&Value::Array(credits.clone())))
+        .and_then(|credits| compact_creator_credits(&Value::Array(credits.clone())).ok())
         .unwrap_or_else(|| Value::Array(Vec::new()))
 }
 
