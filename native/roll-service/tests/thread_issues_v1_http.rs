@@ -481,7 +481,11 @@ async fn create_issues_validation_isolation_and_not_found() {
             StatusCode::BAD_REQUEST,
             Some("Issue range cannot be empty"),
         ),
-        (json!({"issue_range": 5}), StatusCode::UNPROCESSABLE_ENTITY, None),
+        (
+            json!({"issue_range": 5}),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            None,
+        ),
         (
             json!({"issue_range": "1", "insert_after_issue_id": 0}),
             StatusCode::NOT_FOUND,
@@ -622,7 +626,11 @@ async fn reorder_rewrites_positions_and_validates() {
             Some("issue_ids must contain every issue in the thread exactly once"),
         ),
         (json!({}), StatusCode::UNPROCESSABLE_ENTITY, None),
-        (json!({"issue_ids": ["x"]}), StatusCode::UNPROCESSABLE_ENTITY, None),
+        (
+            json!({"issue_ids": ["x"]}),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            None,
+        ),
     ] {
         let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(bad))).await;
         assert_eq!(status, expected_status, "{body}");
