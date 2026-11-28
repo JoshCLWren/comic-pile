@@ -1459,6 +1459,63 @@ mod tests {
     }
 
     #[test]
+    fn rejects_wrong_roots_and_misplaced_books() {
+        for xml in [
+            b"<NotCBL><Book Series=\"X\" Number=\"1\" /></NotCBL>".as_slice(),
+            b"<ReadingList><Book Series=\"X\" Number=\"1\" /></ReadingList>".as_slice(),
+            b"<ReadingList><Wrapper><Books><Book Series=\"X\" Number=\"1\" /></Books></Wrapper></ReadingList>"
+                .as_slice(),
+        ] {
+            assert!(parse_cbl_bytes(xml, "DC/Broken.cbl").is_err(), "{xml:?}");
+        }
+    }
+
+    #[test]
+    fn rejects_unresolved_entities_and_oversized_persisted_fields() {
+        let unknown_entity = b"<ReadingList><Name>Batman &bogus;</Name><Books /></ReadingList>";
+        assert!(parse_cbl_bytes(unknown_entity, "DC/Entity.cbl").is_err());
+
+        let long_series = "X".repeat(MAX_SERIES_NAME_LENGTH + 1);
+        let long_series_xml = format!(
+            "<ReadingList><Books><Book Series=\"{long_series}\" Number=\"1\" /></Books></ReadingList>"
+        );
+        assert!(parse_cbl_bytes(long_series_xml.as_bytes(), "DC/Series.cbl").is_err());
+
+        let long_number = "1".repeat(MAX_ISSUE_NUMBER_LENGTH + 1);
+        let long_number_xml = format!(
+            "<ReadingList><Books><Book Series=\"X\" Number=\"{long_number}\" /></Books></ReadingList>"
+        );
+        assert!(parse_cbl_bytes(long_number_xml.as_bytes(), "DC/Number.cbl").is_err());
+
+        let long_id = "9".repeat(MAX_EXTERNAL_ID_LENGTH + 1);
+        let long_id_xml = format!(
+            "<ReadingList><Books><Book Series=\"X\" Number=\"1\"><Database Name=\"ComicVine\" Issue=\"{long_id}\" /></Book></Books></ReadingList>"
+        );
+        assert!(parse_cbl_bytes(long_id_xml.as_bytes(), "DC/Identity.cbl").is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_files_before_reading_them_fully() {
+        let root = std::env::temp_dir().join(format!(
+            "comicpile-cbl-oversize-{}-{}",
+            std::process::id(),
+            chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .unwrap_or_default()
+        ));
+        fs::create_dir_all(&root).expect("temp directory");
+        let path = root.join("Large.cbl");
+        let file = fs::File::create(&path).expect("large file");
+        file.set_len(MAX_CBL_FILE_BYTES + 1)
+            .expect("sparse oversized file");
+        drop(file);
+
+        let error = parse_cbl_file(&path, &root).expect_err("size rejection");
+        assert!(error.to_string().contains("byte limit"));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn malformed_documents_and_missing_required_fields_fail_with_path_context() {
         let broken = b"<ReadingList><Books><Book Series=\"X\"></Books></ReadingList>";
         assert!(parse_cbl_bytes(broken, "DC/Broken.cbl").is_err());
