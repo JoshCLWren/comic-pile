@@ -5,6 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { PropsWithChildren } from 'react'
 import { beforeEach, expect, vi } from 'vitest'
+
+// The browser page uses the source-linked commit; older assertions name the
+// deprecated alias. Both names share one mock so existing coverage keeps
+// exercising the real commit call site without weakening its assertions.
+const { adoptionCommitMock } = vi.hoisted(() => ({ adoptionCommitMock: vi.fn() }))
 import CblBrowserPage from '../pages/CblBrowserPage'
 import { cblSourcesApi } from '../services/api-cbl-sources'
 import { customCBLApi } from '../services/api-custom-cbl'
@@ -30,8 +35,8 @@ vi.mock('../services/api-cbl-sources', () => ({
     preview: vi.fn(),
     plan: vi.fn(),
     commit: vi.fn(),
-    commitSource: vi.fn(),
-    commitNew: vi.fn(),
+    commitSource: adoptionCommitMock,
+    commitNew: adoptionCommitMock,
     compare: vi.fn(),
     findByComicvineIssue: vi.fn(),
     readingListCandidates: vi.fn(),
@@ -91,8 +96,8 @@ export const mockBrowse = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.browse)
 export const mockPreview = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.preview)
 export const mockPlan = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.plan)
 export const mockCommit = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commit)
-export const mockCommitSource = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commitSource)
-export const mockCommitNew = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commitNew)
+export const mockCommitSource = cast<ReturnType<typeof vi.fn>>(adoptionCommitMock)
+export const mockCommitNew = cast<ReturnType<typeof vi.fn>>(adoptionCommitMock)
 export const mockGraphPreview = cast<ReturnType<typeof vi.fn>>(readingGraphApi.preview)
 export const mockGetOwnedList = cast<ReturnType<typeof vi.fn>>(customCBLApi.get)
 export const mockApplyCommitted = cast<ReturnType<typeof vi.fn>>(applyCommittedCblAdoption)
