@@ -214,3 +214,50 @@ describe('cblSourcesApi.commitNew', () => {
     )
   })
 })
+
+describe('cblSourcesApi.commitSource', () => {
+  beforeEach(() => {
+    client.post.mockReset()
+    client.post.mockResolvedValue({
+      id: 78,
+      name: 'Dark Horse/BPRD/Plague of Frogs.cbl',
+      custom_cbl_list_id: 900,
+      list_version: 4,
+      reused_positions: [1],
+      created_positions: [2],
+      excluded_positions: [3],
+      unresolved_positions: [4],
+    })
+  })
+
+  it('sends the owned list version and idempotency key for a source-linked update', async () => {
+    const result = await cblSourcesApi.commitSource(42, reviewedPreview, {
+      series_decisions: {},
+      entry_decisions: {},
+      list_version: 3,
+      idempotency_key: '42:attempt-1',
+    })
+
+    expect(result.custom_cbl_list_id).toBe(900)
+    expect(client.post).toHaveBeenCalledWith(
+      '/v2/reading-lists/42/adoption-commits',
+      expect.objectContaining({
+        list_version: 3,
+        idempotency_key: '42:attempt-1',
+        content_hash: 'hash-42',
+        revision_sha: 'abcdef1234567890',
+      }),
+      { timeout: 60_000 },
+    )
+  })
+
+  it('omits the guards on a first add so the server creates the canonical list', async () => {
+    await cblSourcesApi.commitSource(42, reviewedPreview, {
+      series_decisions: {},
+      entry_decisions: {},
+    })
+    const payload = client.post.mock.calls[0][1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('list_version')
+    expect(payload).not.toHaveProperty('idempotency_key')
+  })
+})
