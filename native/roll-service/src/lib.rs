@@ -1556,7 +1556,10 @@ mod tests {
             ("PUT", "/api/v1/threads/21/test-backdate"),
             ("PUT", "/api/v1/reading-order-groups/7/order"),
             ("POST", "/api/v1/catalog/series-mappings/preview"),
-            ("POST", "/api/v1/continuity-plans/7/reading-orders/project-preview"),
+            (
+                "POST",
+                "/api/v1/continuity-plans/7/reading-orders/project-preview",
+            ),
         ];
         for (method, uri) in retired {
             let response = router(Arc::clone(&state))

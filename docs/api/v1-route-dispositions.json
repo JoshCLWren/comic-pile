@@ -69,12 +69,13 @@
       "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
     },
     {
-      "issue": 5958,
+      "issue": 4595,
       "method": "GET",
       "path": "/api/roll/events/{event_id}/recommendation-explanation",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 4549,
@@ -141,28 +142,31 @@
       "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
     },
     {
-      "issue": 5958,
+      "issue": 5716,
       "method": "POST",
       "path": "/api/v1/catalog/series-mappings/preview",
       "status": "not-live",
       "disposition": "POST /api/v2/seriesMappings:preview",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4835,
       "method": "GET",
       "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
       "status": "not-live",
       "disposition": "GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5715,
       "method": "POST",
       "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
       "status": "not-live",
       "disposition": "POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5958,
@@ -170,7 +174,8 @@
       "path": "/api/v1/continuity-rules/",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5958,
@@ -178,7 +183,8 @@
       "path": "/api/v1/continuity-rules/",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5958,
@@ -186,7 +192,8 @@
       "path": "/api/v1/continuity-rules/{rule_id}",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5958,
@@ -194,7 +201,8 @@
       "path": "/api/v1/continuity-rules/{rule_id}",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5958,
@@ -202,47 +210,53 @@
       "path": "/api/v1/continuity-rules/{rule_id}",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4836,
       "method": "GET",
       "path": "/api/v1/creators",
       "status": "not-live",
       "disposition": "GET /api/v2/creators",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4836,
       "method": "GET",
       "path": "/api/v1/creators/",
       "status": "not-live",
       "disposition": "GET /api/v2/creators",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4836,
       "method": "GET",
       "path": "/api/v1/creators/summaries",
       "status": "not-live",
       "disposition": "GET /api/v2/creators/summaries",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5276,
       "method": "GET",
       "path": "/api/v1/cron/release-sync",
       "status": "not-live",
       "disposition": "GET /api/v2/cron/release-sync",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4623,
       "method": "GET",
       "path": "/api/v1/issues/{issue_id}/comicvine",
       "status": "not-live",
       "disposition": "GET /api/v2/issues/{issue_id}/comicvine",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5958,
@@ -250,7 +264,8 @@
       "path": "/api/v1/metrics",
       "status": "not-live",
       "disposition": "retain-infrastructure (bare /api/metrics only)",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5710,
@@ -261,52 +276,58 @@
       "notes": "Collection CRUD and /detail are absent from the live Rust router; memberships, ranges and /order remain with #5711."
     },
     {
-      "issue": 5958,
+      "issue": 5711,
       "method": "PUT",
       "path": "/api/v1/reading-order-groups/{group_id}/order",
       "status": "not-live",
       "disposition": "v2 membership/range resources",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4849,
       "method": "PUT",
       "path": "/api/v1/releases/",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4849,
       "method": "GET",
       "path": "/api/v1/releases/source",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4849,
       "method": "GET",
       "path": "/api/v1/releases/{release_id}",
       "status": "not-live",
       "disposition": "GET /api/v2/releases",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4849,
       "method": "POST",
       "path": "/api/v1/releases/{release_id}/retract",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 4595,
       "method": "GET",
       "path": "/api/v1/roll/events/{event_id}/recommendation-explanation",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 4341,
@@ -333,76 +354,85 @@
       "notes": "Legacy sessions list/detail are absent from the live Rust router; #4343 separately owns the retired sessions/current/ route."
     },
     {
-      "issue": 5958,
+      "issue": 5702,
       "method": "POST",
       "path": "/api/v1/threads/",
       "status": "not-live",
       "disposition": "POST /api/v2/threads",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5705,
       "method": "POST",
       "path": "/api/v1/threads/check-duplicates",
       "status": "not-live",
       "disposition": "POST /api/v2/threads:checkDuplicates",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5711,
       "method": "POST",
       "path": "/api/v1/threads/groups:batch",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5703,
       "method": "DELETE",
       "path": "/api/v1/threads/{thread_id}",
       "status": "not-live",
       "disposition": "DELETE /api/v2/threads/{thread_id}",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5703,
       "method": "PUT",
       "path": "/api/v1/threads/{thread_id}",
       "status": "not-live",
       "disposition": "PATCH /api/v2/threads/{thread_id}",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5706,
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues",
       "status": "not-live",
       "disposition": "GET|POST /api/v2/threads/{thread_id}/issues",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5706,
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/issues",
       "status": "not-live",
       "disposition": "GET|POST /api/v2/threads/{thread_id}/issues",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5706,
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues/creators",
       "status": "not-live",
       "disposition": "GET /api/v2/threads/{thread_id}/creatorCredits",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5706,
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/issues:reorder",
       "status": "not-live",
       "disposition": "PUT /api/v2/threads/{thread_id}/issue-order",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5958,
@@ -410,15 +440,17 @@
       "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 5958,
+      "issue": 5715,
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/reading-orders",
       "status": "not-live",
       "disposition": "GET /api/v2/threads/{thread_id}/readingOrders",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5525,
@@ -429,12 +461,13 @@
       "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
     },
     {
-      "issue": 5958,
+      "issue": 4335,
       "method": "PUT",
       "path": "/api/v1/threads/{thread_id}/test-backdate",
       "status": "not-live",
       "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains."
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
       "issue": 5707,

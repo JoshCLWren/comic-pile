@@ -255,7 +255,7 @@ Non-browser / helper / infrastructure surface included in the census:
 - #4549: `POST /api/auth/refresh` — not-live; POST /api/v2/auth/refresh.
 - #4549: `POST /api/auth/register` — not-live; POST /api/v2/auth/register.
 - #4549: `POST /api/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
-- #5958: `GET /api/roll/events/{event_id}/recommendation-explanation` — not-live; retire-without-replacement.
+- #4595: `GET /api/roll/events/{event_id}/recommendation-explanation` — not-live; retire-without-replacement.
 - #4549: `GET /api/v1/auth/csrf` — not-live; GET /api/v2/auth/csrf.
 - #4549: `POST /api/v1/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
 - #4549: `POST /api/v1/auth/login` — not-live; POST /api/v2/auth/login.
@@ -264,43 +264,43 @@ Non-browser / helper / infrastructure surface included in the census:
 - #4549: `POST /api/v1/auth/refresh` — not-live; POST /api/v2/auth/refresh.
 - #4549: `POST /api/v1/auth/register` — not-live; POST /api/v2/auth/register.
 - #4549: `POST /api/v1/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
-- #5958: `POST /api/v1/catalog/series-mappings/preview` — not-live; POST /api/v2/seriesMappings:preview.
-- #5958: `GET /api/v1/comicvine/series/{comicvine_volume_id}/import-status` — not-live; GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status.
-- #5958: `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview` — not-live; POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection.
+- #5716: `POST /api/v1/catalog/series-mappings/preview` — not-live; POST /api/v2/seriesMappings:preview.
+- #4835: `GET /api/v1/comicvine/series/{comicvine_volume_id}/import-status` — not-live; GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status.
+- #5715: `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview` — not-live; POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection.
 - #5958: `GET /api/v1/continuity-rules/` — not-live; retire-without-replacement.
 - #5958: `POST /api/v1/continuity-rules/` — not-live; retire-without-replacement.
 - #5958: `DELETE /api/v1/continuity-rules/{rule_id}` — not-live; retire-without-replacement.
 - #5958: `GET /api/v1/continuity-rules/{rule_id}` — not-live; retire-without-replacement.
 - #5958: `PUT /api/v1/continuity-rules/{rule_id}` — not-live; retire-without-replacement.
-- #5958: `GET /api/v1/creators` — not-live; GET /api/v2/creators.
-- #5958: `GET /api/v1/creators/` — not-live; GET /api/v2/creators.
-- #5958: `GET /api/v1/creators/summaries` — not-live; GET /api/v2/creators/summaries.
-- #5958: `GET /api/v1/cron/release-sync` — not-live; GET /api/v2/cron/release-sync.
-- #5958: `GET /api/v1/issues/{issue_id}/comicvine` — not-live; GET /api/v2/issues/{issue_id}/comicvine.
+- #4836: `GET /api/v1/creators` — not-live; GET /api/v2/creators.
+- #4836: `GET /api/v1/creators/` — not-live; GET /api/v2/creators.
+- #4836: `GET /api/v1/creators/summaries` — not-live; GET /api/v2/creators/summaries.
+- #5276: `GET /api/v1/cron/release-sync` — not-live; GET /api/v2/cron/release-sync.
+- #4623: `GET /api/v1/issues/{issue_id}/comicvine` — not-live; GET /api/v2/issues/{issue_id}/comicvine.
 - #5958: `GET /api/v1/metrics` — not-live; retain-infrastructure (bare /api/metrics only).
 - #5710: `GET /api/v1/reading-order-groups/` — not-live; GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}].
-- #5958: `PUT /api/v1/reading-order-groups/{group_id}/order` — not-live; v2 membership/range resources.
-- #5958: `PUT /api/v1/releases/` — not-live; retire-without-replacement.
-- #5958: `GET /api/v1/releases/source` — not-live; retire-without-replacement.
-- #5958: `GET /api/v1/releases/{release_id}` — not-live; GET /api/v2/releases.
-- #5958: `POST /api/v1/releases/{release_id}/retract` — not-live; retire-without-replacement.
-- #5958: `GET /api/v1/roll/events/{event_id}/recommendation-explanation` — not-live; retire-without-replacement.
+- #5711: `PUT /api/v1/reading-order-groups/{group_id}/order` — not-live; v2 membership/range resources.
+- #4849: `PUT /api/v1/releases/` — not-live; retire-without-replacement.
+- #4849: `GET /api/v1/releases/source` — not-live; retire-without-replacement.
+- #4849: `GET /api/v1/releases/{release_id}` — not-live; GET /api/v2/releases.
+- #4849: `POST /api/v1/releases/{release_id}/retract` — not-live; retire-without-replacement.
+- #4595: `GET /api/v1/roll/events/{event_id}/recommendation-explanation` — not-live; retire-without-replacement.
 - #4341: `POST /api/v1/roll/override` — not-live; retire-without-replacement.
 - #4343: `GET /api/v1/sessions/current/` — not-live; retire-without-replacement.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
-- #5958: `POST /api/v1/threads/` — not-live; POST /api/v2/threads.
-- #5958: `POST /api/v1/threads/check-duplicates` — not-live; POST /api/v2/threads:checkDuplicates.
-- #5958: `POST /api/v1/threads/groups:batch` — not-live; retire-without-replacement.
-- #5958: `DELETE /api/v1/threads/{thread_id}` — not-live; DELETE /api/v2/threads/{thread_id}.
-- #5958: `PUT /api/v1/threads/{thread_id}` — not-live; PATCH /api/v2/threads/{thread_id}.
-- #5958: `GET /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
-- #5958: `POST /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
-- #5958: `GET /api/v1/threads/{thread_id}/issues/creators` — not-live; GET /api/v2/threads/{thread_id}/creatorCredits.
-- #5958: `POST /api/v1/threads/{thread_id}/issues:reorder` — not-live; PUT /api/v2/threads/{thread_id}/issue-order.
+- #5702: `POST /api/v1/threads/` — not-live; POST /api/v2/threads.
+- #5705: `POST /api/v1/threads/check-duplicates` — not-live; POST /api/v2/threads:checkDuplicates.
+- #5711: `POST /api/v1/threads/groups:batch` — not-live; retire-without-replacement.
+- #5703: `DELETE /api/v1/threads/{thread_id}` — not-live; DELETE /api/v2/threads/{thread_id}.
+- #5703: `PUT /api/v1/threads/{thread_id}` — not-live; PATCH /api/v2/threads/{thread_id}.
+- #5706: `GET /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
+- #5706: `POST /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
+- #5706: `GET /api/v1/threads/{thread_id}/issues/creators` — not-live; GET /api/v2/threads/{thread_id}/creatorCredits.
+- #5706: `POST /api/v1/threads/{thread_id}/issues:reorder` — not-live; PUT /api/v2/threads/{thread_id}/issue-order.
 - #5958: `GET /api/v1/threads/{thread_id}/issues:validateOrder` — not-live; retire-without-replacement.
-- #5958: `GET /api/v1/threads/{thread_id}/reading-orders` — not-live; GET /api/v2/threads/{thread_id}/readingOrders.
+- #5715: `GET /api/v1/threads/{thread_id}/reading-orders` — not-live; GET /api/v2/threads/{thread_id}/readingOrders.
 - #5525: `POST /api/v1/threads/{thread_id}/set-pending` — live-p0-evidence; retire-without-replacement.
-- #5958: `PUT /api/v1/threads/{thread_id}/test-backdate` — not-live; retire-without-replacement.
+- #4335: `PUT /api/v1/threads/{thread_id}/test-backdate` — not-live; retire-without-replacement.
 - #5707: `POST /api/v1/threads/{thread_id}:setCurrentIssue` — not-live; POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}.
 
 ## Baseline debt requiring an owner issue
