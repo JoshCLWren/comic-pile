@@ -27,6 +27,7 @@
     {"method":"POST","path":"/api/v2/continuity-plans/release-sources/","owning_issue":4838,"reason":"non-lowercamelcase-segment,trailing-slash"},
     {"method":"DELETE","path":"/api/v2/continuity-plans/release-sources/{source_id}","owning_issue":4838,"reason":"non-lowercamelcase-segment"},
     {"method":"PATCH","path":"/api/v2/continuity-plans/release-sources/{source_id}","owning_issue":4838,"reason":"non-lowercamelcase-segment"},
+    {"method":"POST","path":"/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection","owning_issue":5715,"reason":"action-shaped-subpath"},
     {"method":"GET","path":"/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}","owning_issue":4836,"reason":"non-lowercamelcase-segment"},
     {"method":"GET","path":"/api/v2/creators/{creator_key}/metrics/role-stats/{role}","owning_issue":4836,"reason":"non-lowercamelcase-segment"},
     {"method":"GET","path":"/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}","owning_issue":4836,"reason":"non-lowercamelcase-segment"},

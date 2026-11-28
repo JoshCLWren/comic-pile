@@ -25,7 +25,7 @@
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
     "first_party_call_sites": 924,
-    "stale_aip_baseline_entries": 4
+    "stale_aip_baseline_entries": 5
   },
   "routes": [
     {
