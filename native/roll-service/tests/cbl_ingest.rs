@@ -1,11 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! DB-backed regressions for the offline CBL mirror ingester (#4171).
 //!
-//! Every case runs against the canonical disposable PostgreSQL schema and uses
-//! a real local mirror fixture. They prove that a pinned revision is applied
+//! Database-backed cases use the canonical disposable PostgreSQL schema and
+//! real local mirror fixtures. They prove that a pinned revision is applied
 //! idempotently, that a changed revision only replaces changed lists, that
-//! removed and temporarily malformed sources are deactivated rather than
-//! deleted, and that a legacy repository alias is reconciled in place.
+//! removed paths are deactivated without deleting their rows, that malformed
+//! paths retain their last-known-good lists, and that a legacy repository alias
+//! is reconciled in place.
 
 use chrono::{TimeZone, Utc};
 use comicpile_roll_service::{
