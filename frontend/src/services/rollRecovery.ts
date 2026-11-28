@@ -54,7 +54,9 @@ export function buildRollRecovery({
   graph,
   originalTitle,
 }: RollRecoveryInputs): RollRecoveryInfo | null {
-  if (dependencies == null || dependencies.issue_id !== pending.issue_id) return null
+  const edges = dependencies != null && dependencies.issue_id === pending.issue_id
+    ? dependencies.incoming
+    : []
 
   const eligible = new Set(eligibleIssueIds)
   const cards = new Map(prerequisiteCards.map((card) => [card.issue_id, card]))
@@ -62,7 +64,7 @@ export function buildRollRecovery({
   const readablePrerequisites: RollRecoveryPrerequisite[] = []
   const seen = new Set<number>()
 
-  for (const edge of dependencies.incoming) {
+  for (const edge of edges) {
     const sourceId = edge.source_issue_id
     const card = cards.get(sourceId)
     // A read prerequisite is satisfied; it must not keep the roll blocked.

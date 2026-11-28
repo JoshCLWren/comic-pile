@@ -103,6 +103,23 @@ describe('protected Roll mutation recovery', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
+  it('reads recovery from the signed-in reader browser partition', async () => {
+    mockedProtectedApi.bootstrap.mockResolvedValueOnce(bootstrapState(7))
+    const retry = vi.fn().mockResolvedValue('committed')
+
+    await expect(recoverProtectedRollMutation(
+      7,
+      retry,
+      vi.fn(),
+      protectedRollMutationApi,
+      42,
+    )).resolves.toEqual({ status: 'retried', value: 'committed' })
+
+    // Without the id the API would read the anonymous partition and report a
+    // stale pending pointer, so recovery could never retry the mutation.
+    expect(mockedProtectedApi.bootstrap).toHaveBeenCalledWith(42)
+  })
+
   it('surfaces a definitive recovery failure without replaying', async () => {
     const revoked = { response: { status: 403, data: { detail: 'Revoked token' } } }
     mockedProtectedApi.bootstrap.mockRejectedValueOnce(revoked)
