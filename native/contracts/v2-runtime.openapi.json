@@ -6762,6 +6762,54 @@
         ]
       }
     },
+    "/api/v2/roll/override": {
+      "post": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 manual pick.",
+        "operationId": "override_roll_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollOverrideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Manually selected thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Thread is skipped or on snooze backoff"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread was not found for this reader"
+          },
+          "422": {
+            "description": "Thread is blocked or not active"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/roll/reset": {
       "post": {
         "tags": [
@@ -9659,25 +9707,6 @@
               "null"
             ]
           },
-          "list_version": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Expected version of the owner-scoped canonical Reading List. When the\nsource has already been adopted, a mismatch fails the whole commit with\n409 before any row is written, so a stale preview cannot overwrite a\nlist the reader edited after the preview was produced."
-          },
-          "overlap_decisions": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Value",
-                "description": "Overlap decisions the reader approved for this commit. Persisted with\nthe selections so a reopened list restores them instead of silently\ndropping the reader's choices."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "revision_sha": {
             "type": "string"
           },
@@ -9722,11 +9751,6 @@
               "format": "int32"
             }
           },
-          "custom_cbl_list_id": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Stable ID of the canonical owner-scoped `custom_cbl_lists` row. This is\nthe identity a caller must use to reopen or update the adopted list;\nthe legacy Plan `id` above is kept only for the compatibility projection."
-          },
           "excluded_positions": {
             "type": "array",
             "items": {
@@ -9741,11 +9765,6 @@
           "lanes": {
             "type": "object"
           },
-          "list_version": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Version of the canonical list after this commit. Pass it back as\n`list_version` to guard a later commit against a stale list."
-          },
           "name": {
             "type": "string"
           },
@@ -9755,34 +9774,12 @@
           "ordering_mode": {
             "type": "string"
           },
-          "overlap_decisions": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Value",
-                "description": "Committed overlap decisions, restored on reopen."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "reused_positions": {
             "type": "array",
             "items": {
               "type": "integer",
               "format": "int32"
             }
-          },
-          "selections": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Value",
-                "description": "Committed checkbox decisions, restored on reopen."
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "unresolved_positions": {
             "type": "array",
@@ -17616,34 +17613,11 @@
             "type": "integer",
             "format": "int32"
           },
-          "list_version": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Monotonic version of this owner-scoped list. A later CBL adoption must\necho it as `list_version` or be rejected as stale (#4022)."
-          },
           "mode": {
             "type": "string"
           },
           "name": {
             "type": "string"
-          },
-          "overlap_decisions": {
-            "description": "Overlap decisions approved with the last commit."
-          },
-          "selections": {
-            "description": "Committed checkbox decisions restored when the CBL editor reopens."
-          },
-          "source_content_hash": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_revision_sha": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "updated_at": {
             "type": "string"
@@ -19671,6 +19645,20 @@
           }
         }
       },
+      "RollOverrideRequest": {
+        "type": "object",
+        "description": "Request body for the manual override.",
+        "required": [
+          "thread_id"
+        ],
+        "properties": {
+          "thread_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Reader-selected thread identifier."
+          }
+        }
+      },
       "RollPrerequisiteSwitchRequest": {
         "type": "object",
         "description": "Request body for accepting one current recovery recommendation.",
@@ -19723,6 +19711,102 @@
           },
           "target_thread_title": {
             "type": "string"
+          }
+        }
+      },
+      "RollResponse": {
+        "type": "object",
+        "description": "Response body: the Python `RollResponse` projection for a manual pick.",
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "die_size",
+          "result",
+          "offset",
+          "snoozed_count"
+        ],
+        "properties": {
+          "die_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -22107,8 +22191,7 @@
             }
           }
         }
-      },
-      "Value": {}
+      }
     },
     "securitySchemes": {
       "HTTPBearer": {

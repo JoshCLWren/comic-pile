@@ -850,6 +850,12 @@ export interface OfferRequest {
 
 export type OfferResponse = components['schemas']['RollOfferResponse']
 
+export interface OverrideRollRequest {
+  body: components['schemas']['RollOverrideRequest']
+}
+
+export type OverrideRollResponse = components['schemas']['NativeRollResponse']
+
 export interface PatchThreadRequest {
   path: {
     thread_id: number
@@ -1495,6 +1501,7 @@ export interface NativeV2Client {
   me(): Promise<MeResponse>
   metric(args: MetricRequest): Promise<MetricResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
+  overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
   patchThread(args: PatchThreadRequest): Promise<PatchThreadResponse>
   patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
@@ -2142,6 +2149,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     offer(args: OfferRequest) {
       return client.post<OfferResponse, OfferRequest['body']>(
         "/v2/roll/offer",
+        args.body,
+      )
+    },
+    overrideRoll(args: OverrideRollRequest) {
+      return client.post<OverrideRollResponse, OverrideRollRequest['body']>(
+        "/v2/roll/override",
         args.body,
       )
     },

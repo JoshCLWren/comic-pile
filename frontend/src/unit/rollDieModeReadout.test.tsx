@@ -21,6 +21,7 @@ const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefin
 
 const rollApi: RollApi = {
   roll: vi.fn(),
+  override: vi.fn(),
   dismissPending: vi.fn(),
   reroll: vi.fn(),
   unsnooze: vi.fn(),

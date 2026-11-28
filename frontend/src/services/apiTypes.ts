@@ -2,6 +2,7 @@ import type {
   RatePayload,
   RateResponsePayload,
   RollResponse,
+  OverrideRollPayload,
   SnoozeSessionResponse,
 } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
@@ -11,6 +12,7 @@ export type RollUnsnoozeResponse = RollResponse & { restored: boolean }
 
 export interface RollApi {
   roll: () => Promise<RollResponse>
+  override: (data: OverrideRollPayload) => Promise<RollResponse>
   dismissPending: () => Promise<void>
   reroll: (expectedPendingThreadId?: number) => Promise<RollResponse>
   unsnooze: (threadId: number) => Promise<RollUnsnoozeResponse>

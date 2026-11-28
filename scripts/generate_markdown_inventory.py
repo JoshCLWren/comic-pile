@@ -218,7 +218,6 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         "docs/API.md",
         "docs/API_V1_CANONICAL.md",
         "docs/CBL_CATALOG_API.md",
-        "docs/CBL_CATALOG_CONSUMER_CENSUS.md",
         "docs/CBL_COLLECTION_EXCLUSIONS.md",
         "docs/CBL_COMICVINE_LOOKUP.md",
         "docs/CBL_CREATE_CYCLE_FEEDBACK.md",

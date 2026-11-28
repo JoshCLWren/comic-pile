@@ -337,6 +337,22 @@ async fn recommendation_explanation_requires_auth() {
 }
 
 #[tokio::test]
+async fn override_requires_auth() {
+    let (state, _token, _csrf, _user_id, _guard) = setup_user("ovrauth").await;
+    let (status, body) = send(
+        &state,
+        Request::builder()
+            .method("POST")
+            .uri("/api/v2/roll/override")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json!({"thread_id": 1}).to_string()))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body:?}");
+}
+
+#[tokio::test]
 async fn switch_prerequisite_requires_auth() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("swauth").await;
     let (status, body) = send(
@@ -437,6 +453,81 @@ async fn recommendation_explanation_rejects_non_roll_event() {
             &token,
             &csrf,
             None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+}
+
+#[tokio::test]
+async fn override_returns_404_for_missing_or_other_users_thread() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("ovr404").await;
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/roll/override",
+            &token,
+            &csrf,
+            Some(json!({"thread_id": 999999})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+
+    let (_token2, _csrf2, user2) = register_extra_user(&state, "ovrown2").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id)
+             VALUES ('Other', 'comic', 1, 1, 'active', $1) RETURNING id",
+            &[&user2],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/roll/override",
+            &token,
+            &csrf,
+            Some(json!({"thread_id": thread_id})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+}
+
+#[tokio::test]
+async fn override_returns_422_for_non_selectable_thread() {
+    let (state, token, csrf, user_id, _guard) = setup_user("ovr422").await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+    // Active thread with no unread issue/frontier is not a selectable candidate.
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id)
+             VALUES ('Empty', 'comic', 0, 1, 'active', $1) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/roll/override",
+            &token,
+            &csrf,
+            Some(json!({"thread_id": thread_id})),
         ),
     )
     .await;

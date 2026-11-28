@@ -2266,19 +2266,14 @@ async fn load_collection_guard_state<E: DbExec>(
             thread_ids.push(tid);
         }
         let rows = tx.run_query(
-            "SELECT i.id, ei.provider, ei.entity_type, ei.external_id, ei.metadata_json::text FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id JOIN external_identities ei ON ei.id = ieim.external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2 AND ieim.status='confirmed'",
+            "SELECT i.id, ei.provider, ei.metadata_json::text FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id JOIN external_identities ei ON ei.id = ieim.external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2 AND ieim.status='confirmed'",
             &[&all_issue_ids, &user_id]
         ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             let issue_id: i32 = row.get(0);
             let provider: String = row.get(1);
-            let entity_type: String = row.get(2);
-            let external_id: String = row.get(3);
-            let metadata_text: Option<String> = row.get(4);
+            let metadata_text: Option<String> = row.get(2);
             let mut vals = std::collections::HashSet::new();
-            if entity_type == "series" {
-                vals.insert(normalize_volume(&provider, &external_id));
-            }
             add_metadata_volumes(&provider, metadata_text.as_deref(), &mut vals);
             if !vals.is_empty() {
                 state
@@ -2288,9 +2283,6 @@ async fn load_collection_guard_state<E: DbExec>(
                     .extend(vals);
             }
         }
-        // Read-only catalog fallback: preserve canonical issue-level volume
-        // evidence for catalog-only links until the #3221/#3231 census proves
-        // no such reader rows remain. Bounded by all_issue_ids and owner-scoped.
         let rows = tx.run_query(
             "SELECT i.id, ei.provider, ei.external_id FROM issues i JOIN threads t ON t.id = i.thread_id JOIN catalog_issues ci ON ci.id = i.catalog_issue_id JOIN catalog_series cs ON cs.id = ci.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2",
             &[&all_issue_ids, &user_id]
@@ -2324,8 +2316,6 @@ async fn load_collection_guard_state<E: DbExec>(
                 .or_default()
                 .insert(normalize_volume(&p, &e));
         }
-        // Read-only catalog fallback for catalog-only thread identities; kept
-        // until the #3221/#3231 census/rehearsal proves no such rows remain.
         let rows = tx.run_query(
             "SELECT t.id, ei.provider, ei.external_id FROM threads t JOIN catalog_series cs ON cs.id = t.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE t.id = ANY($1) AND t.user_id=$2",
             &[&thread_ids, &user_id]
@@ -2512,17 +2502,6 @@ pub struct CblAdoptionCommitRequest {
     pub idempotency_key: Option<String>,
     pub content_hash: String,
     pub revision_sha: String,
-    /// Expected version of the owner-scoped canonical Reading List. When the
-    /// source has already been adopted, a mismatch fails the whole commit with
-    /// 409 before any row is written, so a stale preview cannot overwrite a
-    /// list the reader edited after the preview was produced.
-    #[serde(default)]
-    pub list_version: Option<i32>,
-    /// Overlap decisions the reader approved for this commit. Persisted with
-    /// the selections so a reopened list restores them instead of silently
-    /// dropping the reader's choices.
-    #[serde(default)]
-    pub overlap_decisions: Option<JsonValue>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -2555,21 +2534,6 @@ pub struct CblAdoptionCommitResponseWire {
     pub created_positions: Vec<i32>,
     pub excluded_positions: Vec<i32>,
     pub unresolved_positions: Vec<i32>,
-    /// Stable ID of the canonical owner-scoped `custom_cbl_lists` row. This is
-    /// the identity a caller must use to reopen or update the adopted list;
-    /// the legacy Plan `id` above is kept only for the compatibility projection.
-    #[serde(default)]
-    pub custom_cbl_list_id: i32,
-    /// Version of the canonical list after this commit. Pass it back as
-    /// `list_version` to guard a later commit against a stale list.
-    #[serde(default)]
-    pub list_version: i32,
-    /// Committed checkbox decisions, restored on reopen.
-    #[serde(default)]
-    pub selections: Option<JsonValue>,
-    /// Committed overlap decisions, restored on reopen.
-    #[serde(default)]
-    pub overlap_decisions: Option<JsonValue>,
 }
 
 fn adoption_conflict(code: &str, message: &str) -> (StatusCode, Json<JsonValue>) {
@@ -2805,10 +2769,6 @@ fn cbl_adoption_request_fingerprint(
         "series_decisions": series_decisions,
         "series_overrides": series_overrides,
         "idempotency_key": request.idempotency_key.as_deref(),
-        // A version guard or a newly approved overlap decision is part of the
-        // committed intent: replaying an older receipt would skip both.
-        "list_version": request.list_version,
-        "overlap_decisions": request.overlap_decisions,
     });
     let serialized = serde_json::to_vec(&payload).unwrap_or_default();
     sha256_hex(&serialized)
@@ -2859,33 +2819,6 @@ async fn replay_cbl_adoption_receipt(
             }
         })?;
     let Some(prow) = prow else { return Ok(None) };
-    // Legacy receipts predate the canonical-list fields. Recover them from the
-    // owner-scoped source link so an exact retry still reports the stable list
-    // identity instead of zero.
-    let link = tx
-        .run_query_opt(
-            "SELECT custom_cbl_list_id, list_version, selections_json, overlap_decisions_json
-             FROM custom_cbl_source_links
-             WHERE user_id = $1 AND cbl_source_list_id = $2",
-            &[&user_id, &list_id],
-        )
-        .await
-        .map_err(|e| {
-            if crate::db::is_transport_failure(&e) {
-                CommitErr::Db(ApiError::database_unavailable())
-            } else {
-                CommitErr::Unexpected(format!("lookup replay source link: {e}"))
-            }
-        })?;
-    let (canonical_list_id, list_version, selections, overlap_decisions) = match link {
-        Some(row) => (
-            row.get::<_, i32>(0),
-            row.get::<_, i32>(1),
-            row.get::<_, Option<JsonValue>>(2),
-            row.get::<_, Option<JsonValue>>(3),
-        ),
-        None => (0, 0, None, None),
-    };
     Ok(Some(CblAdoptionCommitResponseWire {
         id: prow.get(0),
         user_id: prow.get(1),
@@ -2901,10 +2834,6 @@ async fn replay_cbl_adoption_receipt(
         created_positions: Vec::new(),
         excluded_positions: Vec::new(),
         unresolved_positions: Vec::new(),
-        custom_cbl_list_id: canonical_list_id,
-        list_version,
-        selections,
-        overlap_decisions,
     }))
 }
 
@@ -3194,7 +3123,7 @@ async fn do_cbl_adoption_commit(
     // them must drop its canonical Reading List entry (#5523). Deriving the set
     // from source provenance keeps entries added manually or from other sources
     // untouched.
-    let mut previous_source_issue_ids: Vec<i32> = nodes_json
+    let previous_source_issue_ids: Vec<i32> = nodes_json
         .as_array()
         .map(|nodes| {
             nodes
@@ -3241,87 +3170,90 @@ async fn do_cbl_adoption_commit(
         }
     })?;
 
-    // #4022: the canonical Reading List is keyed by reader + stable source
-    // identity. `custom_cbl_source_links` owns that identity, so neither a
-    // display name nor the legacy continuity Plan decides which list is
-    // updated: same-name sources and other readers can never collide, and the
-    // compatibility Plan write below can never redirect this upsert.
-    let (canonical_list_id, current_version, previous_selections) = {
-        let link = tx
+    // Persist to canonical, source-linked Option E Reading List (custom_cbl_list).
+    // This keeps the Reading List as the source of truth for adopted CBL entries.
+    let adopted_issue_ids: Vec<i32> = merge.4.clone();
+    let existing_list_id: Option<i32> = {
+        let plan_list = tx
             .run_query_opt(
-                "SELECT sl.custom_cbl_list_id, sl.list_version, sl.selections_json
-                 FROM custom_cbl_source_links sl
-                 JOIN custom_cbl_lists l ON l.id = sl.custom_cbl_list_id AND l.user_id = sl.user_id
-                 WHERE sl.user_id = $1 AND sl.cbl_source_list_id = $2
-                 FOR UPDATE OF sl",
-                &[&user_id, &list_id],
+                "SELECT s.custom_cbl_list_id
+                 FROM reading_plan_sources s
+                 JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $2
+                 WHERE s.plan_id = $1 AND s.custom_cbl_list_id IS NOT NULL
+                 ORDER BY s.id DESC LIMIT 1",
+                &[&plan_id, &user_id],
             )
             .await
             .map_err(|e| {
                 if crate::db::is_transport_failure(&e) {
                     CommitErr::Db(ApiError::database_unavailable())
                 } else {
-                    CommitErr::Unexpected(format!("lookup adoption source link: {e}"))
+                    CommitErr::Unexpected(format!("lookup plan reading list: {e}"))
                 }
             })?;
-        if let Some(row) = link {
-            let linked_list_id: i32 = row.get(0);
-            let version: i32 = row.get(1);
-            let selections: Option<JsonValue> = row.get(2);
-            if let Some(expected) = request.list_version {
-                if expected != version {
-                    // Return before any write: dropping the transaction rolls
-                    // back the reader lock and leaves no partial rows.
-                    return Err(CommitErr::Stale(format!(
-                        "Reading List version mismatch: expected {expected}, current {version}"
-                    )));
-                }
-            }
-            (linked_list_id, version, selections)
+        if let Some(row) = plan_list {
+            row.get::<_, Option<i32>>(0)
         } else {
-            // Display name is not identity. A collision with another list (or
-            // another reader's list of the same name) is harmless here.
-            let display_name = if list_name.is_empty() {
-                format!("CBL adoption for {source_path}")
-            } else {
-                list_name.clone()
-            };
-            let row = tx
-                .run_query_one(
-                    "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
-                     VALUES ($1, $2, NULL, 'loose', NOW(), NOW())
-                     RETURNING id",
-                    &[&user_id, &display_name],
+            let source_list = tx
+                .run_query_opt(
+                    "SELECT s.custom_cbl_list_id
+                     FROM reading_plan_sources s
+                     JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $1
+                     WHERE s.cbl_source_list_id = $2 AND s.custom_cbl_list_id IS NOT NULL
+                     ORDER BY s.id DESC LIMIT 1",
+                    &[&user_id, &list_id],
                 )
                 .await
                 .map_err(|e| {
                     if crate::db::is_transport_failure(&e) {
                         CommitErr::Db(ApiError::database_unavailable())
                     } else {
-                        CommitErr::Unexpected(format!("create reading list: {e}"))
+                        CommitErr::Unexpected(format!("lookup source reading list: {e}"))
                     }
                 })?;
-            (row.get::<_, i32>(0), 0, None)
+            source_list.and_then(|row| row.get::<_, Option<i32>>(0))
         }
     };
-    let list_version = current_version.checked_add(1).ok_or_else(|| {
-        CommitErr::Unexpected("canonical Reading List version overflow".to_string())
-    })?;
-    tx.run_execute(
-        "UPDATE custom_cbl_lists SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
-        &[&canonical_list_id, &user_id],
-    )
-    .await
-    .map_err(|e| {
-        if crate::db::is_transport_failure(&e) {
-            CommitErr::Db(ApiError::database_unavailable())
+
+    let canonical_list_id: i32 = if let Some(existing_id) = existing_list_id {
+        tx.run_execute(
+            "UPDATE custom_cbl_lists SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
+            &[&existing_id, &user_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("update reading list: {e}"))
+            }
+        })?;
+        existing_id
+    } else {
+        let list_name = if list_name.is_empty() {
+            format!("CBL adoption for {source_path}")
         } else {
-            CommitErr::Unexpected(format!("update reading list: {e}"))
-        }
-    })?;
+            list_name.clone()
+        };
+        let row = tx
+            .run_query_one(
+                "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
+                 VALUES ($1, $2, NULL, 'loose', NOW(), NOW())
+                 RETURNING id",
+                &[&user_id, &list_name],
+            )
+            .await
+            .map_err(|e| {
+                if crate::db::is_transport_failure(&e) {
+                    CommitErr::Db(ApiError::database_unavailable())
+                } else {
+                    CommitErr::Unexpected(format!("create reading list: {e}"))
+                }
+            })?;
+        row.get::<_, i32>(0)
+    };
 
     let canonical_source_path = format!("custom-cbl:{canonical_list_id}");
-    let adopted_issue_ids: Vec<i32> = merge.4.clone();
 
     // A single source can resolve several positions to the same canonical
     // issue. Deduplicate while keeping source order so the set-based insert
@@ -3331,24 +3263,6 @@ async fn do_cbl_adoption_commit(
         .into_iter()
         .filter(|issue_id| seen_adopted.insert(*issue_id))
         .collect();
-
-    // The source link is the durable identity, so it also carries the last
-    // adopted issue set. A compatibility Plan can be retired or recreated
-    // without losing the ability to reconcile exclusions on the canonical list.
-    if let Some(previous) = previous_selections
-        .as_ref()
-        .and_then(|value| value.get("adopted_issue_ids"))
-        .and_then(|value| value.as_array())
-    {
-        for value in previous {
-            if let Some(id) = value.as_i64() {
-                let id = id as i32;
-                if !previous_source_issue_ids.contains(&id) {
-                    previous_source_issue_ids.push(id);
-                }
-            }
-        }
-    }
 
     // Reconcile this source's list entries to the newly committed adopted set
     // inside the same transaction. An issue included by an earlier commit but
@@ -3460,55 +3374,6 @@ async fn do_cbl_adoption_commit(
         })?;
     }
 
-    // Persist the committed source identity, checkbox decisions and approved
-    // overlap decisions in the same transaction as the list entries. This is
-    // the state a reopened list restores; uncommitted UI selections never
-    // reach the database.
-    let selections = serde_json::json!({
-        "entry_decisions": entry_decisions_raw,
-        "series_decisions": series_decisions_raw,
-        "series_overrides": series_overrides_raw,
-        "adopted_issue_ids": adopted_issue_ids,
-    });
-    let overlap_decisions = request
-        .overlap_decisions
-        .clone()
-        .unwrap_or_else(|| serde_json::json!([]));
-    tx.run_execute(
-        "INSERT INTO custom_cbl_source_links
-           (user_id, cbl_source_list_id, custom_cbl_list_id, source_revision_sha,
-            source_content_hash, list_version, selections_json, overlap_decisions_json,
-            created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
-         ON CONFLICT (user_id, cbl_source_list_id)
-         DO UPDATE SET
-            custom_cbl_list_id = EXCLUDED.custom_cbl_list_id,
-            source_revision_sha = EXCLUDED.source_revision_sha,
-            source_content_hash = EXCLUDED.source_content_hash,
-            list_version = EXCLUDED.list_version,
-            selections_json = EXCLUDED.selections_json,
-            overlap_decisions_json = EXCLUDED.overlap_decisions_json,
-            updated_at = NOW()",
-        &[
-            &user_id,
-            &list_id,
-            &canonical_list_id,
-            &revision_sha,
-            &content_hash,
-            &list_version,
-            &selections,
-            &overlap_decisions,
-        ],
-    )
-    .await
-    .map_err(|e| {
-        if crate::db::is_transport_failure(&e) {
-            CommitErr::Db(ApiError::database_unavailable())
-        } else {
-            CommitErr::Unexpected(format!("upsert adoption source link: {e}"))
-        }
-    })?;
-
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
@@ -3530,10 +3395,6 @@ async fn do_cbl_adoption_commit(
         created_positions: merge.1,
         excluded_positions: merge.2,
         unresolved_positions: merge.3,
-        custom_cbl_list_id: canonical_list_id,
-        list_version,
-        selections: Some(selections),
-        overlap_decisions: Some(overlap_decisions),
     };
     store_cbl_adoption_receipt(&tx, user_id, list_id, plan_id, &request_fingerprint, &resp).await?;
     tx.commit().await.map_err(|e| {
@@ -5401,155 +5262,5 @@ impl utoipa::Modify for IssueIdentitySecurityAddon {
                 ),
             );
         }
-    }
-}
-
-#[cfg(test)]
-mod guard_db_tests {
-    use super::*;
-    use crate::{db, test_support};
-    use serde_json::json;
-
-    /// Synthetic two-reader fixture: reader A owns one catalog-only issue and
-    /// one confirmed-mapping issue; reader B owns a catalog-only issue reusing
-    /// the same catalog identity. Only reader A has a volume exclusion.
-    async fn fixture() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
-        let state = test_support::test_state(2)
-            .await
-            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
-        let guard = test_support::reset_for_test(&state).await;
-        let conn = db::checkout(&state).await.expect("fixture connection");
-        conn.batch_execute(
-            r#"
-            INSERT INTO users (id, username, created_at) VALUES
-                (9101, 'guard-a', NOW()), (9102, 'guard-b', NOW());
-            INSERT INTO external_identities
-                (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
-            VALUES
-                (8001, 'comicvine', 'series', '4050-1000', '{}'::json, NOW(), NOW()),
-                (8101, 'comicvine', 'issue', '4000-1', '{}'::json, NOW(), NOW());
-            INSERT INTO catalog_series (id, canonical_external_identity_id, created_at, updated_at)
-            VALUES (1001, 8001, NOW(), NOW());
-            INSERT INTO catalog_issues
-                (id, canonical_external_identity_id, catalog_series_id, created_at, updated_at)
-            VALUES (9001, 8101, 1001, NOW(), NOW());
-            INSERT INTO threads
-                (id, user_id, title, format, issues_remaining, queue_position, status,
-                 created_at, catalog_series_id)
-            VALUES
-                (9201, 9101, 'A catalog thread', 'comic', 1, 1, 'active', NOW(), 1001),
-                (9202, 9101, 'A confirmed thread', 'comic', 1, 2, 'active', NOW(), NULL),
-                (9401, 9102, 'B catalog thread', 'comic', 1, 1, 'active', NOW(), 1001);
-            INSERT INTO issues
-                (id, thread_id, issue_number, status, created_at, position, catalog_issue_id)
-            VALUES
-                (9301, 9201, '1', 'unread', NOW(), 1, 9001),
-                (9302, 9202, '1', 'unread', NOW(), 1, NULL),
-                (9501, 9401, '1', 'unread', NOW(), 1, 9001);
-            INSERT INTO thread_external_series_mappings
-                (id, thread_id, external_identity_id, status, evidence_source, created_at, updated_at)
-            VALUES (9601, 9202, 8001, 'confirmed', 'test', NOW(), NOW());
-            INSERT INTO issue_external_identity_mappings
-                (id, issue_id, external_identity_id, status, evidence_source, evidence_json,
-                 created_at, updated_at)
-            VALUES (9602, 9302, 8001, 'confirmed', 'test', '{}'::json, NOW(), NOW());
-            INSERT INTO collection_exclusions
-                (id, user_id, provider, external_volume_id, created_at)
-            VALUES (9701, 9101, 'comicvine', '4050-1000', NOW());
-            "#,
-        )
-        .await
-        .expect("seed guard fixture");
-        drop(conn);
-        (state, guard)
-    }
-
-    fn fact(issue_id: Option<i32>, thread_id: Option<i32>) -> serde_json::Map<String, JsonValue> {
-        let mut fact = serde_json::Map::new();
-        if let Some(id) = issue_id {
-            fact.insert("resolved_issue_id".into(), json!(id));
-        }
-        if let Some(id) = thread_id {
-            fact.insert("thread_id".into(), json!(id));
-        }
-        fact
-    }
-
-    #[tokio::test]
-    async fn guard_state_preserves_confirmed_catalog_and_cross_reader_evidence() {
-        let (state, _guard) = fixture().await;
-        let mut conn = db::checkout(&state).await.expect("guard connection");
-        let tx = conn
-            .build_transaction()
-            .read_only(true)
-            .start()
-            .await
-            .expect("guard transaction");
-
-        // Confirmed issue mapping: series entity_type yields a volume key.
-        let confirmed = vec![fact(Some(9302), None)];
-        let confirmed_state = load_collection_guard_state(&tx, 9101, &confirmed)
-            .await
-            .expect("confirmed guard state");
-        assert!(confirmed_state
-            .issue_volumes
-            .get(&9302)
-            .is_some_and(|v| v.contains(&("comicvine".to_string(), "1000".to_string()))));
-        assert_eq!(
-            guard_check(&confirmed_state, &confirmed[0]).map(|(reason, _)| reason),
-            Some("collection_volume_excluded".to_string())
-        );
-
-        // Catalog-only issue: no confirmed mapping, canonical identity survives.
-        let catalog_only = vec![fact(Some(9301), None)];
-        let catalog_state = load_collection_guard_state(&tx, 9101, &catalog_only)
-            .await
-            .expect("catalog guard state");
-        assert!(catalog_state
-            .issue_volumes
-            .get(&9301)
-            .is_some_and(|v| v.contains(&("comicvine".to_string(), "1000".to_string()))));
-        assert_eq!(
-            guard_check(&catalog_state, &catalog_only[0]).map(|(reason, _)| reason),
-            Some("collection_volume_excluded".to_string())
-        );
-
-        // Missing mapping fails closed for review instead of silently allowing.
-        let missing = vec![fact(Some(9999), None)];
-        let missing_state = load_collection_guard_state(&tx, 9101, &missing)
-            .await
-            .expect("missing guard state");
-        assert!(missing_state.issue_volumes.is_empty());
-        assert_eq!(
-            guard_check(&missing_state, &missing[0]).map(|(reason, _)| reason),
-            Some("collection_identity_requires_review".to_string())
-        );
-
-        // Catalog-only thread identity (not an issue-level fact).
-        let thread = vec![fact(None, Some(9201))];
-        let thread_state = load_collection_guard_state(&tx, 9101, &thread)
-            .await
-            .expect("thread guard state");
-        assert!(thread_state
-            .thread_identities
-            .get(&9201)
-            .is_some_and(|v| v.contains(&("comicvine".to_string(), "1000".to_string()))));
-        assert_eq!(
-            guard_check(&thread_state, &thread[0]).map(|(reason, _)| reason),
-            Some("collection_volume_excluded".to_string())
-        );
-
-        // Cross-reader isolation: reader B uses the same catalog issue but A's
-        // volume exclusion must not apply to B's fact.
-        let other = vec![fact(Some(9501), Some(9401))];
-        let other_state = load_collection_guard_state(&tx, 9102, &other)
-            .await
-            .expect("other reader guard state");
-        assert!(
-            guard_check(&other_state, &other[0]).is_none(),
-            "foreign exclusion leaked"
-        );
-
-        tx.rollback().await.expect("rollback guard transaction");
     }
 }

@@ -67,20 +67,6 @@ pub struct ReadingList {
     pub entries: Vec<ReadingListEntry>,
     #[serde(default)]
     pub warnings: Vec<String>,
-    /// Monotonic version of this owner-scoped list. A later CBL adoption must
-    /// echo it as `list_version` or be rejected as stale (#4022).
-    #[serde(default)]
-    pub list_version: i32,
-    #[serde(default)]
-    pub source_revision_sha: Option<String>,
-    #[serde(default)]
-    pub source_content_hash: Option<String>,
-    /// Committed checkbox decisions restored when the CBL editor reopens.
-    #[serde(default)]
-    pub selections: Option<serde_json::Value>,
-    /// Overlap decisions approved with the last commit.
-    #[serde(default)]
-    pub overlap_decisions: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -318,39 +304,19 @@ async fn load_entries(
         .collect())
 }
 
-type ReadingListRow = (
-    i32,
-    String,
-    Option<String>,
-    String,
-    String,
-    String,
-    i32,
-    i32,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
-
 async fn load_list(
     conn: &deadpool_postgres::Object,
     list_id: i32,
     user_id: i32,
-) -> Result<Option<ReadingListRow>, ApiError> {
+) -> Result<Option<(i32, String, Option<String>, String, String, String, i32)>, ApiError> {
     let row = conn
         .query_opt(
             "SELECT l.id, l.name, l.description, l.mode, l.created_at::text, l.updated_at::text,
-                    count(e.id)::int,
-                    COALESCE(sl.list_version, 0), sl.source_revision_sha, sl.source_content_hash,
-                    sl.selections_json::text, sl.overlap_decisions_json::text
+                    l.user_id, count(e.id)::int
              FROM custom_cbl_lists l
              LEFT JOIN custom_cbl_entries e ON e.list_id=l.id
-             LEFT JOIN custom_cbl_source_links sl
-                    ON sl.custom_cbl_list_id=l.id AND sl.user_id=l.user_id
              WHERE l.id=$1 AND l.user_id=$2
-             GROUP BY l.id, sl.list_version, sl.source_revision_sha, sl.source_content_hash,
-                      sl.selections_json, sl.overlap_decisions_json",
+             GROUP BY l.id",
             &[&list_id, &user_id],
         )
         .await
@@ -363,22 +329,13 @@ async fn load_list(
             row.get(3),
             row.get(4),
             row.get(5),
-            row.get(6),
             row.get(7),
-            row.get(8),
-            row.get(9),
-            row.get(10),
-            row.get(11),
         )
     }))
 }
 
-fn parse_json_or_none(value: Option<String>) -> Option<serde_json::Value> {
-    value.and_then(|text| serde_json::from_str(&text).ok())
-}
-
 fn list_from_row(
-    row: ReadingListRow,
+    row: (i32, String, Option<String>, String, String, String, i32),
     user_id: i32,
     entries: Vec<ReadingListEntry>,
     warnings: Vec<String>,
@@ -392,11 +349,6 @@ fn list_from_row(
         created_at: row.4,
         updated_at: row.5,
         issue_count: row.6,
-        list_version: row.7,
-        source_revision_sha: row.8,
-        source_content_hash: row.9,
-        selections: parse_json_or_none(row.10),
-        overlap_decisions: parse_json_or_none(row.11),
         entries,
         warnings,
     }
@@ -555,11 +507,6 @@ pub async fn create_reading_list(
             row.get(1),
             row.get(2),
             entries.len() as i32,
-            0,
-            None,
-            None,
-            None,
-            None,
         ),
         user.id(),
         entries,
@@ -1018,11 +965,6 @@ pub async fn update_reading_list(
             row.get(3),
             String::new(),
             entries.len() as i32,
-            0,
-            None,
-            None,
-            None,
-            None,
         ),
         user.id(),
         entries,

@@ -239,6 +239,10 @@ export interface RatePayload {
   source: 'direct' | 'roll_offer';
 }
 
+export interface OverrideRollPayload {
+  thread_id: number;
+}
+
 export interface UndoPayload {
   sessionId: number;
   snapshotId: number;
