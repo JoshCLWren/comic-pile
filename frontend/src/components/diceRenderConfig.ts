@@ -21,9 +21,9 @@ const DEFAULT_GLOBAL_CONFIG = {
   d10TopOffsetY: 0,
   d10BottomOffsetX: 0,
   d10BottomOffsetY: 0,
-  textColor: '#1a1a2e',
-  borderColor: '#cccccc',
-  backgroundColor: '#ffffff',
+  textColor: '#111111',
+  borderColor: '#658e97',
+  backgroundColor: '#c2e9f1',
   fontFamily: 'Arial',
   fontWeight: 'bold',
 } satisfies DiceRenderGlobalConfig

@@ -17,7 +17,7 @@ export default function QueueThreadActions({ title, onRead }: QueueThreadActions
           event.stopPropagation()
           onRead()
         }}
-        className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+        className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
       >
         Read & Rate
       </button>

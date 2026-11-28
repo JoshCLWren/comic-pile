@@ -97,7 +97,7 @@ export const rollDialogSecondaryActionClass = [
  * danger semantics; only its typography is demoted to ordinary sentence case.
  */
 export const rollDangerActionClass = [
-  'rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-semibold text-[var(--theme-text-primary)]',
+  'rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-semibold text-[var(--theme-primary-action-text)]',
   'transition-colors hover:bg-[var(--theme-danger-hover)] disabled:opacity-50',
 ].join(' ')
 

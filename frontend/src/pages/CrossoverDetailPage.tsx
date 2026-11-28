@@ -68,7 +68,7 @@ export default function CrossoverDetailPage() {
           <p className="mt-1 text-sm">{error}</p>
           <button
             onClick={() => void refetch()}
-            className="mt-4 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 font-bold text-[var(--theme-text-primary)]"
+            className="mt-4 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 font-bold text-[var(--theme-primary-action-text)]"
           >
             Try again
           </button>
@@ -90,7 +90,7 @@ export default function CrossoverDetailPage() {
           <p className="text-lg font-medium">Crossover not found</p>
           <Link
             to="/continuity-plans"
-            className="mt-4 inline-block rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 font-bold text-[var(--theme-text-primary)]"
+            className="mt-4 inline-block rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 font-bold text-[var(--theme-primary-action-text)]"
           >
             Back to Reading Plans
           </Link>
@@ -130,14 +130,14 @@ export default function CrossoverDetailPage() {
         {linkedPlans[0] ? (
           <Link
             to={`/continuity-plans/${linkedPlans[0].id}`}
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-black hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
           >
             Open Reading Plan: {linkedPlans[0].name}
           </Link>
         ) : nextUnread?.thread || sortedMembers[0]?.thread ? (
           <Link
             to={'/thread/' + (nextUnread?.thread?.id ?? sortedMembers[0]?.thread?.id)}
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-black hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
           >
             Continue Reading
           </Link>
@@ -201,7 +201,7 @@ export default function CrossoverDetailPage() {
                     ) : (
                       <Link
                         to={'/thread/' + nextUnread.thread?.id}
-                        className="shrink-0 inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+                        className="shrink-0 inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
                       >
                         Read Now
                       </Link>
@@ -302,7 +302,7 @@ export default function CrossoverDetailPage() {
             {sortedMembers.length > 0 && sortedMembers[0].thread && (
               <Link
                 to={`/thread/${sortedMembers[0].thread.id}`}
-                className="rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-[var(--theme-text-primary)]"
+                className="rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-bold text-[var(--theme-primary-action-text)]"
               >
                 View First Series
               </Link>

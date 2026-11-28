@@ -298,7 +298,7 @@ export default function DuplicateReconciliationPage() {
                 <div className="mt-4 flex gap-2">
                   <button
                     type="button"
-                    className="rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-medium text-[var(--theme-text-primary)] disabled:opacity-50"
+                    className="rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-medium text-[var(--theme-primary-action-text)] disabled:opacity-50"
                     disabled={canonicalId == null || duplicateIds.length === 0 || previewMutation.isPending}
                     onClick={() => previewMutation.mutate(decisions)}
                   >
@@ -402,7 +402,7 @@ export default function DuplicateReconciliationPage() {
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
-                  className="rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-medium text-[var(--theme-text-primary)] disabled:opacity-50"
+                  className="rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-medium text-[var(--theme-primary-action-text)] disabled:opacity-50"
                   disabled={!preview.can_apply || applyMutation.isPending}
                   onClick={() => applyMutation.mutate()}
                 >

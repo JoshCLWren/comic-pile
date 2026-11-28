@@ -250,7 +250,7 @@ export default function QueuePage() {
               <button
                 type="button"
                 onClick={handleLoadMore}
-                className="mx-auto block rounded-md bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action)] transition-colors"
+                className="mx-auto block rounded-md bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action)] transition-colors"
                 data-testid="queue-load-more-retry"
               >
                 Try again

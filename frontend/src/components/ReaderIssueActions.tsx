@@ -92,7 +92,7 @@ export function ReadNowIssueButton({
         type="button"
         onClick={() => setOpen(true)}
         className={primary
-          ? 'inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)]'
+          ? 'inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)]'
           : 'min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] hover:underline'}
       >
         {label}

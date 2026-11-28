@@ -166,7 +166,7 @@ export function BulkTagToolbar({ selectedIds, onClearSelection, onDone }: BulkTa
             type="button"
             onClick={() => void run('add')}
             disabled={busy}
-            className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-primary-action-text)] transition hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
             {bulkAssign.isPending ? 'Adding…' : `Add tag to ${selectedIds.length}`}
           </button>

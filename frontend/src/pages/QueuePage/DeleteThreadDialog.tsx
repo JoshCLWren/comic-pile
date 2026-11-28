@@ -71,7 +71,7 @@ export default function DeleteThreadDialog({
               onClick={onConfirm}
               disabled={isPending}
               data-testid="confirm-delete-thread"
-              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
             >
               {isPending ? 'Deleting...' : 'Delete Series'}
             </button>

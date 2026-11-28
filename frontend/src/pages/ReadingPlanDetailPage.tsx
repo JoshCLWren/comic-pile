@@ -265,7 +265,7 @@ export default function ReadingPlanDetailPage() {
         <button
           type="button"
           onClick={() => void readerQuery.refetch()}
-          className="mt-3 min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black"
+          className="mt-3 min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-[var(--theme-primary-action-text)]"
         >
           Try again
         </button>
@@ -523,7 +523,7 @@ export default function ReadingPlanDetailPage() {
           {editableListId != null ? (
             <Link
               to={`/reading-lists/${editableListId}`}
-              className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-black"
+              className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-[var(--theme-primary-action-text)]"
             >
               Add or edit Reading List
             </Link>

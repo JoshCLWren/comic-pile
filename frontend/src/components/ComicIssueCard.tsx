@@ -407,7 +407,7 @@ export function ComicIssueCard({
   }
 
   const primaryClass =
-    'inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black transition-colors hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50'
+    'inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] transition-colors hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50'
   const secondaryClass =
     'inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] transition-colors hover:underline disabled:opacity-50'
 

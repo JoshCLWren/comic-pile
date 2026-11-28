@@ -218,7 +218,7 @@ export function NewReleasesSection({
                   }
                   className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-bold transition disabled:opacity-50 ${
                     source.enabled
-                      ? 'bg-[var(--theme-primary-action)] text-black hover:bg-[var(--theme-primary-action-hover)]'
+                      ? 'bg-[var(--theme-primary-action)] text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)]'
                       : 'border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[var(--theme-text-primary)] hover:border-[var(--theme-continuity-accent)]'
                   }`}
                 >

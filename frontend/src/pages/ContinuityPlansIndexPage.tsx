@@ -71,7 +71,7 @@ export default function ContinuityPlansIndexPage() {
           <button
             type="button"
             onClick={() => navigate('/continuity-plans/new')}
-            className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)]"
+            className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)]"
           >
             New Reading Plan
           </button>
@@ -123,7 +123,7 @@ export default function ContinuityPlansIndexPage() {
           <button
             type="button"
             onClick={() => navigate('/continuity-plans/new?addFrom=cbl')}
-            className="min-h-11 flex-1 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)]"
+            className="min-h-11 flex-1 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)]"
           >
             New Reading Plan
           </button>
@@ -210,7 +210,7 @@ export default function ContinuityPlansIndexPage() {
                         type="button"
                         onClick={confirmDelete}
                         disabled={isDeletingThis}
-                        className="min-h-11 flex-1 rounded-xl bg-[var(--theme-danger)] font-black text-[var(--theme-text-primary)] disabled:opacity-50"
+                        className="min-h-11 flex-1 rounded-xl bg-[var(--theme-danger)] font-black text-[var(--theme-primary-action-text)] disabled:opacity-50"
                       >
                         {isDeletingThis ? 'Deleting…' : 'Delete'}
                       </button>

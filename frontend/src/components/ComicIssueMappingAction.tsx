@@ -210,7 +210,7 @@ export default function ComicIssueMappingAction({
               type="button"
               onClick={() => void mapping.handleRemoveMapping()}
               disabled={mapping.isRemovingMapping}
-              className="min-h-11 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-[var(--theme-text-primary)] transition-colors hover:bg-[var(--theme-danger-hover)] disabled:opacity-50 sm:min-h-9"
+              className="min-h-11 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-[var(--theme-primary-action-text)] transition-colors hover:bg-[var(--theme-danger-hover)] disabled:opacity-50 sm:min-h-9"
             >
               {mapping.isRemovingMapping ? 'Removing…' : 'Remove mapping'}
             </button>
