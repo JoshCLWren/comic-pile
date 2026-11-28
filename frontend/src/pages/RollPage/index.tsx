@@ -22,6 +22,7 @@ import { useMoveToBack, useMoveToFront, useShuffleQueue, useActiveSeriesCount } 
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
+import { isFunction, isWindowDefined } from '../../utils/runtimeChecks'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
 import { readRollSnoozes } from '../../services/api-roll'
@@ -58,8 +59,8 @@ import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCar
 /** Decorative motion is skipped for reduced-motion readers; the outcome is not. */
 function prefersReducedMotion(): boolean {
   return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
+    isWindowDefined() &&
+    isFunction(window.matchMedia) &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
 }

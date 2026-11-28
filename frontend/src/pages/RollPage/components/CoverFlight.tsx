@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { isFunction } from '../../../utils/runtimeChecks'
 import ImageWithLoading from '../../../components/ImageWithLoading'
 
 export interface CoverFlightState {
@@ -28,7 +29,7 @@ export function CoverFlight({ flight, onDone }: CoverFlightProps) {
       onDone()
       return
     }
-    if (typeof node.animate !== 'function') {
+    if (!isFunction(node.animate)) {
       onDone()
       return
     }
