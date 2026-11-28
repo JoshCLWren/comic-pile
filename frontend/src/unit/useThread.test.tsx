@@ -93,7 +93,6 @@ it('creates, updates, deletes, and reactivates threads', async () => {
 
   expect(mockedThreadsApi.create).toHaveBeenCalledWith({
     title: 'New',
-    format: 'Comics',
     issues_remaining: 5,
   })
   expect(mockedThreadsApi.update).toHaveBeenCalledWith(7, { title: 'Updated' })
@@ -107,7 +106,6 @@ it('refreshes Roll and plan views when a thread is renamed (#5264)', async () =>
   const updatedThread = {
     id: 7,
     title: 'Renamed',
-    format: 'issue',
     issues_remaining: 4,
     total_issues: 12,
     queue_position: 3,

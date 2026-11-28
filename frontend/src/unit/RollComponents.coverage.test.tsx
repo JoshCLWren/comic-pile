@@ -33,7 +33,6 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
 const thread: Thread = {
   id: 1,
   title: 'Saga',
-  format: 'Comic',
   issues_remaining: 5,
   total_issues: 10,
   next_unread_issue_number: '3',

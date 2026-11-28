@@ -51,7 +51,6 @@ const threadData: Array<{ id: number; title: string; format: string; status: str
 interface StaleTestThread {
   id: number
   title: string
-  format: string
   status: string
   is_blocked?: boolean
   last_activity_at?: string
@@ -434,7 +433,6 @@ describe('RollPage parent handlers', () => {
     bootstrapData.active_thread = {
       id: 1,
       title: 'Saga',
-      format: 'Comic',
       issues_remaining: 2,
       queue_position: 1,
       total_issues: 10,
@@ -874,7 +872,6 @@ describe('RollPage parent handlers', () => {
         active_thread: {
           id: 1,
           title: 'Complete pending',
-          format: 'Comic',
           issues_remaining: 2,
           queue_position: 2,
           total_issues: 8,
@@ -932,7 +929,6 @@ describe('RollPage parent handlers', () => {
         active_thread: {
           id: 1,
           title: 'Sparse pending',
-          format: null,
           issues_remaining: null,
           queue_position: null,
           total_issues: null,
@@ -1004,7 +1000,6 @@ describe('RollPage parent handlers', () => {
     const completeResponse = {
       thread_id: 1,
       title: 'Saga',
-      format: 'Comic',
       issues_remaining: 2,
       queue_position: 1,
       total_issues: 10,

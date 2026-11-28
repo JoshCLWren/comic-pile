@@ -99,7 +99,6 @@ export const OTHER_USER: HarnessUser = {
 const DEMO_ROLL = {
   thread_id: 1,
   title: 'Demo Series',
-  format: 'issue',
   issues_remaining: 4,
   queue_position: 1,
   die_size: 20,

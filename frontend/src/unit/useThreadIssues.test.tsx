@@ -327,7 +327,6 @@ describe('disabled and unseeded cache paths', () => {
     const thread = cast<Thread>({
       id: 95,
       title: 'T',
-      format: 'issue',
       issues_remaining: 0,
       total_issues: 1,
       queue_position: 1,

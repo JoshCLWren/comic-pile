@@ -150,7 +150,6 @@ it('offers a retry affordance when the next-page fetch fails', async () => {
       {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
         status: 'active',
         queue_position: 1,
         issues_remaining: 5,
@@ -186,7 +185,6 @@ it('does not offer a retry affordance when there is no further page', async () =
       {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
         status: 'active',
         queue_position: 1,
         issues_remaining: 5,

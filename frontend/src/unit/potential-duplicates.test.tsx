@@ -65,7 +65,6 @@ const UNCERTAIN_MATCH: PotentialDuplicateMatch = {
 const EDITING_THREAD: Thread = {
   id: 7,
   title: 'Saga',
-  format: 'Comic',
   status: 'active',
   queue_position: 1,
   issues_remaining: 4,

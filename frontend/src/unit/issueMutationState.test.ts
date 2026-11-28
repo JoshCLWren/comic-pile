@@ -5,7 +5,6 @@ import { applyIssueReadStatus } from '../pages/thread-detail/issueMutationState'
 const thread: Thread = {
   id: 7,
   title: 'Test Thread',
-  format: 'single issues',
   issues_remaining: 2,
   total_issues: 3,
   next_unread_issue_id: 11,

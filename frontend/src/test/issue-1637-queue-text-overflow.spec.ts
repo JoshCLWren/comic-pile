@@ -93,14 +93,12 @@ test.describe('Queue card text overflow (#1637)', () => {
     await setupAuthenticatedPage(page);
     await createThread(page, {
       title: 'Comic With Long URL Notes',
-      format: 'Issue',
       issues_remaining: 1,
       total_issues: 1,
       notes: `Imported: ${LONG_URL}`,
     });
     await createThread(page, {
       title: 'Neighbouring Card',
-      format: 'Issue',
       issues_remaining: 1,
       total_issues: 1,
       notes: `Also imported: ${LONG_URL}`,

@@ -74,7 +74,6 @@ function threadResult(id: number): Thread {
   return {
     id,
     title: id === 1 ? 'Saga' : 'Monstress',
-    format: 'Comics',
     issues_remaining: 1,
     queue_position: id,
     status: 'active',

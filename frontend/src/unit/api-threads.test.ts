@@ -95,7 +95,6 @@ describe('threadsApi.checkPotentialDuplicates', () => {
     const client = createHttpClientStub()
     const request = {
       title: 'Amazing Spider-Man',
-      format: 'Comic',
       comicvine_volume_id: 4050,
       exclude_thread_id: 12,
     }
@@ -118,7 +117,6 @@ describe('threadsApi.checkPotentialDuplicates', () => {
 
     expect(client.post).toHaveBeenCalledWith('/v2/threads:checkDuplicates', {
       title: 'Saga',
-      format: 'Comic',
     })
   })
 })

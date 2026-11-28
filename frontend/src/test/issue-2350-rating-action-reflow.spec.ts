@@ -144,7 +144,6 @@ test.describe('rating action cluster reflow (issue #2350)', () => {
     await page.setViewportSize(TABLET_VIEWPORT)
     await createThread(page, {
       title: 'Reflow Tablet Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -181,7 +180,6 @@ test.describe('rating action cluster reflow (issue #2350)', () => {
     await page.setViewportSize(MOBILE_VIEWPORT)
     await createThread(page, {
       title: 'Reflow Mobile Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })

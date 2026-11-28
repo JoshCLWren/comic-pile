@@ -203,7 +203,6 @@ beforeEach(() => {
   mockedThreadsApi.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',
-    format: 'Comic',
     issues_remaining: 5,
     queue_position: 1,
     die_size: 6,
@@ -1176,7 +1175,6 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const manyThreads = Array.from({ length: 55 }, (_, index) => ({
     id: index + 1,
     title: `Thread ${index + 1}`,
-    format: 'Comic',
     status: 'active',
     queue_position: index + 1,
     issues_remaining: 1,

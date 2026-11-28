@@ -8,7 +8,6 @@ test.describe('Issue #3147: Focus management after Roll and Queue actions', () =
     // The primary Roll CTA only mounts when there is rollable content.
     await createThread(page, {
       title: 'Focus Roll Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -27,7 +26,6 @@ test.describe('Issue #3147: Focus management after Roll and Queue actions', () =
     // Queue row actions only render for an actual thread card.
     await createThread(page, {
       title: 'Focus Queue Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })

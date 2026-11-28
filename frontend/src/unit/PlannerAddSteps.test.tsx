@@ -20,7 +20,6 @@ const threads = [
   {
     id: 4,
     title: 'Mister Miracle',
-    format: 'ongoing',
     issues_remaining: 2,
     total_issues: 2,
     queue_position: 1,

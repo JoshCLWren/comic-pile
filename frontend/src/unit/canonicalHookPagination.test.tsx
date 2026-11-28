@@ -31,7 +31,6 @@ const secondIssue: Issue = { ...firstIssue, id: 2, issue_number: '2', position: 
 const thread: ThreadListItem = {
   id: 1,
   title: 'Series',
-  format: 'single issues',
   issues_remaining: 0,
   queue_position: 1,
   status: 'active',

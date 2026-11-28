@@ -245,7 +245,6 @@ describe('continuity comic selectors', () => {
     const longThread = {
       id: 3,
       title: longTitle,
-      format: 'omnibus',
       issues_remaining: 2,
       total_issues: 2,
       queue_position: 1,
@@ -289,7 +288,6 @@ describe('continuity comic selectors', () => {
     const longThread = {
       id: 4,
       title: 'Starman (Vol. 2) (1994 - 2001)',
-      format: 'ongoing',
       issues_remaining: 3,
       total_issues: 12,
       queue_position: 2,

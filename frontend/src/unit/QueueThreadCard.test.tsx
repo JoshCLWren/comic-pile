@@ -103,7 +103,6 @@ function createMockThread(overrides: Partial<ThreadListItem> = {}): ThreadListIt
   return {
     id: 1,
     title: 'Test Thread',
-    format: 'Comic',
     issues_remaining: 5,
     total_issues: 10,
     next_unread_issue_number: null,

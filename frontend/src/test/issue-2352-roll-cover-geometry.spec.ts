@@ -138,7 +138,6 @@ function assertPortraitCoverWithoutGutters(g: CoverGeometry): void {
 async function createCoverThread(page: Page, title: string): Promise<void> {
   await createThread(page, {
     title,
-    format: 'Comic',
     issues_remaining: 3,
     total_issues: 3,
   })

@@ -186,7 +186,6 @@ async function createThreadsForUser(
         headers,
         data: {
           title: `Test Thread ${i + 1}`,
-          format: 'issue',
           issues_remaining: 10,
           total_issues: 10,
         },

@@ -35,7 +35,6 @@ test.describe('Issue #3467: Pick this series double-click prevention', () => {
     const title = `Double Click Pick ${Date.now()}`
     await createThread(page, {
       title,
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -67,7 +66,6 @@ test.describe('Issue #3467: Pick this series double-click prevention', () => {
     const title = `Disabled Pick ${Date.now()}`
     await createThread(page, {
       title,
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })

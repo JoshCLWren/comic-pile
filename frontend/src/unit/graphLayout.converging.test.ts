@@ -6,7 +6,6 @@ function thread(id: number): Thread {
   return {
     id,
     title: `Thread ${id}`,
-    format: 'Comics',
     issues_remaining: 1,
     total_issues: 1,
     next_unread_issue_id: null,

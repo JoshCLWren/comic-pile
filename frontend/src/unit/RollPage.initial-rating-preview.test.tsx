@@ -85,7 +85,6 @@ const pendingBootstrap = {
   active_thread: {
     id: 1,
     title: 'Annihilation: Super-Skrull',
-    format: 'Comic',
     issues_remaining: 6,
     queue_position: 2,
     total_issues: 12,

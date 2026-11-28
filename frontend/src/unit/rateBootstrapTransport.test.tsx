@@ -32,7 +32,6 @@ const mockedBootstrapApi = vi.mocked(rollBootstrapApi)
 const THREAD: Thread = {
   id: 1,
   title: 'Saga',
-  format: 'issue',
   issues_remaining: 4,
   total_issues: 10,
   queue_position: 2,

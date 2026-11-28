@@ -42,7 +42,6 @@ const longTitle =
 const baseThread = {
   id: 7,
   title: longTitle,
-  format: 'single',
   issues_remaining: 5,
   queue_position: 1,
   total_issues: 22,

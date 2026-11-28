@@ -18,7 +18,6 @@ test.describe('RATE-001: Rating a comic', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Rate Visible Thread',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -38,7 +37,6 @@ test.describe('RATE-001: Rating a comic', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Persist Rating Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -67,7 +65,6 @@ test.describe('RATE-001: Rating a comic', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Snooze Button Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -88,7 +85,6 @@ test.describe('RATE-001: Rating a comic', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Cancel Roll Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })

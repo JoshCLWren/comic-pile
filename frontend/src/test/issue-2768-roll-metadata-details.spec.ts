@@ -107,7 +107,6 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Cover Modal Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -135,7 +134,6 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'No Cover Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -160,7 +158,6 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'ComicVine Link Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -186,7 +183,6 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'No ComicVine Link Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -211,7 +207,6 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Story Title Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -242,7 +237,6 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Normal Summary Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -270,7 +264,6 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     const longDescription = 'A '.repeat(200) + 'very long description that should be truncated.'
     await createThread(page, {
       title: 'Long Summary Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -308,7 +301,6 @@ test.describe('issue #2768: creators and story arcs', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Creators Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -349,7 +341,6 @@ test.describe('issue #2768: creators and story arcs', () => {
     }))
     await createThread(page, {
       title: 'Long Creators Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -381,7 +372,6 @@ test.describe('issue #2768: creators and story arcs', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Story Arcs Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -434,7 +424,6 @@ test.describe('issue #2768: creators and story arcs', () => {
     }))
     await createThread(page, {
       title: 'Tablet Arc Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -475,7 +464,6 @@ test.describe('issue #2768: responsive and edge cases', () => {
     await page.setViewportSize(PHONE_VIEWPORT)
     await createThread(page, {
       title: 'Phone Overflow Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -506,7 +494,6 @@ test.describe('issue #2768: responsive and edge cases', () => {
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Sparse Metadata Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })

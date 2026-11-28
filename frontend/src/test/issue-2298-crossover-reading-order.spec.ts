@@ -69,7 +69,6 @@ async function seedLargeCrossover(page: Page): Promise<CrossoverFixture> {
   for (let i = 1; i <= LARGE_CROSSOVER_MEMBER_COUNT; i += 1) {
     const thread = await createThread(page, {
       title: `Crossover Series ${String(i).padStart(2, '0')}`,
-      format: 'Issue',
       issues_remaining: 1,
       total_issues: 1,
     })

@@ -54,7 +54,6 @@ vi.mock('../pages/QueuePage/FormatSelect', () => ({
 const EDITING_THREAD = {
   id: 99,
   title: 'Test Series',
-  format: 'Comic',
   notes: null,
   issues_remaining: 1,
   total_issues: 12,

@@ -101,7 +101,6 @@ const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 const thread = {
   id: 1,
   title: 'Saga',
-  format: 'Comic',
   status: 'active',
   queue_position: 1,
   issues_remaining: 5,

@@ -186,19 +186,16 @@ test.describe('CBL replacement review', () => {
     const manualTitle = `Replace Manual ${suffix}`
     const first = await createThread(page, {
       title: firstTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const removed = await createThread(page, {
       title: removedTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const manual = await createThread(page, {
       title: manualTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
@@ -330,19 +327,16 @@ test.describe('CBL replacement review', () => {
     const replacementTitle = `Same Name Replacement ${suffix}`
     const first = await createThread(page, {
       title: firstTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const second = await createThread(page, {
       title: secondTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const replacement = await createThread(page, {
       title: replacementTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
@@ -447,13 +441,11 @@ test.describe('CBL replacement review', () => {
     const secondTitle = `Stale Second ${suffix}`
     const first = await createThread(page, {
       title: firstTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const second = await createThread(page, {
       title: secondTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
@@ -567,13 +559,11 @@ test.describe('CBL replacement review', () => {
     const manualTitle = `Rated Manual ${suffix}`
     const rated = await createThread(page, {
       title: ratedTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const manual = await createThread(page, {
       title: manualTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
@@ -671,13 +661,11 @@ test.describe('CBL replacement review', () => {
     const secondTitle = `Overlap Second ${suffix}`
     const first = await createThread(page, {
       title: firstTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const second = await createThread(page, {
       title: secondTitle,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })

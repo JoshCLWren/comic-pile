@@ -7,13 +7,11 @@ const completedThreads = [
   {
     id: 2,
     title: 'Descender',
-    format: 'Comic',
     notes: 'Finished the main series',
   },
   {
     id: 3,
     title: 'Paper Girls',
-    format: 'Trade',
     notes: null,
   },
 ]

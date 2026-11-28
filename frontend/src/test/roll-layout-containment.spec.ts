@@ -185,7 +185,6 @@ test.describe('Roll layout containment', () => {
       await page.setViewportSize(viewport)
       await createThread(page, {
         title: THREAD_TITLE,
-        format: 'Comic',
         issues_remaining: 2,
         total_issues: 4,
       })
@@ -248,7 +247,6 @@ test.describe('Roll rating view cover rail and Summary width', () => {
       await page.setViewportSize(viewport)
       await createThread(page, {
         title: THREAD_TITLE,
-        format: 'Comic',
         issues_remaining: 2,
         total_issues: 4,
       })
@@ -302,7 +300,6 @@ test.describe('Roll rating view title column width', () => {
       await page.setViewportSize(viewport)
       await createThread(page, {
         title: THREAD_TITLE,
-        format: 'Comic',
         issues_remaining: 2,
         total_issues: 4,
       })

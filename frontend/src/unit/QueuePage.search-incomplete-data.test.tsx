@@ -140,7 +140,6 @@ describe('Queue search with incomplete data', () => {
       {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
         status: 'active',
         queue_position: 1,
         issues_remaining: 5,
@@ -148,7 +147,6 @@ describe('Queue search with incomplete data', () => {
       {
         id: 2,
         title: 'Spawn',
-        format: 'Comic',
         status: 'active',
         queue_position: 2,
         issues_remaining: 5,
@@ -215,7 +213,6 @@ describe('Queue search with incomplete data', () => {
       {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
         status: 'active',
         queue_position: 1,
         issues_remaining: 5,
@@ -223,7 +220,6 @@ describe('Queue search with incomplete data', () => {
       {
         id: 2,
         title: 'Spawn',
-        format: 'Comic',
         status: 'active',
         queue_position: 2,
         issues_remaining: 5,

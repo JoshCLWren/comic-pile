@@ -165,7 +165,6 @@ function deferred<T>(): Deferred<T> {
 const MIGRATED_THREAD: ThreadListItem = {
   id: 1,
   title: 'Saga',
-  format: 'Comic',
   status: 'active',
   queue_position: 1,
   issues_remaining: 5,
@@ -179,7 +178,6 @@ const MIGRATED_THREAD: ThreadListItem = {
 const UNMIGRATED_THREAD: ThreadListItem = {
   id: 7,
   title: 'Descender',
-  format: 'Comic',
   status: 'active',
   queue_position: 1,
   issues_remaining: 3,

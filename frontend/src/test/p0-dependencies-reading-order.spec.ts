@@ -84,13 +84,11 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     const page = authenticatedPage
     const blocking = await createThread(page, {
       title: 'Blocking Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
     const blocked = await createThread(page, {
       title: 'Blocked Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -112,13 +110,11 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     const page = authenticatedPage
     const blocking = await createThread(page, {
       title: 'Dep Blocker',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
     const blocked = await createThread(page, {
       title: 'Dep Blocked',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -138,13 +134,11 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     const page = authenticatedPage
     const blocking = await createThread(page, {
       title: 'Order Blocker',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
     const blocked = await createThread(page, {
       title: 'Order Blocked',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -175,13 +169,11 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     const page = authenticatedPage
     const threadA = await createThread(page, {
       title: 'Issue Dep A',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
     const threadB = await createThread(page, {
       title: 'Issue Dep B',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -220,13 +212,11 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     const page = authenticatedPage
     const threadA = await createThread(page, {
       title: 'Delete Dep A',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
     const threadB = await createThread(page, {
       title: 'Delete Dep B',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })

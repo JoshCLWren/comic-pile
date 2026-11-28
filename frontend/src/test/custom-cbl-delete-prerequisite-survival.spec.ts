@@ -137,19 +137,16 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   const suffix = `${Date.now()}`
   const source = await createThread(page, {
     title: `Prerequisite Source ${suffix}`,
-    format: 'Comics',
     issues_remaining: 1,
     total_issues: 1,
   })
   const target = await createThread(page, {
     title: `Prerequisite Target ${suffix}`,
-    format: 'Comics',
     issues_remaining: 1,
     total_issues: 1,
   })
   const blockedTarget = await createThread(page, {
     title: `Prerequisite Blocked Target ${suffix}`,
-    format: 'Comics',
     issues_remaining: 1,
     total_issues: 1,
   })

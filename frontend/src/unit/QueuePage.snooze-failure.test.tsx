@@ -135,7 +135,6 @@ it('does not refresh session or threads when native reroll snooze fails', async 
       {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
         status: 'active',
         queue_position: 1,
         issues_remaining: 5,
@@ -177,7 +176,6 @@ it('keeps snooze disabled before session data has loaded', async () => {
       {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
         status: 'active',
         queue_position: 1,
         issues_remaining: 5,

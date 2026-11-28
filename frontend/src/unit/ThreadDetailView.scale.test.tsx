@@ -90,7 +90,6 @@ it.each([25, 250, 1_000, 10_000])(
     mockedThreadsApiGet.mockResolvedValue({
       id: 1,
       title: `Scale Test ${totalIssues}`,
-      format: 'Comics',
       issues_remaining: totalIssues - 1,
       queue_position: 1,
       status: 'active',
@@ -116,7 +115,6 @@ it('keeps unmigrated threads independent from the issue-list endpoint', async ()
   mockedThreadsApiGet.mockResolvedValue({
     id: 1,
     title: 'Legacy Thread',
-    format: 'Comics',
     issues_remaining: 12,
     queue_position: 3,
     status: 'active',

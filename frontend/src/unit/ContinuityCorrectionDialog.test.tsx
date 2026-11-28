@@ -151,7 +151,6 @@ describe('ContinuityCorrectionDialog', () => {
     getThread.mockImplementation(async (id: number) => ({
       id,
       title: connected.find((entry) => entry.thread_id === id)?.title ?? 'Unknown',
-      format: 'issue',
       issues_remaining: 1,
       total_issues: 1,
       queue_position: 1,

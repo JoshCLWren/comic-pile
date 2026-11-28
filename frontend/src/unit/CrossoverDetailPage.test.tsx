@@ -42,7 +42,6 @@ function makeThread(id: number, title: string): Thread {
   return {
     id,
     title,
-    format: 'single issues',
     issues_remaining: 1,
     total_issues: 6,
     next_unread_issue_id: null,

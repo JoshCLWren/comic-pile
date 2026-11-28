@@ -8,7 +8,6 @@ function thread(id: number, cover: string | null): ThreadListItem {
   return {
     id,
     title: `Series ${id}`,
-    format: 'Comic',
     issues_remaining: 1,
     total_issues: 5,
     next_unread_issue_number: '3',

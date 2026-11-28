@@ -51,13 +51,11 @@ test.describe('Reading Plan reader surface', () => {
     const headers = await authHeaders(page)
     const xmen = await createThread(page, {
       title: 'Reader X-Men',
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const cable = await createThread(page, {
       title: 'Reader Cable',
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })

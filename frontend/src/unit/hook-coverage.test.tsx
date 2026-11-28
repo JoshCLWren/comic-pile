@@ -54,7 +54,6 @@ beforeEach(() => {
   protectedApi.rate.mockResolvedValue({
     id: 1,
     title: 'Test',
-    format: 'issue',
     issues_remaining: 1,
     total_issues: 1,
     queue_position: 1,

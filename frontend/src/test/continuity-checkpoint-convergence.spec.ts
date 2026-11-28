@@ -70,7 +70,6 @@ test.describe('Continuity plan checkpoint and convergence', () => {
 
     const thread = await createThread(page, {
       title: 'Checkpoint Alpha',
-      format: 'Comics',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -113,13 +112,11 @@ test.describe('Continuity plan checkpoint and convergence', () => {
 
     const threadA = await createThread(page, {
       title: 'Converge Branch A',
-      format: 'Comics',
       issues_remaining: 2,
       total_issues: 2,
     })
     const threadB = await createThread(page, {
       title: 'Converge Branch B',
-      format: 'Comics',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -169,7 +166,6 @@ test.describe('Continuity plan checkpoint and convergence', () => {
 
     const thread = await createThread(page, {
       title: 'Gate Edit',
-      format: 'Comics',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -221,7 +217,6 @@ test.describe('Continuity plan checkpoint and convergence', () => {
 
     const thread = await createThread(page, {
       title: 'Gate Remove',
-      format: 'Comics',
       issues_remaining: 2,
       total_issues: 2,
     })

@@ -81,7 +81,6 @@ test('Edit Series preview shows labels and cancel leaves the series unchanged', 
   const threadTitle = `Preview 4654 ${suffix}`
   const thread = await createThread(page, {
     title: threadTitle,
-    format: 'comic',
     total_issues: 1,
     issues_remaining: 1,
   })
@@ -132,7 +131,6 @@ test('Edit Series failed preview can be retried from the error modal', async ({ 
   const threadTitle = `Retry Preview 4654 ${suffix}`
   const thread = await createThread(page, {
     title: threadTitle,
-    format: 'comic',
     total_issues: 1,
     issues_remaining: 1,
   })
@@ -182,7 +180,6 @@ test('committed Edit Series add offers browser Undo of the pre-edit snapshot', a
   const threadTitle = `Undo Preview 4654 ${suffix}`
   const thread = await createThread(page, {
     title: threadTitle,
-    format: 'comic',
     total_issues: 1,
     issues_remaining: 1,
   })

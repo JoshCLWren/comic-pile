@@ -28,7 +28,6 @@ vi.mock('../components/ContinuityCorrectionDialog', () => ({
 const ratingThread = {
   id: 7,
   title: 'Animal Man / Swamp Thing',
-  format: 'Comic',
   issues_remaining: 3,
   queue_position: 1,
   total_issues: null,

@@ -90,7 +90,6 @@ function activeThread(id: number, title: string) {
   return {
     id,
     title,
-    format: 'Comic',
     status: 'active',
     queue_position: id,
     issues_remaining: 5,

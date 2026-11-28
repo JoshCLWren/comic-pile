@@ -80,7 +80,6 @@ function renderAt(path: string, element: ReactNode, strict = false): ReactNode {
 const queueThreads = [1, 2].map((id) => ({
   id,
   title: `Series ${id}`,
-  format: 'Comic',
   issues_remaining: 3,
   total_issues: 3,
   status: 'active',

@@ -27,7 +27,6 @@ function makeThread(overrides: Partial<Thread>): Thread {
   return {
     id: 1,
     title: 'Saga',
-    format: 'Comic',
     status: 'active',
     queue_position: 1,
     issues_remaining: 1,

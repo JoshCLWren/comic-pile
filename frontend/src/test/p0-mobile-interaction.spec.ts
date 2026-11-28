@@ -94,7 +94,6 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
     await page.setViewportSize(MOBILE_VIEWPORT)
     await createThread(page, {
       title: 'Mobile Roll Thread',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -118,7 +117,6 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
     await page.setViewportSize(MOBILE_VIEWPORT)
     await createThread(page, {
       title: 'Mobile Queue Thread',
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -138,7 +136,6 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
     await page.setViewportSize(MOBILE_VIEWPORT)
     await createThread(page, {
       title: 'Mobile Rate Thread',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })

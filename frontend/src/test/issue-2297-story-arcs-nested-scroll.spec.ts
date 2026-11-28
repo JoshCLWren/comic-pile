@@ -169,7 +169,6 @@ test.describe('issue #2297: story arcs list reflows with the page at tablet port
 
     await createThread(page, {
       title: 'Story Arc Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })

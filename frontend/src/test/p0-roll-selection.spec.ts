@@ -32,7 +32,6 @@ test.describe('ROLL-001: Roll selection', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Roll Die Thread',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -49,7 +48,6 @@ test.describe('ROLL-001: Roll selection', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Rolled Thread',
-      format: 'Issue',
       issues_remaining: 5,
       total_issues: 5,
     })
@@ -69,7 +67,6 @@ test.describe('ROLL-001: Roll selection', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Rating Target Thread',
-      format: 'Comic',
       issues_remaining: 4,
       total_issues: 4,
     })
@@ -89,7 +86,6 @@ test.describe('ROLL-001: Roll selection', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Die Selector Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -131,13 +127,11 @@ test.describe('ROLL-001: Roll selection', () => {
     const ledger = startRequestLedger(page)
     await createThread(page, {
       title: 'Move To Front Alpha',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
     const beta = await createThread(page, {
       title: 'Move To Front Beta',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -184,13 +178,11 @@ test.describe('ROLL-001: Roll selection', () => {
     const ledger = startRequestLedger(page)
     await createThread(page, {
       title: 'Shuffle Pool Alpha',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
     await createThread(page, {
       title: 'Shuffle Pool Beta',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })

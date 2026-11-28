@@ -234,7 +234,6 @@ it('requests one scoped card batch and prefers its title and issue number (#4719
       roll_pool: [{
         id: 1,
         title: 'Bootstrap title',
-        format: 'Comic',
         issue_id: 11,
         issue_number: '1',
       }],

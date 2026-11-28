@@ -9,7 +9,6 @@ function makeDecisionCardProps(overrides: Partial<DecisionCardProps> = {}) {
     activeRatingThread: {
       id: 1,
       title: 'Test Comic',
-      format: 'comic',
       issues_remaining: 3,
       queue_position: 1,
       total_issues: null,

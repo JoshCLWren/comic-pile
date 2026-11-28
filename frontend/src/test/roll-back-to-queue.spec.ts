@@ -22,7 +22,6 @@ test.describe('Issue #4140: Roll → Queue navigation optimization', () => {
     const title = 'Navigation Optimization Thread'
     await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -60,7 +59,6 @@ test.describe('Issue #4140: Roll → Queue navigation optimization', () => {
     const title = 'Pending Selection Thread'
     await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })

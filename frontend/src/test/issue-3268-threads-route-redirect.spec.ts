@@ -47,7 +47,6 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
 async function seedThread(page: Page): Promise<number> {
   const thread = await createThread(page, {
     title: THREAD_TITLE,
-    format: 'Issue',
     issues_remaining: 1,
     total_issues: 1,
   })

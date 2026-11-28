@@ -31,7 +31,6 @@ test.describe('issue #2286: fresh roll anchors the viewport to the rating surfac
       for (let index = 0; index < 3; index++) {
         await createThread(page, {
           title: `Scroll Anchor Thread ${index + 1}`,
-          format: 'Issue',
           issues_remaining: 3,
           total_issues: 3,
         })
