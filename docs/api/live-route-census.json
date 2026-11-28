@@ -1236,30 +1236,6 @@
       "notes": ""
     },
     {
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
-      "handler": "thread_lifecycle::set_pending_thread",
-      "handler_kind": "function",
-      "router_line": 947,
-      "version": "v1",
-      "runtime": "native-rust",
-      "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/test/helpers.ts",
-        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts"
-      ],
-      "caller_count": 4,
-      "ingress_destination": "/api/native_roll.rs",
-      "ingress_source": "vercel-route",
-      "owner_issue": 4344,
-      "needs_owner_issue": false,
-      "disposition": "retire-without-replacement",
-      "rollout_status": "owner-issue-open",
-      "notes": "Census regression: Rust implementation does not make this v1 surface complete or retired. Direct v2 issue actions supersede it (#5525)."
-    },
-    {
       "method": "PUT",
       "path": "/api/v1/threads/{thread_id}/test-backdate",
       "handler": "thread_lifecycle::backdate_thread_for_testing",
@@ -5531,14 +5507,6 @@
       "status": "not-live",
       "disposition": "retire-without-replacement",
       "notes": "Event-derived v2 state supersedes the legacy current-session resource."
-    },
-    {
-      "issue": 5525,
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
-      "status": "live-p0-evidence",
-      "disposition": "retire-without-replacement",
-      "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
     },
     {
       "issue": 5707,
