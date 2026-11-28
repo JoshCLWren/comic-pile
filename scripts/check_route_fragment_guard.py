@@ -44,6 +44,64 @@ SOURCE_FRAGMENT_PREFIX: Final = "docs/api/route-fragments/"
 AGENTS_PATH: Final = "AGENTS.md"
 AGENTS_BEGIN_PREFIX: Final = "<!-- route-burndown:begin"
 AGENTS_END_MARKER: Final = "<!-- route-burndown:end -->"
+ACTION_EXEMPTIONS_PATH: Final = "docs/api/v2-aip-shapes-baseline.json"
+ACTION_EXEMPTION_REASON: Final = "action-shaped-subpath"
+ACTION_VERBS: Final = frozenset(
+    {
+        "activate",
+        "adopt",
+        "apply",
+        "approve",
+        "archive",
+        "batch",
+        "browse",
+        "callback",
+        "cancel",
+        "check",
+        "compare",
+        "confirm",
+        "correct",
+        "deactivate",
+        "delete",
+        "detect",
+        "dismiss",
+        "dispatch",
+        "download",
+        "export",
+        "get",
+        "import",
+        "login",
+        "logout",
+        "merge",
+        "offer",
+        "override",
+        "preview",
+        "project",
+        "promote",
+        "publish",
+        "reactivate",
+        "refresh",
+        "register",
+        "reject",
+        "replace",
+        "reset",
+        "resolve",
+        "restore",
+        "retract",
+        "retry",
+        "revert",
+        "search",
+        "set",
+        "switch",
+        "sync",
+        "undo",
+        "unsnooze",
+        "upload",
+        "validate",
+        "verify",
+    }
+)
+ACTION_SEGMENT_SPLIT: Final = re.compile(r"[-_]+|(?<=[a-z0-9])(?=[A-Z])")
 
 
 def is_source_fragment(path: str) -> bool:
