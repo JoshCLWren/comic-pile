@@ -52,9 +52,10 @@ export function clamp(value: number, min: number, max: number): number {
  * unknown size falls back to d6, matching the scoped die-state fallback.
  */
 export function resolveProductionDie(value: number): ProductionDie {
-  return (PRODUCTION_DICE_SIDES as readonly number[]).includes(value)
-    ? (value as ProductionDie)
-    : 6
+  // SAFETY: PRODUCTION_DICE_SIDES is a literal tuple of ProductionDie members,
+  // so a matching `find` returns that exact literal and never an arbitrary
+  // number; the nullish fallback is the supported d6.
+  return PRODUCTION_DICE_SIDES.find((side) => side === value) ?? 6
 }
 
 export function getCoverArrangement(value: number): CoverArrangement {

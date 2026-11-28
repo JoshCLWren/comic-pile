@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import { isFunction } from '../../../utils/runtimeChecks'
 
 export interface CoverFlightState {
   /** Exact ComicVine CDN URL from the card projection; never proxied. */
@@ -11,6 +12,17 @@ export interface CoverFlightState {
 interface CoverFlightProps {
   flight: CoverFlightState
   onDone: () => void
+}
+
+/**
+ * Web Animations is an optional browser capability (it is absent in jsdom and
+ * older browsers). `isFunction` decodes the DOM method at the boundary instead
+ * of narrowing a representation with `typeof`: the checked invariant is that a
+ * function found here is `Element.animate`, which accepts keyframes/options. A
+ * missing implementation is not an error — the decorative flight is skipped.
+ */
+function canAnimate(node: HTMLElement): boolean {
+  return isFunction(node.animate)
 }
 
 /**
@@ -28,7 +40,7 @@ export function CoverFlight({ flight, onDone }: CoverFlightProps) {
       onDone()
       return
     }
-    if (typeof node.animate !== 'function') {
+    if (!canAnimate(node)) {
       onDone()
       return
     }

@@ -44,6 +44,7 @@ import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterUndo, invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
+import { isFunction, isWindowDefined } from '../../utils/runtimeChecks'
 import { ThreadPool } from './components/ThreadPool'
 import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
 import { RollHeader } from './components/RollHeader'
@@ -55,11 +56,16 @@ import { RollDiceButton } from './components/RollDiceButton'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCard'
 
-/** Decorative motion is skipped for reduced-motion readers; the outcome is not. */
+/**
+ * Decorative motion is skipped for reduced-motion readers; the outcome is not.
+ * `matchMedia` is decoded with the runtimeChecks contract helper rather than a
+ * bare `typeof` guard: a function at this DOM boundary is the browser's
+ * `MediaQueryList` factory, so `.matches` is a boolean preference.
+ */
 function prefersReducedMotion(): boolean {
   return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
+    isWindowDefined() &&
+    isFunction(window.matchMedia) &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
 }
