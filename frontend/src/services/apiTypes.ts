@@ -23,7 +23,7 @@ export type RollPendingUserId = number | string | null | undefined
 
 export interface ProtectedRollMutationApi {
   rate: (data: RatePayload) => Promise<RateResponsePayload>
-  snooze: () => Promise<SnoozeSessionResponse>
+  snooze: () => Promise<SnoozeSessionResponse & RollResponse>
   bootstrap: (userId?: RollPendingUserId) => Promise<RollBootstrapResponse>
 }
 

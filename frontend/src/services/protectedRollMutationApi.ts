@@ -21,12 +21,15 @@ export function createProtectedRollMutationApi(client: HttpClient) {
   const { rate } = createNativeRollMutationApi(client)
   return {
     rate,
-    snooze: async (): Promise<SnoozeSessionResponse> => {
+    snooze: async (): Promise<SnoozeSessionResponse & RollResponse> => {
       // The Roll action-sheet snooze is the same native offer as Reroll: the
       // Rust writer records the snooze event, advances the die and selects the
       // replacement atomically. The legacy v1 snooze route is retired (#4338).
+      // Keep the full offer alongside the snooze projection so callers can seed
+      // the browser-owned pending selection with the exact replacement issue.
       const response = await rollOffers.reroll()
       return {
+        ...response,
         current_die: response.die_size,
         pending_thread_id: response.thread_id ?? null,
         reading_mode_suggested: false,
