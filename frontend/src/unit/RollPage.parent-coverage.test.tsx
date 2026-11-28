@@ -518,10 +518,6 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
-<<<<<<< HEAD
-=======
-    expect(spies.setPending).not.toHaveBeenCalled()
->>>>>>> origin/main
   })
 
   it('handles normal roll failures and unresolved pending conflicts', async () => {
@@ -975,10 +971,6 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'skip migration' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'complete migration' })).not.toBeInTheDocument()
-<<<<<<< HEAD
-=======
-    expect(spies.setPending).not.toHaveBeenCalled()
->>>>>>> origin/main
   })
 
   it('refreshes matching active metadata and reopens pending rolls', async () => {
