@@ -100,7 +100,27 @@ function ActivitySubject({ item }: { item: ActivityItem }) {
   )
 }
 
+const FILTER_DEBOUNCE_MS = 400
+
 export default function HistoryPage() {
+  // Text inputs are locally owned and debounced so typing does not issue a
+  // request per keystroke; select/date changes also settle through the same
+  // short quiet period. The applied filters feed both the query key and the
+  // server request, so chronology and pagination stay resource-owned.
+  const [filterDraft, setFilterDraft] = useState<ActivityFilters>(EMPTY_ACTIVITY_FILTERS)
+  const debouncedQuery = useDebounce(filterDraft.q, FILTER_DEBOUNCE_MS)
+  const debouncedSeries = useDebounce(filterDraft.series, FILTER_DEBOUNCE_MS)
+  const filters = useMemo(
+    () =>
+      normalizeActivityFilters({
+        ...filterDraft,
+        q: debouncedQuery,
+        series: debouncedSeries,
+      }),
+    [filterDraft, debouncedQuery, debouncedSeries],
+  )
+  const hasFilters = hasActiveActivityFilters(filters)
+  const clearFilters = useCallback(() => setFilterDraft(EMPTY_ACTIVITY_FILTERS), [])
   const {
     data: activity,
     isPending,
@@ -110,7 +130,7 @@ export default function HistoryPage() {
     error,
     isRetrying,
     refetch,
-  } = useActivity()
+  } = useActivity(filters)
   const [restoringThreadId, setRestoringThreadId] = useState<number | null>(null)
   const [restoreMessage, setRestoreMessage] = useState<string | null>(null)
   const {
@@ -199,7 +219,12 @@ export default function HistoryPage() {
             <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
           </div>
         </header>
-        <div className="text-center text-stone-500">No activity yet</div>
+        <div className="px-2">
+          <HistoryFilters filters={filterDraft} onChange={setFilterDraft} onClear={clearFilters} />
+        </div>
+        <div className="text-center text-stone-500" role="status">
+          {hasFilters ? 'No activity matches these filters' : 'No activity yet'}
+        </div>
       </div>
     )
   }
@@ -216,6 +241,10 @@ export default function HistoryPage() {
           )}
         </div>
       </header>
+
+      <div className="px-2">
+        <HistoryFilters filters={filterDraft} onChange={setFilterDraft} onClear={clearFilters} />
+      </div>
 
       {bulkReadOperations.length > 0 && (
         <section
