@@ -97,7 +97,7 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
    */
   isFetchNextPageError: boolean
   isError: boolean
-  error: unknown
+  error: Error | null
 }
 
 /**

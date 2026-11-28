@@ -1,6 +1,10 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { cblSourcesApi } from '../services/api-cbl-sources'
+import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
+import {
+  cblSourcesApi,
+  type CBLSourceEntryDetail,
+  type CBLSourceListDetail,
+} from '../services/api-cbl-sources'
 import { queryKeys } from '../query/queryKeys'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
 import { isObject, isString, type JsonRecord } from '../utils/runtimeChecks'
@@ -59,7 +63,7 @@ export function CblSourceDetailPanel({
   const back: CblBackDestination = backHref
     ? { path: backHref, label: backLabel ?? 'CBL results' }
     : routerBack
-  const detailQuery = useInfiniteQuery({
+  const detailQuery = useInfiniteCollection<CBLSourceEntryDetail, CBLSourceListDetail, number>({
     queryKey: queryKeys.cblSources.detail(listId, PAGE_SIZE),
     queryFn: ({ pageParam }) =>
       cblSourcesApi.detail(listId, { offset: pageParam, limit: PAGE_SIZE }),
@@ -68,6 +72,7 @@ export function CblSourceDetailPanel({
       const nextOffset = lastPage.entries_offset + lastPage.entries.length
       return nextOffset < lastPage.entries_total ? nextOffset : undefined
     },
+    selectPage: (page) => page.entries,
   })
 
   if (detailQuery.isPending) {
