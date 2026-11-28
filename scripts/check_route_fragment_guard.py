@@ -123,6 +123,122 @@ def is_source_fragment(path: str) -> bool:
     return path != "docs/api/route-fragments/vercel-rewrites.json"
 
 
+def is_action_shaped_route(path: str) -> bool:
+    """Return whether a v2 path exposes an action instead of a resource.
+
+    Colon custom methods, bare action segments, hyphenated/underscored actions,
+    and lowerCamelCase verb operations all require a route-specific exemption.
+    Path parameters are ignored. Existing routes are compared with the merge
+    base by :func:`find_action_route_violations`, so this strict policy does not
+    retroactively reject the accepted legacy surface.
+
+    Args:
+        path: Absolute operation path from a source fragment.
+
+    Returns:
+        True for action-shaped v2 paths; non-v2 and resource paths return False.
+    """
+    if not path.startswith("/api/v2/"):
+        return False
+    for segment in path.removeprefix("/api/v2/").split("/"):
+        if not segment or (segment.startswith("{") and segment.endswith("}")):
+            continue
+        if ":" in segment:
+            return True
+        words = [word.lower() for word in ACTION_SEGMENT_SPLIT.split(segment) if word]
+        if any(word in ACTION_VERBS for word in words):
+            return True
+    return False
+
+
+def _json_object(value: object, source: str) -> JsonObject:
+    """Validate and normalize one decoded JSON object."""
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise ValueError(f"{source} must contain a JSON object")
+    return {str(key): item for key, item in value.items()}
+
+
+def _load_json_object(text: str, source: str) -> JsonObject:
+    """Decode one JSON object, treating an absent revision file as empty."""
+    if not text.strip():
+        return {}
+    return _json_object(json.loads(text), source)
+
+
+def _operation_keys(text: str, source: str) -> set[tuple[str, str]]:
+    """Read ``METHOD path`` keys from one source-fragment JSON document."""
+    document = _load_json_object(text, source)
+    operations = document.get("operations", [])
+    if not isinstance(operations, list):
+        raise ValueError(f"{source}.operations must be an array")
+    result: set[tuple[str, str]] = set()
+    for index, value in enumerate(operations):
+        operation = _json_object(value, f"{source}.operations[{index}]")
+        method = operation.get("method")
+        path = operation.get("path")
+        if not isinstance(method, str) or not isinstance(path, str):
+            raise ValueError(f"{source}.operations[{index}] needs method and path strings")
+        result.add((method.upper(), path))
+    return result
+
+
+def _action_exemptions(text: str, source: str = ACTION_EXEMPTIONS_PATH) -> set[tuple[str, str]]:
+    """Read owner-approved action-route exemptions from the AIP baseline."""
+    document = _load_json_object(text, source)
+    entries = document.get("entries", [])
+    if not isinstance(entries, list):
+        raise ValueError(f"{source}.entries must be an array")
+    result: set[tuple[str, str]] = set()
+    for index, value in enumerate(entries):
+        entry = _json_object(value, f"{source}.entries[{index}]")
+        method = entry.get("method")
+        path = entry.get("path")
+        owner = entry.get("owning_issue")
+        reasons = entry.get("reason")
+        if not isinstance(method, str) or not isinstance(path, str):
+            raise ValueError(f"{source}.entries[{index}] needs method and path strings")
+        if (
+            type(owner) is int
+            and owner > 0
+            and isinstance(reasons, str)
+            and ACTION_EXEMPTION_REASON in reasons.split(",")
+        ):
+            result.add((method.upper(), path))
+    return result
+
+
+def find_action_route_violations(
+    base_fragments: dict[str, str],
+    head_fragments: dict[str, str],
+    exemptions_text: str,
+) -> list[str]:
+    """Reject newly added action-shaped operations without an owned exemption.
+
+    Args:
+        base_fragments: Source path to JSON text at the merge base.
+        head_fragments: Source path to JSON text at the proposed head.
+        exemptions_text: Proposed AIP baseline JSON. An exemption must name a
+            positive ``owning_issue`` and the ``action-shaped-subpath`` reason.
+
+    Returns:
+        Sorted, source-labelled violations. Pre-existing operations and real
+        resource routes do not require exemptions.
+    """
+    base_operations: set[tuple[str, str]] = set()
+    for source, text in base_fragments.items():
+        base_operations.update(_operation_keys(text, source))
+    exemptions = _action_exemptions(exemptions_text)
+    violations: set[str] = set()
+    for source, text in head_fragments.items():
+        for method, path in _operation_keys(text, source) - base_operations:
+            if is_action_shaped_route(path) and (method, path) not in exemptions:
+                violations.add(
+                    f"{source}: {method} {path} is action-shaped and has no "
+                    "owner-approved action-shaped-subpath exemption"
+                )
+    return sorted(violations)
+
+
 def is_generated_path(path: str) -> bool:
     """Return whether ``path`` is a bot-owned generated file.
 
