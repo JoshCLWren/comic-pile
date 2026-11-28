@@ -162,7 +162,7 @@ pub struct ReplacementUndoRequest {
     pub idempotency_key: Option<String>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReplacementUndoResponse {
     pub target_list_id: i32,
     pub snapshot_id: i32,
