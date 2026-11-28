@@ -2999,6 +2999,515 @@ async fn series_mappings_preview_v2_http_auth_validation_and_read_only_scope() {
     assert_eq!(receipts, 0, "v2 preview must not write commit receipts");
 }
 
+// ---------------------------------------------------------------------------
+// #5170: safe exact-match preview -> v2 commit round trip on the all-Rust path.
+//
+// The earlier Python-minted token vectors in `catalog_commit::tests` prove the
+// historical digest fix (#5340). These tests exercise the *current* contract:
+// a stateless v2 preview mints the token and the same v2 commit endpoint
+// revalidates it. The provider roster is an installed fixture, so no test ever
+// reaches ComicVine and the whole plan is deterministic.
+// ---------------------------------------------------------------------------
+
+const NTT_SERIES_TITLE: &str = "New Teen Titans (1980)";
+
+struct SafeSeriesFixture {
+    volume_id: &'static str,
+    thread_id: i32,
+    first_issue_id: i32,
+}
+
+impl SafeSeriesFixture {
+    fn new(volume_id: &'static str, thread_id: i32, first_issue_id: i32) -> Self {
+        Self {
+            volume_id,
+            thread_id,
+            first_issue_id,
+        }
+    }
+
+    fn safe_issue_ids(&self) -> Vec<i32> {
+        (self.first_issue_id..self.first_issue_id + 33).collect()
+    }
+
+    fn safe_row_ids(&self) -> Vec<String> {
+        self.safe_issue_ids()
+            .into_iter()
+            .map(|id| format!("issue:{id}"))
+            .collect()
+    }
+
+    fn unsafe_issue_id(&self) -> i32 {
+        self.first_issue_id + 33
+    }
+
+    fn origin_issue_id(&self) -> i32 {
+        self.first_issue_id
+    }
+
+    fn series_info(&self) -> Value {
+        json!({
+            "id": self.volume_id,
+            "name": NTT_SERIES_TITLE,
+            "publisher": "DC Comics",
+            "start_year": 1980,
+            "count_of_issues": 35,
+            "site_detail_url": format!("https://comicvine.gamespot.com/volume/{}", self.volume_id),
+            "image": null,
+        })
+    }
+
+    /// The 33 exact provider matches plus two inventory-only issues (#34/#35).
+    /// Both classes must remain unmapped when only the safe rows are approved.
+    fn roster(&self) -> Vec<Value> {
+        let mut roster = Vec::new();
+        for number in 1..=33_i32 {
+            let provider_id = 600_000 + number;
+            roster.push(json!({
+                "issue_id": provider_id,
+                "issue_number": number.to_string(),
+                "title": format!("Teen Titans #{number}"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": provider_id.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": {
+                    "name": format!("Teen Titans #{number}"),
+                    "issue_number": number.to_string(),
+                    "volume": {"name": NTT_SERIES_TITLE},
+                },
+            }));
+        }
+        for (number, provider_id) in [(34, 600_034_i32), (35, 600_035_i32)] {
+            roster.push(json!({
+                "issue_id": provider_id,
+                "issue_number": number.to_string(),
+                "title": format!("Teen Titans #{number}"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": provider_id.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": {
+                    "name": format!("Teen Titans #{number}"),
+                    "issue_number": number.to_string(),
+                    "volume": {"name": NTT_SERIES_TITLE},
+                },
+            }));
+        }
+        roster
+    }
+
+    fn install(&self) {
+        test_support::install_test_volume_roster(self.volume_id, self.series_info(), self.roster());
+    }
+
+    fn clear(&self) {
+        test_support::clear_test_volume_roster(self.volume_id);
+    }
+
+    async fn seed(&self, state: &Arc<AppState>, user_id: i32) {
+        let conn = state.pool.get().await.unwrap();
+        conn.execute(
+            "INSERT INTO threads
+             (id, user_id, title, format, issues_remaining, queue_position, status,
+              total_issues, reading_progress, created_at)
+             VALUES ($1, $2, $3, 'comic', 0, 1, 'active', 34, 'unread', NOW())",
+            &[&self.thread_id, &user_id, &NTT_SERIES_TITLE],
+        )
+        .await
+        .unwrap();
+        for offset in 0..33_i32 {
+            conn.execute(
+                "INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+                 VALUES ($1, $2, $3, $4, 'unread', NOW())",
+                &[
+                    &(self.first_issue_id + offset),
+                    &self.thread_id,
+                    &(offset + 1).to_string(),
+                    &(offset + 1),
+                ],
+            )
+            .await
+            .unwrap();
+        }
+        // An owned "Annual 1" classifies excluded_special: it must never be
+        // bulk-approved, even when the reader sends its row id in the commit.
+        conn.execute(
+            "INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+             VALUES ($1, $2, 'Annual 1', 34, 'unread', NOW())",
+            &[&self.unsafe_issue_id(), &self.thread_id],
+        )
+        .await
+        .unwrap();
+        // `setup()` seeds catalog identities with explicit ids and resets every
+        // sequence to 1, so advance the identity sequence the way real inserts
+        // would have. Otherwise the commit's first default-id insert collides
+        // with the seeded row and fails with an unrelated 23505.
+        conn.execute(
+            "SELECT setval(pg_get_serial_sequence('external_identities', 'id'),
+                           GREATEST((SELECT COALESCE(MAX(id), 1) FROM external_identities), 1))",
+            &[],
+        )
+        .await
+        .unwrap();
+    }
+
+    fn preview_request(&self) -> Value {
+        json!({
+            "origin_issue_id": self.origin_issue_id(),
+            "provider": "comicvine",
+            "provider_series_external_id": self.volume_id,
+            "scope_mode": "queue_thread_bootstrap",
+        })
+    }
+
+    fn commit_request(&self, token: &str, key: &str, approved_row_ids: Vec<String>) -> Value {
+        json!({
+            "preview_token": token,
+            "idempotency_key": key,
+            "approved_row_ids": approved_row_ids,
+        })
+    }
+
+    async fn mapping_count(&self, state: &Arc<AppState>) -> i64 {
+        let conn = state.pool.get().await.unwrap();
+        conn.query_one(
+            "SELECT count(*) FROM issue_external_identity_mappings m
+             JOIN issues i ON i.id = m.issue_id
+             WHERE i.thread_id = $1",
+            &[&self.thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0)
+    }
+
+    async fn receipt_count(&self, state: &Arc<AppState>) -> i64 {
+        let conn = state.pool.get().await.unwrap();
+        conn.query_one("SELECT count(*) FROM catalog_commit_receipts", &[])
+            .await
+            .unwrap()
+            .get(0)
+    }
+}
+
+const PREVIEW_URI: &str = "/api/v2/seriesMappings:preview";
+const COMMIT_URI: &str = "/api/v2/series-mapping-commits";
+
+#[tokio::test]
+async fn series_mapping_v2_safe_preview_commits_reloads_and_replays() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    let fixture = SafeSeriesFixture::new("4050-5170", 51700, 517001);
+    fixture.install();
+    fixture.seed(&state, user_id).await;
+
+    // Real v2 preview: stateless, all 33 safe rows selected by default.
+    let (status, preview) = post_json(
+        &state,
+        &token,
+        &csrf,
+        PREVIEW_URI,
+        fixture.preview_request(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    assert_eq!(preview["scope"]["status"], "available", "{preview}");
+    assert_eq!(preview["counts"]["safe_exact_match"], 33, "{preview}");
+    let preview_token = preview["preview_token"]
+        .as_str()
+        .expect("available scope mints a preview token")
+        .to_string();
+    let approved = fixture.safe_row_ids();
+    let previewed_safe_rows: Vec<&Value> = preview["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["classification"] == "safe_exact_match")
+        .collect();
+    assert_eq!(previewed_safe_rows.len(), 33, "{preview}");
+    for row in previewed_safe_rows {
+        assert!(approved.contains(&row["row_id"].as_str().unwrap().to_string()));
+    }
+    assert_eq!(
+        fixture.mapping_count(&state).await,
+        0,
+        "preview must not write"
+    );
+    assert_eq!(
+        fixture.receipt_count(&state).await,
+        0,
+        "preview must not write"
+    );
+
+    // Real v2 commit with every safe row approved.
+    let key = "qa-5170-safe-ntt";
+    let (status, committed) = post_json(
+        &state,
+        &token,
+        &csrf,
+        COMMIT_URI,
+        fixture.commit_request(&preview_token, key, approved.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{committed}");
+    assert_eq!(
+        committed["confirmed_issue_ids"],
+        json!(fixture.safe_issue_ids()),
+        "{committed}"
+    );
+    assert_eq!(
+        committed["needs_review_issue_ids"],
+        json!([fixture.unsafe_issue_id()]),
+        "the excluded special issue stays for review: {committed}"
+    );
+    assert_eq!(
+        committed["series_mapping"]["status"], "confirmed",
+        "{committed}"
+    );
+    assert_eq!(
+        committed["series_mapping"]["evidence_source"], "user_series_confirmation",
+        "{committed}"
+    );
+    assert_eq!(fixture.mapping_count(&state).await, 33);
+    assert_eq!(fixture.receipt_count(&state).await, 1);
+
+    // Reload: a fresh preview request and direct reads both see 33 confirmations,
+    // while the unsafe row is still unmapped and the series link survives.
+    let (status, reloaded) = post_json(
+        &state,
+        &token,
+        &csrf,
+        PREVIEW_URI,
+        fixture.preview_request(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reloaded}");
+    assert_eq!(reloaded["counts"]["already_confirmed"], 33, "{reloaded}");
+    assert_eq!(reloaded["counts"]["safe_exact_match"], 0, "{reloaded}");
+    let conn = state.pool.get().await.unwrap();
+    let confirmed: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issue_external_identity_mappings m
+             JOIN issues i ON i.id = m.issue_id
+             WHERE i.thread_id = $1 AND m.status = 'confirmed'",
+            &[&fixture.thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(confirmed, 33);
+    let unsafe_mapped: bool = conn
+        .query_one(
+            "SELECT EXISTS (SELECT 1 FROM issue_external_identity_mappings WHERE issue_id = $1)",
+            &[&fixture.unsafe_issue_id()],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(!unsafe_mapped, "ambiguous/special rows stay unmapped");
+    let series_link: bool = conn
+        .query_one(
+            "SELECT EXISTS (
+               SELECT 1 FROM thread_external_series_mappings tsm
+               JOIN external_identities e ON e.id = tsm.external_identity_id
+               WHERE tsm.thread_id = $1 AND tsm.status = 'confirmed'
+                 AND e.entity_type = 'series' AND e.external_id = $2
+             )",
+            &[&fixture.thread_id, &fixture.volume_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        series_link,
+        "the confirmed thread-series link survives reload"
+    );
+
+    // Same key and same selection replays the receipt: no extra rows.
+    let (status, replay) = post_json(
+        &state,
+        &token,
+        &csrf,
+        COMMIT_URI,
+        fixture.commit_request(&preview_token, key, approved.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{replay}");
+    assert_eq!(replay, committed, "replay returns the same logical result");
+    assert_eq!(fixture.mapping_count(&state).await, 33);
+    assert_eq!(fixture.receipt_count(&state).await, 1);
+
+    // Same key with a changed material selection conflicts and keeps the receipt.
+    let mut shortened = approved.clone();
+    shortened.pop();
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        COMMIT_URI,
+        fixture.commit_request(&preview_token, key, shortened),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["detail"], "idempotency_conflict", "{body}");
+
+    // A previously valid token is stale once the plan has been committed: a
+    // fresh key cannot bypass revalidation, and no partial mutation occurs.
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        COMMIT_URI,
+        fixture.commit_request(
+            &preview_token,
+            "qa-5170-stale-after-commit",
+            approved.clone(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["detail"], "preview_stale", "{body}");
+    assert_eq!(fixture.mapping_count(&state).await, 33);
+    assert_eq!(fixture.receipt_count(&state).await, 1);
+
+    fixture.clear();
+}
+
+#[tokio::test]
+async fn series_mapping_v2_commit_rejects_unsafe_stale_and_foreign_requests_without_writes() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    let fixture = SafeSeriesFixture::new("4050-5171", 51710, 517101);
+    fixture.install();
+    fixture.seed(&state, user_id).await;
+
+    let (status, preview) = post_json(
+        &state,
+        &token,
+        &csrf,
+        PREVIEW_URI,
+        fixture.preview_request(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    let preview_token = preview["preview_token"]
+        .as_str()
+        .expect("available scope mints a preview token")
+        .to_string();
+    let approved = fixture.safe_row_ids();
+
+    // Approving the excluded_special row alongside the safe rows is refused
+    // before any write. Unsafe rows are never bulk-confirmed.
+    let mut unsafe_selection = approved.clone();
+    unsafe_selection.push(format!("issue:{}", fixture.unsafe_issue_id()));
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        COMMIT_URI,
+        fixture.commit_request(&preview_token, "qa-5170-unsafe", unsafe_selection),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"], "invalid_approved_row", "{body}");
+
+    // Provider inventory rows are not owned issues and cannot be approved.
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        COMMIT_URI,
+        fixture.commit_request(
+            &preview_token,
+            "qa-5170-inventory",
+            vec!["roster:600034".to_string()],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"], "invalid_approved_row", "{body}");
+
+    // A tampered token fails signature verification.
+    let tampered = preview_token.replace("4050-5171", "4050-5172");
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        COMMIT_URI,
+        fixture.commit_request(&tampered, "qa-5170-tampered", approved.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    assert_eq!(body["detail"], "invalid_preview_token", "{body}");
+
+    // Cross-owner commit: the token is bound to the reader who previewed.
+    let (other_token, other_csrf) = create_test_user(&state, "ntt-other-owner").await;
+    let (status, body) = post_json(
+        &state,
+        &other_token,
+        &other_csrf,
+        COMMIT_URI,
+        fixture.commit_request(&preview_token, "qa-5170-cross-owner", approved.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    assert_eq!(body["detail"], "invalid_preview_token", "{body}");
+    let (status, other_preview) = post_json(
+        &state,
+        &other_token,
+        &other_csrf,
+        PREVIEW_URI,
+        fixture.preview_request(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{other_preview}");
+    assert_eq!(
+        other_preview["scope"]["status"], "unavailable",
+        "{other_preview}"
+    );
+    assert!(other_preview["preview_token"].is_null(), "{other_preview}");
+
+    // Changing the underlying plan after preview makes the token stale. The
+    // commit is rejected with zero partial mutations, even with a fresh key.
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+         VALUES (517199, 51710, '36', 35, 'unread', NOW())",
+        &[],
+    )
+    .await
+    .unwrap();
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        COMMIT_URI,
+        fixture.commit_request(&preview_token, "qa-5170-stale-empty", approved.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["detail"], "preview_stale", "{body}");
+
+    assert_eq!(
+        fixture.mapping_count(&state).await,
+        0,
+        "no partial mutation"
+    );
+    assert_eq!(
+        fixture.receipt_count(&state).await,
+        0,
+        "no receipt on refusal"
+    );
+    fixture.clear();
+}
+
 #[tokio::test]
 async fn project_preview_projects_plan_and_enforces_ownership() {
     let (state, token, csrf, _guard) = setup().await;
