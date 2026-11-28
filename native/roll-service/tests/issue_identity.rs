@@ -3145,6 +3145,17 @@ impl SafeSeriesFixture {
         )
         .await
         .unwrap();
+        // `setup()` seeds catalog identities with explicit ids and resets every
+        // sequence to 1, so advance the identity sequence the way real inserts
+        // would have. Otherwise the commit's first default-id insert collides
+        // with the seeded row and fails with an unrelated 23505.
+        conn.execute(
+            "SELECT setval(pg_get_serial_sequence('external_identities', 'id'),
+                           GREATEST((SELECT COALESCE(MAX(id), 1) FROM external_identities), 1))",
+            &[],
+        )
+        .await
+        .unwrap();
     }
 
     fn preview_request(&self) -> Value {
