@@ -785,7 +785,7 @@ pub async fn commit_replacement(
     .await?;
 
     let mut conn = db::checkout(&state).await?;
-    let mut tx = conn
+    let tx = conn
         .build_transaction()
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
         .start()
@@ -1050,7 +1050,7 @@ pub async fn undo_replacement(
     Json(request): Json<ReplacementUndoRequest>,
 ) -> Result<Json<ReplacementUndoResponse>, ApiError> {
     let mut conn = db::checkout(&state).await?;
-    let mut tx = conn
+    let tx = conn
         .build_transaction()
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
         .start()
