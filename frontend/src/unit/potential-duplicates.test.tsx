@@ -179,7 +179,7 @@ describe('Add Series duplicate advisory (#3612)', () => {
 
     await waitFor(() =>
       expect(CHECK).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Spider-Man (2018)', format: 'Comic' }),
+        expect.objectContaining({ title: 'Spider-Man (2018)' }),
       ),
     )
 
@@ -264,7 +264,7 @@ describe('Edit/Rename duplicate advisory (#3612)', () => {
       '/thread/9',
     )
     expect(CHECK).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Saga', format: 'Comic', exclude_thread_id: 7 }),
+      expect.objectContaining({ title: 'Saga', exclude_thread_id: 7 }),
     )
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled()
 

@@ -5,7 +5,7 @@ import { createHttpClientStub } from './httpClientStub'
 describe('threadsApi.create', () => {
   it('posts to the canonical v2 threads collection (#5702)', async () => {
     const client = createHttpClientStub()
-    const payload = { title: 'Saga', format: 'Comic', issues_remaining: 4 }
+    const payload = { title: 'Saga', issues_remaining: 4 }
     client.post.mockResolvedValueOnce({ ...payload, id: 7 })
 
     const api = createThreadsApi(client)
@@ -33,7 +33,7 @@ describe('threadsApi.update', () => {
       title: 'Renamed',
       notes: 'kept',
       update_mask: ['title', 'notes'],
-      expected: { title: 'Old', format: 'Comic', notes: null, manual_creator_credits: [] },
+      expected: { title: 'Old', notes: null, manual_creator_credits: [] },
     })
   })
 })
