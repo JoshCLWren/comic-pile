@@ -38,13 +38,18 @@ export interface DependencyBuilderApiDeps {
   migration?: DependencyMigrationApi;
 }
 
+const ISSUE_PAGE_SIZE = 100;
+// native/roll-service/src/thread_issues.rs caps a thread at 10,000 issues.
+const MAX_ISSUE_COLLECTION_PAGES = 100;
+
 async function fetchAllUnreadIssues(threadId: number, issues: DependencyIssuesApi = issuesApi): Promise<Issue[]> {
   const result = await collectAllPages({
     fetchPage: (token) => {
-      const params: IssueListParams = { status: 'unread', page_size: 100 };
+      const params: IssueListParams = { status: 'unread', page_size: ISSUE_PAGE_SIZE };
       if (token) params.page_token = token;
       return issues.list(threadId, params);
     },
+    maxPages: MAX_ISSUE_COLLECTION_PAGES,
     selectItems: (page) => page.issues,
     selectNextToken: (page) => page.next_page_token || null,
   });

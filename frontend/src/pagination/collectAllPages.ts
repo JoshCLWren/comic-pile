@@ -49,8 +49,8 @@ export async function collectAllPages<TPage, TItem, TToken = string>(
   options: CollectAllPagesOptions<TPage, TItem, TToken>,
 ): Promise<CollectAllPagesResult<TItem, TPage, TToken>> {
   const maxPages = options.maxPages ?? COLLECT_ALL_DEFAULT_MAX_PAGES
-  if (maxPages < 1) {
-    throw new RangeError('collectAllPages maxPages must be at least 1')
+  if (!Number.isInteger(maxPages) || maxPages < 1) {
+    throw new RangeError('collectAllPages maxPages must be a positive integer')
   }
 
   const pages: TPage[] = []
