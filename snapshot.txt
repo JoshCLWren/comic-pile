@@ -1,9 +1,9 @@
-utc: 2026-11-28T09:09:36Z
-uptime: 7134.85s load: 0.28 0.21 0.13
+utc: 2026-11-28T09:09:53Z
+uptime: 7151.18s load: 0.22 0.20 0.13
 processes: 178
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1098        7651         101        7678       14884
+Mem:           15983        1093        7656         101        7678       14889
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
@@ -12,7 +12,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 --- top rss (KiB, name only)
 165500 Runner.Worker
 124988 Runner.Listener
-118380 provjobd3932773
+118180 provjobd3932773
 83224 dockerd
 56080 php-fpm8.5
 49096 ExtHandler
@@ -26,8 +26,8 @@ Filesystem      Size  Used Avail Use% Mounted on
 19056 systemd-journal
 17052 systemd
 --- top cpu (name only)
- 1.3 hv_kvp_daemon
  1.3 provjobd3932773
+ 1.3 hv_kvp_daemon
  0.3 Runner.Worker
  0.0 containerd
  0.0 ExtHandler
