@@ -26,7 +26,7 @@ interface ThreadPoolProps {
    * carries a list or whole-library report, only why the dice have no faces.
    */
   emptyPoolReason?: RollPoolReason
-  snoozedThreads: Array<{ id: number; title: string; format: string }>
+  snoozedThreads: Array<{ id: number; title: string }>
   snoozedCovers?: Record<number, string | null>
   snoozedCount?: number
   snoozedExpanded: boolean

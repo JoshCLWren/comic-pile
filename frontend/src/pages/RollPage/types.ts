@@ -2,7 +2,7 @@ import type { Thread, SessionThread, RollResponse } from '../../types'
 
 export type RatingThread = Pick<
   Thread,
-  'id' | 'title' | 'format' | 'issues_remaining' | 'queue_position' | 'total_issues' | 'reading_progress'
+  'id' | 'title' | 'issues_remaining' | 'queue_position' | 'total_issues' | 'reading_progress'
 > &
   Pick<
     SessionThread,
