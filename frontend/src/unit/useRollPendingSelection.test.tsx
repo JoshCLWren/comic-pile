@@ -80,6 +80,15 @@ describe('useRollPendingSelection', () => {
     })
   })
 
+  it('replaces an exact selection when a legacy offer has no issue row', () => {
+    const { result } = renderHook(() => useRollPendingSelection())
+    act(() => result.current.seedFromOffer(OFFER))
+    expect(result.current.pending?.issue_id).toBe(42)
+
+    act(() => result.current.seedFromOffer({ ...OFFER, issue_id: null }))
+    expect(result.current.pending).toBeNull()
+  })
+
   it('does not issue a server call to cancel; it only clears local state', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'))
     try {

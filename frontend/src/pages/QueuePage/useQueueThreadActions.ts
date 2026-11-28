@@ -11,6 +11,7 @@ import {
 import { useDeleteThread, useExcludeThread } from '../../hooks/useThread'
 import { rollApi } from '../../services/api-roll'
 import { useUnsnooze } from '../../hooks/useRoll'
+import { useRollPendingSelection } from '../../hooks/useRollPendingSelection'
 import type { RollUnsnoozeResponse } from '../../services/apiTypes'
 
 import { useToast } from '../../contexts/useToast'
@@ -308,6 +309,7 @@ export function useQueueThreadActions(
     }
   }, [shuffleQueueMutation])
 
+  const { seedFromOffer } = useRollPendingSelection()
   const handleSnoozeToggle = useCallback(
     async (thread: ThreadListItem, isSnoozed: boolean) => {
       try {
@@ -316,6 +318,7 @@ export function useQueueThreadActions(
           // pending roll and revert the die. The endpoint also clears the
           // browser snooze cookie.
           const result = await unsnooze(thread.id)
+          if (result.restored) seedFromOffer(result)
           showToast(
             result.restored
               ? `Restored "${thread.title}" as the pending roll.`
@@ -328,6 +331,7 @@ export function useQueueThreadActions(
           // v1 snooze clears session.pending_thread_id without selecting a new
           // offer, which loses a native pending roll (#4589).
           const offer = await reroll(thread.id)
+          seedFromOffer(offer)
           showToast(`Snoozed "${thread.title}" and rolled "${offer.title}". Open Roll to read it.`, 'success')
         }
         // Native reroll/unsnooze do not own a session query refresh, so Queue must
@@ -347,7 +351,7 @@ export function useQueueThreadActions(
         )
       }
     },
-    [reroll, unsnooze, restoreSeriesActionsFocus, showToast],
+    [reroll, unsnooze, seedFromOffer, restoreSeriesActionsFocus, showToast],
   )
 
   return {

@@ -22,6 +22,8 @@ interface UseRollSnoozeParams {
     result?: number | null,
     threadMetadata?: ThreadMetadata | null,
   ) => Promise<void>
+  /** Replace browser-owned pending with the exact replacement offer. */
+  seedPending?: (offer: RollOfferSeed) => void
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
   /**
    * Reports that the committed snooze could not refresh authoritative Roll
