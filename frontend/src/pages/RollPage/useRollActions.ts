@@ -89,7 +89,6 @@ export function useRollActions({
     selectedThread,
     setSelectedThread,
     setIsActionSheetOpen,
-    setIsSetCurrentIssueOpen,
     setIsShuffleOpen,
     setShuffleError,
     setErrorMessage,
@@ -132,10 +131,6 @@ export function useRollActions({
           // Explicit Read Now never enters the automatic Roll offer lifecycle.
           // Resolve the exact owned issue in the shared card and write only on Save.
           state.setIsDirectReadOpen(true)
-          break
-        }
-        case 'set-current-issue': {
-          setIsSetCurrentIssueOpen(true)
           break
         }
         case 'move-front':

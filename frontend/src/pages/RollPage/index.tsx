@@ -316,33 +316,6 @@ export default function RollPage() {
   // active-series total is fetched while the confirmation is actually open.
   const activeSeriesCount = useActiveSeriesCount(state.isShuffleOpen)
 
-  const handleSetCurrentIssue = async (issueNumber: string) => {
-    if (!state.selectedThread) return
-    try {
-      const response = await threadsApi.setCurrentIssue(state.selectedThread.id, issueNumber)
-      await refetchBootstrap()
-      const threadMetadata: ThreadMetadata = {
-        id: response.thread_id,
-        title: response.title,
-        format: response.format,
-        issues_remaining: response.issues_remaining,
-        queue_position: response.queue_position,
-        total_issues: response.total_issues,
-        reading_progress: response.reading_progress ?? null,
-        issue_id: response.issue_id,
-        issue_number: response.issue_number,
-        next_issue_id: response.next_issue_id,
-        next_issue_number: response.next_issue_number,
-        last_rolled_result: null,
-      }
-      state.suppressPendingAutoOpenRef.current = true
-      rating.enterRatingView(response.thread_id, null, threadMetadata)
-    } catch (error) {
-      console.error('Set current issue failed:', error)
-      throw error
-    }
-  }
-
   const handleUndoRating = async () => {
     const rated = rating.lastRated
     const sessionId = bootstrap?.session_id
@@ -717,9 +690,6 @@ export default function RollPage() {
           pendingThreadId={bootstrap.pending_thread_id}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
           onAction={actions.handleAction}
-          isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
-          onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
-          onSetCurrentIssue={handleSetCurrentIssue}
           isShuffleOpen={state.isShuffleOpen}
           onShuffleConfirm={actions.performShuffle}
           onShuffleCancel={() => {

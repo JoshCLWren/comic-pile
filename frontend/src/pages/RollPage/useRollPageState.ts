@@ -11,7 +11,6 @@ export interface RollPageState {
   overrideErrorMessage: string
   snoozedExpanded: boolean
   isDieModalOpen: boolean
-  isSetCurrentIssueOpen: boolean
   selectedThread: RollBootstrapThread | null
   isActionSheetOpen: boolean
   isDirectReadOpen: boolean
