@@ -81,6 +81,10 @@ export function useRollPendingSession({ state, bootstrap, rollPool, pending }: U
       pending?.result ?? pendingFromSession?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null
     // SAFETY: both pendingFromSession and pendingFromPool carry ThreadMetadata when present; the union falls back to null.
     const pendingMetadata = (pendingFromSession ?? pendingFromPool) as ThreadMetadata | null
+    // The exact pending card may load after the eligible pool. Never open a
+    // rating workspace without its title/issue metadata: Save would have no
+    // active thread and silently do nothing.
+    if (!pendingMetadata?.title) return
     const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection
 
     setSelectedThreadId(pendingId)

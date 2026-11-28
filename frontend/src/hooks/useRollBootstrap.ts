@@ -85,11 +85,11 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     ? storedPending
     : null
 
+  const pendingCardReady = pendingCardIds.length > 0 ? pendingCards.isSuccess : cards.isSuccess
   useEffect(() => {
-    if (storedPending == null || !pendingCards.isSuccess) return
-    const card = pendingCards.data?.items.find((item) => item.issue_id === storedPending.issue_id)
-    if (card == null || card.status === 'read') clearPending(storedPending.issue_id)
-  }, [storedPending, pendingCards.isSuccess, pendingCards.data, clearPending])
+    if (storedPending == null || !pendingCardReady) return
+    if (pendingCard == null || pendingCard.status === 'read') clearPending(storedPending.issue_id)
+  }, [storedPending, pendingCardReady, pendingCard, clearPending])
 
   // A pending issue missing from the eligible pool may be continuity-blocked.
   // Only then is one bounded, owner-scoped issue-edge GET needed; a cold idle
@@ -248,6 +248,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
       eligible.refetch(),
       // `refetch` ignores `enabled`; the cards route rejects an empty batch.
       ...(issueIds.length > 0 ? [cards.refetch()] : []),
+      ...(pendingCardIds.length > 0 ? [pendingCards.refetch()] : []),
       ...(blockedIssueId != null ? [dependencyQuery.refetch()] : []),
       ...(prerequisiteIds.length > 0 ? [prerequisiteCards.refetch()] : []),
       ...(snoozedIds.length > 0 ? [snoozedSummaries.refetch()] : []),
@@ -258,6 +259,8 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     eligible,
     cards,
     issueIds.length,
+    pendingCardIds.length,
+    pendingCards,
     blockedIssueId,
     dependencyQuery,
     prerequisiteIds.length,
