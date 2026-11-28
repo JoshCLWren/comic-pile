@@ -53,9 +53,11 @@ export interface IssueReadOperationUndoResponse {
   skipped_issue_ids: number[]
 }
 
-/** Server cap for one issue-range create (`MAX_ISSUES` in thread_issues.rs). */
+/** Server cap for issues on one thread (`MAX_ISSUES` in thread_issues.rs). */
 const MAX_MIGRATION_ISSUES = 10_000
-/** Server cap for one bulk read-marker request. */
+/** Server cap for one issue-range create (`MAX_ISSUES_PER_REQUEST` in issue_mutation.rs). */
+const MAX_ISSUES_PER_CREATE = 1_000
+/** Server cap for one bulk read-marker request (`MAX_BULK_ISSUES` in issue_read_state.rs). */
 const BULK_READ_MARKER_CHUNK_SIZE = 100
 
 /**
@@ -63,10 +65,12 @@ const BULK_READ_MARKER_CHUNK_SIZE = 100
  *
  * The retired one-shot v1 migration action bundled issue creation and
  * reading progress in one server-authoritative call. The v2 contract composes
- * the same result from scoped resources: create `1-N`, mark the first
- * `lastIssueRead` issues read (the server re-derives queue and reading state),
- * then read the updated thread. No client-side next-unread pointer is stored.
- * Every request is owned-scoped and bounded before any allocation or loop.
+ * the same result from scoped resources: create the range in bounded chunks
+ * (the create endpoint accepts at most 1,000 issues per request), mark the
+ * first `lastIssueRead` issues read in bounded bulk requests (the server
+ * re-derives queue and reading state), then read the updated thread. No
+ * client-side next-unread pointer is stored. Every request is owned-scoped and
+ * bounded before any allocation or loop.
  *
  * @param client - HTTP transport used for every request.
  * @param threadId - Thread whose issues are materialized.
@@ -88,11 +92,16 @@ export async function migrateThreadToIssues(
     throw new Error('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
   }
 
-  const created = await client.post<IssueListResponse, { issue_range: string }>(
-    `/v2/threads/${threadId}/issues`,
-    { issue_range: `1-${totalIssues}` },
-  )
-  const readIds = (created.issues ?? []).slice(0, lastIssueRead).map((issue) => issue.id)
+  const createdIds: number[] = []
+  for (let start = 1; start <= totalIssues; start += MAX_ISSUES_PER_CREATE) {
+    const end = Math.min(start + MAX_ISSUES_PER_CREATE - 1, totalIssues)
+    const created = await client.post<IssueListResponse, { issue_range: string }>(
+      `/v2/threads/${threadId}/issues`,
+      { issue_range: `${start}-${end}` },
+    )
+    for (const issue of created.issues ?? []) createdIds.push(issue.id)
+  }
+  const readIds = createdIds.slice(0, lastIssueRead)
   for (let offset = 0; offset < readIds.length; offset += BULK_READ_MARKER_CHUNK_SIZE) {
     await client.post('/v2/issue-read-markers', {
       issue_ids: readIds.slice(offset, offset + BULK_READ_MARKER_CHUNK_SIZE),

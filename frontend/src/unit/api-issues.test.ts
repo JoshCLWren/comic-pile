@@ -61,6 +61,31 @@ it('chunks bulk read markers at 100 issues without per-issue requests', async ()
   })
 })
 
+it('splits large migrations into server-bounded create ranges', async () => {
+  const first = Array.from({ length: 1000 }, (_, index) => ({ id: index + 1 }))
+  const second = Array.from({ length: 205 }, (_, index) => ({ id: index + 1001 }))
+  client.post
+    .mockResolvedValueOnce({ issues: first, next_page_token: null })
+    .mockResolvedValueOnce({ issues: second, next_page_token: null })
+
+  await issuesApi.migrateThread(42, 1205, 1205)
+
+  // The v2 create endpoint caps one issue range at 1,000, while the retired
+  // one-shot v1 action accepted up to 10,000; keep the supported range without
+  // sending an oversized range the Rust handler would reject.
+  expect(client.post).toHaveBeenNthCalledWith(1, '/v2/threads/42/issues', {
+    issue_range: '1-1000',
+  })
+  expect(client.post).toHaveBeenNthCalledWith(2, '/v2/threads/42/issues', {
+    issue_range: '1001-1205',
+  })
+  expect(client.post).toHaveBeenCalledTimes(15) // 2 creates + 13 bulk read-marker posts
+  expect(client.post).toHaveBeenNthCalledWith(15, '/v2/issue-read-markers', {
+    issue_ids: second.slice(200),
+  })
+  expect(client.get).toHaveBeenCalledWith('/v1/threads/42')
+})
+
 it('rejects unbounded migration input before making any request', async () => {
   await expect(issuesApi.migrateThread(42, 2, 10_001)).rejects.toThrow(/Invalid migration values/)
   await expect(issuesApi.migrateThread(42, -1, 10)).rejects.toThrow(/Invalid migration values/)
