@@ -660,24 +660,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/series-mapping-commits",
             post(catalog_commit::commit_series_mapping_handler),
         )
-        // #5716: AIP-136 stateless collection custom method. The v1 preview
-        // alias stays mounted only until production proof retires it; no new
-        // caller may use it.
+        // #5716/#5715: AIP-136 stateless collection custom methods are the
+        // only live preview surfaces; #5958 retired their v1 aliases.
         .route(
             "/api/v2/seriesMappings:preview",
             post(catalog_series_mapping_preview::preview_series_mappings_v2),
         )
-        .route(
-            "/api/v1/catalog/series-mappings/preview",
-            post(catalog_series_mapping_preview::preview_series_mapping_handler),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-            post(continuity_plans_project_preview::preview_plan_projection_handler),
-        )
-        // #5715: canonical AIP-136 stateless resource custom method. The v1
-        // preview alias stays mounted only until production proof retires it;
-        // no new caller may use it. matchit (axum 0.8) requires a capture to own
+        // #5715: matchit (axum 0.8) requires a capture to own
         // its whole segment, so the mounted pattern captures the final segment
         // and the handler dispatches on the exact `:previewReadingOrderProjection`
         // suffix. The wire URL and published contract stay canonical.
@@ -814,17 +803,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(threads::get_thread_detail),
         )
         .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
-        .route(
-            "/api/v1/threads/{thread_id}/issues",
-            get(issue_read::list_thread_issues),
-        )
-        // axum/matchit rejects a parameter followed by literal text, so the
-        // `{thread_id}:action` operation family is routed through the single
-        // `{thread_id}` segment and dispatched on the action suffix.
-        .route(
-            "/api/v1/threads/{thread_id}",
-            post(thread_ordering::post_thread_action),
-        )
+        // #5958: the v1 Thread issues slices and `{thread_id}:action` legacy
+        // dispatcher were retired after their owning v2 slices landed. Only
+        // the still-owned v1 read and the bare alias remain mounted.
         .route(
             "/api/v2/issues/{issue_id}/read-markers",
             post(issue_read_state::create_read_marker).delete(issue_read_state::delete_read_marker),
@@ -865,28 +846,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/dependency-order-check",
             get(thread_ordering::check_thread_dependency_order),
         )
-        .route(
-            "/api/v1/threads/{thread_id}/issues",
-            post(thread_issues::create_thread_issues),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
-            get(thread_issues::list_thread_issue_creators),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues:reorder",
-            post(thread_issues::reorder_thread_issues),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues:validateOrder",
-            get(thread_ordering::validate_issue_order),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/reading-orders",
-            get(thread_ordering::get_thread_reading_orders),
-        )
-        // #5715: canonical AIP-122 collection spelling for the same
-        // owner-scoped read. The v1 alias remains only for legacy callers.
+        // #5958: all v1 issue-list, creator, reorder, validation and
+        // reading-order Thread slices are retired; their v2 resources are the
+        // only live surface.
         .route(
             "/api/v2/threads/{thread_id}/readingOrders",
             get(thread_ordering::get_thread_reading_orders_v2),
@@ -895,22 +857,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),
         )
-        .route("/api/v1/threads/", post(thread_lifecycle::create_thread))
-        .route(
-            "/api/v1/threads/check-duplicates",
-            post(thread_lifecycle::check_potential_duplicates),
-        )
         .route(
             "/api/v1/threads/excluded/threads",
             get(thread_lifecycle::list_excluded_threads),
         )
-        // The retired batch URL would otherwise be captured as a
-        // `/api/v1/threads/{thread_id}` action. Pin it to an explicit 404 so
-        // v2 is the only membership batch authority (#5711).
-        .route(
-            "/api/v1/threads/groups:batch",
-            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
-        )
+        // #5958: the retired `groups:batch` URL is no longer pinned in the
+        // inner router. It falls through to the same Rust JSON 404 as every
+        // other unregistered legacy path; v2 is the membership authority.
         .route(
             "/api/v2/threads/{thread_id}/reading-order-group-memberships",
             get(dependency_groups::list_thread_groups),
@@ -924,14 +877,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(thread_lifecycle::list_stale_threads),
         )
         .route(
-            "/api/v1/threads/{thread_id}",
-            put(thread_lifecycle::update_thread),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}",
-            delete(thread_lifecycle::delete_thread),
-        )
-        .route(
             "/api/v1/threads/{thread_id}/exclude",
             post(thread_lifecycle::exclude_thread),
         )
@@ -943,10 +888,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/set-pending",
             post(thread_lifecycle::set_pending_thread),
         )
-        .route(
-            "/api/v1/threads/{thread_id}/test-backdate",
-            put(thread_lifecycle::backdate_thread_for_testing),
-        )
+        // #5958: the test-only backdate route is retired; no product v2
+        // successor exists and no shipped caller uses it.
         .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
