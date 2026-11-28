@@ -116,11 +116,13 @@ def _parse_timestamp(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
-def _read_json(request: urllib.request.Request) -> object:
+def _read_json(request: urllib.request.Request, url_kind: str = "release recovery source") -> object:
     """Perform one bounded JSON GET.
 
     Args:
         request: Fully prepared request.
+        url_kind: Human-readable kind of URL being read, used in errors
+            without exposing the URL itself.
 
     Returns:
         The decoded JSON payload.
@@ -134,25 +136,27 @@ def _read_json(request: urllib.request.Request) -> object:
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
         raise RecoveryError(
-            f"HTTP {exc.code} from release recovery source: {detail[:500]}"
+            f"HTTP {exc.code} from {url_kind}: {detail[:500]}"
         ) from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise RecoveryError(f"Release recovery request failed: {exc}") from exc
+        raise RecoveryError(f"Release recovery {url_kind} request failed: {exc}") from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RecoveryError("Release recovery source returned invalid JSON") from exc
+        raise RecoveryError(f"{url_kind} returned invalid JSON") from exc
 
 
-def _read_url_json(url: str) -> object:
+def _read_url_json(url: str, url_kind: str = "production health URL") -> object:
     """Read one JSON document from an absolute URL.
 
     Args:
         url: Absolute HTTP URL.
+        url_kind: Human-readable kind of URL being read.
 
     Returns:
         The decoded JSON payload.
     """
     return _read_json(
-        urllib.request.Request(url, headers={"Accept": "application/json"})
+        urllib.request.Request(url, headers={"Accept": "application/json"}),
+        url_kind=url_kind,
     )
 
 
@@ -174,7 +178,8 @@ def _github_request(path: str) -> object:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return _read_json(
-        urllib.request.Request(f"{GITHUB_API_BASE}{path}", headers=headers)
+        urllib.request.Request(f"{GITHUB_API_BASE}{path}", headers=headers),
+        url_kind="GitHub API URL",
     )
 
 
@@ -250,7 +255,7 @@ def _fetch_one(
     """
     owner, name = _repository_parts(repository)
     source = _source_from_pull(
-        request_json(f"{GITHUB_API_BASE}/repos/{owner}/{name}/pulls/{number}")
+        request_json(f"/repos/{owner}/{name}/pulls/{number}")
     )
     if source is None:
         raise RecoveryError(
@@ -296,7 +301,7 @@ def _discover(
                 "page": page,
             }
         )
-        result = request_json(f"{GITHUB_API_BASE}/repos/{owner}/{name}/pulls?{query}")
+        result = request_json(f"/repos/{owner}/{name}/pulls?{query}")
         if not isinstance(result, list):
             raise RecoveryError("GitHub pull discovery response must be a list")
         last_updated: datetime | None = None
@@ -609,7 +614,7 @@ def _changed_files(
     owner, name = _repository_parts(repository)
     query = urllib.parse.urlencode({"per_page": 100, "page": 1})
     result = request_json(
-        f"{GITHUB_API_BASE}/repos/{owner}/{name}/pulls/{number}/files?{query}"
+        f"/repos/{owner}/{name}/pulls/{number}/files?{query}"
     )
     if not isinstance(result, list) or not all(isinstance(item, dict) for item in result):
         raise RecoveryError("GitHub changed-file response must be an object list")
