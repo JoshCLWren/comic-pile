@@ -1,5 +1,4 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface CBLSourceListDiscoveryItem {
   id: number
@@ -229,7 +228,24 @@ export interface CBLAdoptionPreview {
   }
 }
 
-export interface CBLAdoptionCommitResult extends ContinuityPlan {
+/**
+ * Result of a source-linked CBL adoption commit (#4022).
+ *
+ * `id`/`name` are the compatibility plan projection and must never be used as
+ * the destination or identity of an adopted list. `custom_cbl_list_id` is the
+ * stable reader-owned Reading List ID returned by the v2 commit endpoint.
+ */
+export interface CBLAdoptionCommitResult {
+  id: number
+  name: string
+  user_id: number
+  ordering_mode: string
+  created_at: string
+  updated_at: string
+  custom_cbl_list_id?: number | null
+  list_version?: number | null
+  selections?: unknown | null
+  overlap_decisions?: unknown | null
   reused_positions: number[]
   created_positions: number[]
   excluded_positions: number[]
@@ -245,6 +261,10 @@ export interface CBLAdoptionPlanChoices {
    * durable persistence for the answer belongs to the overlap-decision store.
    */
   overlap_decisions?: CBLOverlapDecision[]
+  /** Version of the owned list last seen by the reader; guards a stale update. */
+  list_version?: number | null
+  /** Stable key so an ambiguous response can be retried without a double commit. */
+  idempotency_key?: string | null
 }
 
 /** One reader-approved series overlap decision carried into the commit. */
@@ -290,13 +310,23 @@ export function createCblSourcesApi(client: HttpClient) {
     const seriesOverrides = [...overridesByPosition.entries()]
       .sort(([left], [right]) => left - right)
       .map(([cbl_position, decision]) => ({ cbl_position, decision }))
+    const entryDecisions = Object.fromEntries(
+      Object.entries(choices.entry_decisions).map(([entryId, include]) => [
+        entryId,
+        include ? 'include' : 'exclude',
+      ]),
+    ) as Record<string, string>
     return {
-      entry_decisions: {},
+      entry_decisions: entryDecisions,
       series_decisions: [],
       series_overrides: seriesOverrides,
       overlap_decisions: choices.overlap_decisions ?? [],
       content_hash: preview.source.content_hash,
       revision_sha: preview.source.revision_sha,
+      ...(choices.list_version === undefined || choices.list_version === null
+        ? {}
+        : { list_version: choices.list_version }),
+      ...(choices.idempotency_key ? { idempotency_key: choices.idempotency_key } : {}),
     }
   }
   return {
@@ -355,6 +385,11 @@ export function createCblSourcesApi(client: HttpClient) {
       client.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
     plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
       client.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
+    /**
+     * Targeted adoption into an existing plan, used only by the "add material"
+     * surface of a plan the reader already owns (#4023 keeps that surface; the
+     * standalone CBL browser uses source-linked `commitSource` instead).
+     */
     commit: (
       listId: number,
       planId: number,
@@ -367,10 +402,22 @@ export function createCblSourcesApi(client: HttpClient) {
         { timeout: 60_000 },
       ),
     /**
-     * One-decision adoption: adopt the source into a Reading Plan, creating the
-     * plan from the source when it has none yet. This is the "Add this reading
-     * order" action for the CBL browser.
+     * Source-linked, owner-scoped upsert into the reader's canonical Reading
+     * List (#4022). The first add creates the owned list; an exact repeat or a
+     * revised selection updates that same list ID. No plan ID participates in
+     * identity or navigation.
      */
+    commitSource: (
+      listId: number,
+      preview: CBLAdoptionPreview,
+      choices: CBLAdoptionPlanChoices,
+    ) =>
+      client.post<CBLAdoptionCommitResult>(
+        `/v2/reading-lists/${listId}/adoption-commits`,
+        commitPayload(preview, choices),
+        { timeout: 60_000 },
+      ),
+    /** @deprecated Use `commitSource`; the source-linked upsert is also an update. */
     commitNew: (
       listId: number,
       preview: CBLAdoptionPreview,

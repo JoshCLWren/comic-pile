@@ -8,19 +8,29 @@ import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
 import ReadingGraphSummary from '../components/ReadingGraphSummary'
 import TriStateCheckbox from '../components/TriStateCheckbox'
 import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
-import { applyCommittedReadingPlan } from '../query/cacheEffects'
+import { applyCommittedCblAdoption } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
-import { continuityPlansApi } from '../services/api-continuity-plans'
-import { CblAdoptionTargetFieldset } from '../components/CblAdoptionTargetFieldset'
-import { planMatchesSource, useCblAdoptionTarget } from '../hooks/useCblAdoptionTarget'
+import { customCBLApi } from '../services/api-custom-cbl'
 import { CblSourceDetailPanel } from '../components/CblSourceDetailPanel'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import {
   cblSourcesApi,
+  type CBLAdoptionCommitResult,
+  type CBLAdoptionPlanChoices,
+  type CBLAdoptionPreview,
   type CBLAdoptionPreviewEntry,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
+import {
+  canonicalListId,
+  forgetOwnedCblList,
+  readOwnedCblList,
+  restoreCommittedChoices,
+  restoreOverlapChoices,
+  saveOwnedCblList,
+  type OwnedCblListLink,
+} from '../utils/cblAdoptionOwnership'
 import {
   buildReadingGraphRequest,
   hasGenuineOverlap,
@@ -153,18 +163,13 @@ function groupSelectionLabel(group: CblSeriesGroup): string {
   return `${group.selectedCount} of ${group.selectableEntries.length} selected`
 }
 
-async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
-  const plans = await continuityPlansApi.list()
-  const match = plans.find((plan) => planMatchesSource(plan, source))
-  if (!match) return null
-  return continuityPlansApi.get(match.id)
-}
-
 /**
  * Standalone CBL browser: find a trusted reading-order source, preview its
- * consequences without mutation, then adopt it into a canonical Reading Plan
- * with one decision. Selecting the source is the data entry — the reader never
- * re-types titles, issue numbers, or source order.
+ * consequences without mutation, then commit it into the reader's own
+ * source-linked Reading List with one explicit decision. The first add creates
+ * the list; a repeat add or a revised selection updates that same list ID.
+ * Selecting the source is the data entry — the reader never re-types titles,
+ * issue numbers, or source order, and no legacy Reading Plan is involved.
  */
 export default function CblBrowserPage() {
   const navigate = useNavigate()
@@ -212,6 +217,18 @@ export default function CblBrowserPage() {
   sourceDecisionsRef.current = sourceDecisions
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
+  /** The commit response omitted a canonical list ID; never fall back to a plan. */
+  const [commitMissingListId, setCommitMissingListId] = useState(false)
+  /**
+   * Committed source-linked Reading List pointer for the source on screen.
+   * Loaded from committed state on source change and refreshed after a commit;
+   * it is never inferred from a display name or a legacy plan.
+   */
+  const [ownedLink, setOwnedLink] = useState<OwnedCblListLink | null>(null)
+  /** One idempotency key per pending source so an ambiguous retry cannot double-commit. */
+  const idempotencyKeys = useRef<Record<number, string>>({})
+  /** Prevent the committed-choice restore effect from rewriting later local edits. */
+  const restoredLinkRef = useRef<string | null>(null)
   /**
    * Series-level answers for the prospective graph. Keyed by the server's
    * stable overlap identity; restored from saved decisions on reopen.
@@ -251,9 +268,12 @@ export default function CblBrowserPage() {
     setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
+    setCommitMissingListId(false)
     setOverlapChoices({})
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
+    setOwnedLink(deepLinkedListId === null ? null : readOwnedCblList(deepLinkedListId))
+    restoredLinkRef.current = null
     // Restore the checklist saved for the source the URL now shows (#4014),
     // after the reset above, so Back/Forward and the results list both return
     // the reader to the choices they already made.
