@@ -8,7 +8,7 @@ import {
   useAllThreads as usePlannerThreads,
   useThreadIssues as usePlannerThreadIssues,
 } from '../hooks/useContinuityPlannerData'
-import { useThreadAllIssues } from '../hooks/useThreadIssues'
+import { useThreadIssuePages } from '../hooks/useThreadIssues'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api-threads'
 import { COLLECT_ALL_DEFAULT_MAX_PAGES } from '../pagination/collectAllPages'

@@ -6,7 +6,6 @@ import type { IssueListParams, IssueListResponse } from '../services/api-issues'
 import type { Issue, IssueDependenciesResponse } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-import { collectAllPages, MAX_ISSUE_COLLECTION_PAGES } from '../pagination/collectAllPages'
 import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
 import { invalidateAfterIssueEdit, optimisticallyUpdateIssueStatus, optimisticallyDeleteIssue, optimisticallyReorderIssues } from '../query/cacheEffects'
 
@@ -94,34 +93,6 @@ export function getIssueTotalCount(
 }
 
 /**
- * Query for all issues in a thread (all-pages drain, used by IssueToggleList).
- * Fetches all pages at once and returns the flattened list.
- */
-export function useThreadAllIssues(threadId: number) {
-  return useQuery<Issue[]>({
-    queryKey: queryKeys.thread.issuePagesAll(threadId),
-    queryFn: async () => {
-      const result = await collectAllPages({
-        fetchPage: (token) => {
-          const params: IssueListParams = { page_size: THREAD_ISSUES_PAGE_SIZE }
-          if (token) {
-            params.page_token = token
-          }
-          return issuesApi.list(threadId, params)
-        },
-        selectItems: (page) => page.issues,
-        selectNextToken: (page) => page.next_page_token || null,
-        maxPages: MAX_ISSUE_COLLECTION_PAGES,
-      })
-      if (result.stopReason === 'max-pages') {
-        throw new Error('Unable to load the complete issue list for this series.')
-      }
-      return result.items
-    },
-  })
-}
-
-/**
  * Query for thread issue dependencies.
  */
 export function useThreadDependencies(threadId: number) {
@@ -165,23 +136,6 @@ export function useToggleIssueStatus(threadId: number) {
     },
     onError: (_err, _vars, context) => {
       context?.rollback?.()
-    },
-    onSuccess: async () => {
-      await invalidateAfterIssueEdit(queryClient, threadId)
-    },
-  })
-}
-
-/**
- * Mutation to create issues from a range string.
- */
-export function useCreateIssues(threadId: number) {
-  return useMutation({
-    mutationFn: async ({
-      issueRange,
-      insertAfterIssueId,
-    }: { issueRange: string; insertAfterIssueId?: number | null }) => {
-      return issuesApi.create(threadId, issueRange, { insert_after_issue_id: insertAfterIssueId })
     },
     onSuccess: async () => {
       await invalidateAfterIssueEdit(queryClient, threadId)
