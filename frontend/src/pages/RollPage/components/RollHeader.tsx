@@ -3,7 +3,7 @@ import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { DiceSide } from '../../../components/diceTypes'
-import type { RollState, RollThreadSummary } from '../../../types/rollState'
+import type { RollThreadSummary } from '../../../types/rollState'
 import type { ReadingModeDisplay } from '../../../types/readingMode'
 import {
   ROLL_WORKSPACE_GUTTER,
@@ -14,7 +14,6 @@ import { ReadingModeControl } from './ReadingModeControl'
 import type { DieStateResponse } from '../../../generated/nativeV2Client'
 
 interface RollHeaderProps {
-  bootstrap: RollState
   currentDie: number
   dieSize: number
   displayDie: DiceSide
@@ -53,7 +52,6 @@ interface RollHeaderProps {
  * is no Auto/Manual segment to select (#4353).
  */
 export function RollHeader({
-  bootstrap,
   currentDie,
   dieSize,
   displayDie,

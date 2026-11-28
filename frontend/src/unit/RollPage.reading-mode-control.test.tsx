@@ -92,7 +92,6 @@ describe('RollHeader scoped reading-mode integration', () => {
     render(
       <MemoryRouter>
         <RollHeader
-          bootstrap={rollState}
           readingMode={{ bandwidth: 'light', intent: 'momentum', source: 'manual' }}
           {...headerBaseProps}
         />
@@ -106,7 +105,7 @@ describe('RollHeader scoped reading-mode integration', () => {
   it('omits the chip when scoped reading mode is unavailable', () => {
     render(
       <MemoryRouter>
-        <RollHeader bootstrap={rollState} {...headerBaseProps} />
+        <RollHeader {...headerBaseProps} />
       </MemoryRouter>,
     )
     expect(screen.queryByTestId('reading-mode-control')).not.toBeInTheDocument()

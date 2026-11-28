@@ -31,28 +31,28 @@ interface UseRollPendingSyncResult {
 }
 
 export function useRollPendingSync({
-  rollState,
+  rollState: source,
   refetchQueue,
 }: UseRollPendingSyncParams): UseRollPendingSyncResult {
-  // Bootstrap is authoritative, including when pending_thread_id is null.
+  // The scoped snapshot is authoritative, including when pending_thread_id is null.
   const rollState = useMemo<QueueRollState | undefined>(() => {
-    if (rollState == null) return undefined
+    if (source == null) return undefined
     // `snoozed_threads` is capped at 20 display rows; the id list is complete.
     // The summary ids are merged for payloads that predate the id list.
-    const snoozedIds = new Set<number>(rollState.snoozed_thread_ids ?? [])
-    for (const thread of rollState.snoozed_threads ?? []) snoozedIds.add(thread.id)
+    const snoozedIds = new Set<number>(source.snoozed_thread_ids ?? [])
+    for (const thread of source.snoozed_threads ?? []) snoozedIds.add(thread.id)
     return {
-      pending_thread_id: rollState.pending_thread_id,
+      pending_thread_id: source.pending_thread_id,
       snoozed_thread_ids: Array.from(snoozedIds),
     }
-  }, [rollState])
+  }, [source])
 
   const onUpdated = useCallback(async () => {
     await refetchQueue()
-    if (rollState) {
+    if (source) {
       await queryClient.refetchQueries({ queryKey: queryKeys.roll.state() })
     }
-  }, [refetchQueue, rollState])
+  }, [refetchQueue, source])
 
   const onRefetchRollState = useCallback(async () => {
     await queryClient.refetchQueries({ queryKey: queryKeys.roll.state() })

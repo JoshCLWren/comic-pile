@@ -1455,7 +1455,7 @@ async fn query_page(
         .replace("{created_timestamp}", &iso_timestamp("p.created_at"))
         .replace("{tag_created_timestamp}", &iso_timestamp("tg.created_at"))
         .replace("{tag_updated_timestamp}", &iso_timestamp("tg.updated_at"));
-    let sql = if let Some(ids) = exact_ids {
+    let sql = if exact_ids.is_some() {
         sql.replace(
             "WHERE t.status = 'active' AND t.queue_position >= 1",
             "WHERE t.status = 'active' AND t.queue_position >= 1 AND t.id = ANY($9::int[])",

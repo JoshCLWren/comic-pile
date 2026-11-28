@@ -27,7 +27,7 @@ pub struct BootstrapQuery {
 ///
 /// The stable stored tag columns are typed; `extra` preserves any additional
 /// stored columns so future tag metadata is never silently dropped.
-#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub struct BootstrapTag {
     pub id: i32,
     pub name: String,

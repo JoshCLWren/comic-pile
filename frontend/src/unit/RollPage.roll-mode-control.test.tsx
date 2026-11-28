@@ -4,20 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { DICE_LADDER } from '../components/diceLadder'
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
-import type { RollState } from '../types/rollState'
 import type { ReadingModeDisplay } from '../types/readingMode'
 
 const ACTIVE_FILL = 'bg-[var(--theme-primary-action)]'
 const balancedMode: ReadingModeDisplay = { bandwidth: 'balanced', intent: 'balanced' }
-
-const rollState: RollState = {
-  pending_thread_id: null,
-  last_rolled_result: null,
-  active_thread: null,
-  roll_pool: [],
-  snoozed_threads: [],
-  snoozed_count: 0,
-}
 
 const headerBaseProps = {
   currentDie: 6,
@@ -36,7 +26,6 @@ function renderHeader(currentDie = 6, readingMode: ReadingModeDisplay | null = n
   return render(
     <MemoryRouter>
       <RollHeader
-        bootstrap={rollState}
         readingMode={readingMode}
         {...headerBaseProps}
         currentDie={currentDie}

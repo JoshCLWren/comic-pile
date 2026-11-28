@@ -410,7 +410,6 @@ export default function RollPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <RollHeader
-        bootstrap={bootstrap}
         currentDie={selectedDie}
         dieSize={dieSize}
         displayDie={displayDie}
