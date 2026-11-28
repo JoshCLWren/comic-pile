@@ -155,8 +155,8 @@ pub fn router() -> Router {
     assert.equal(operation.ingress_destination, '/api/native_roll.rs');
     assert.ok(operation.consumers.includes('frontend/src/services/api-native.ts'));
   }
-  assert.ok(!inventory.operations.some(operation => operation.path === '/api/v2/unicode'),
-    'a stale native inventory entry without a router registration is not live');
+  assert.ok(!inventory.operations.some(operation => operation.path === '/api/v2/alpha'),
+    'a stale native fragment without a router registration is not live');
   run([process.execPath, nodeScript], [...args, '--check'], tmp);
 
   writeFileSync(router, `${readFileSync(router, 'utf8').replace('\n}', `
