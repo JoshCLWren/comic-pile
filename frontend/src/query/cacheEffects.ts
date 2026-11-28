@@ -588,6 +588,23 @@ export async function applyCommittedReadingPlan(
 }
 
 /**
+ * Apply a successful source-linked CBL adoption to the cache (#4023).
+ *
+ * The commit writes the canonical Reading List and its entries in one
+ * transaction; the compatibility plan projection is deliberately not treated
+ * as the destination and is not seeded into the plan cache.
+ */
+export async function applyCommittedCblAdoption(
+  client: QueryClient,
+  listId: number,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.detail(listId) })
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+  await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
+  await invalidateAfterQueueMovement(client)
+}
+
+/**
  * @deprecated Use `applyCommittedReadingPlan` instead.
  */
 export async function applyCommittedReadingPlanUpdate(
