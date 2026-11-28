@@ -660,16 +660,6 @@ fn parse_book(element: &quick_xml::events::BytesStart<'_>) -> Result<CBLBook, In
         &[b"SeriesID", b"SeriesId", b"VolumeID", b"VolumeId"],
     )?;
     let comicvine_issue_id = first_attribute(element, &[b"IssueID", b"IssueId"])?;
-    if let Some(id) = comicvine_series_id
-        .as_ref()
-        .or(comicvine_issue_id.as_ref())
-        .filter(|id| id.chars().count() > MAX_EXTERNAL_ID_LENGTH)
-    {
-        let _ = id;
-        return Err(IngestError::new(
-            "Comic Vine external id exceeds 100 characters",
-        ));
-    }
     Ok(CBLBook {
         position: 0,
         series,
@@ -679,6 +669,30 @@ fn parse_book(element: &quick_xml::events::BytesStart<'_>) -> Result<CBLBook, In
         comicvine_series_id,
         comicvine_issue_id,
     })
+}
+
+fn validate_book(book: &CBLBook) -> Result<(), IngestError> {
+    if book.series.chars().count() > MAX_SERIES_NAME_LENGTH {
+        return Err(IngestError::new(
+            "book Series exceeds 500 characters",
+        ));
+    }
+    if book.issue_number.chars().count() > MAX_ISSUE_NUMBER_LENGTH {
+        return Err(IngestError::new(
+            "book Number exceeds 100 characters",
+        ));
+    }
+    if book
+        .comicvine_series_id
+        .iter()
+        .chain(book.comicvine_issue_id.iter())
+        .any(|id| id.chars().count() > MAX_EXTERNAL_ID_LENGTH)
+    {
+        return Err(IngestError::new(
+            "Comic Vine external id exceeds 100 characters",
+        ));
+    }
+    Ok(())
 }
 
 fn apply_database(
@@ -896,10 +910,13 @@ pub async fn sync_cbl_lists<C: GenericClient>(
             "CBL source paths must be unique within one sync",
         ));
     }
-    if parsed_lists
-        .iter()
-        .any(|item| item.content_hash.is_empty() || item.content_hash.len() != 64)
-    {
+    if parsed_lists.iter().any(|item| {
+        item.content_hash.len() != 64
+            || !item
+                .content_hash
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+    }) {
         return Err(IngestError::new(
             "CBL content hashes must be 64 hex characters",
         ));
