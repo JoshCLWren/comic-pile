@@ -456,8 +456,6 @@ async fn delete_v2_removes_thread_with_reading_list_membership_dependencies() {
     assert_eq!(counts.get::<_, i64>(3), 1, "reading list itself retained");
     drop(conn);
 }
-<<<<<<< HEAD
-=======
 
 /// Read-only Queue revisits must return the same ids, order and totals, and
 /// every rendered row must be a member of the set the totals count (#3604).
