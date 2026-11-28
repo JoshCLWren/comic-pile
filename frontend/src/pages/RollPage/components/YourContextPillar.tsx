@@ -17,7 +17,7 @@ interface YourContextPillarProps {
 
 function ReaderContextLoading() {
   return (
-    <div className="space-y-2 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.1)', backgroundColor: 'var(--theme-bg-panel)' }}>
+    <div className="space-y-2 rounded-2xl border border-[var(--theme-personal-accent)]/10 bg-[var(--theme-bg-panel)] p-3">
       <div className="h-3 w-24 animate-pulse rounded bg-[var(--theme-bg-hover)]" />
       <div className="h-5 w-16 animate-pulse rounded bg-[var(--theme-bg-hover)]" />
       <div className="h-3 w-20 animate-pulse rounded bg-[var(--theme-bg-hover)]" />
@@ -54,7 +54,7 @@ export function YourContextPillar({
         </>
       ) : null}
 
-      <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
+      <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl border border-[var(--theme-personal-accent)]/20 bg-[var(--theme-bg-panel)] p-3">
         <div className="flex items-end justify-between gap-3">
           <div>
             <h3 id="rating-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-text-dim)]">

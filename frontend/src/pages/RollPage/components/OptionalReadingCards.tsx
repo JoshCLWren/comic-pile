@@ -286,7 +286,7 @@ function ReadingContextContent({
                   </div>
                   <div
                     className="mt-1 h-1.5 overflow-hidden rounded-full"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+                    style={{ backgroundColor: 'var(--theme-border)' }}
                     aria-hidden="true"
                   >
                     <div

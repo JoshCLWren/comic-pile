@@ -16,8 +16,7 @@ export function ReadingContextStatusCard({ isLoading, error }: ReadingContextSta
     return (
       <section
         aria-labelledby="reader-context-loading-heading"
-        className="rounded-2xl p-3"
-        style={{ border: '1px solid rgba(6,182,212,0.1)', backgroundColor: 'rgba(6, 182, 212, 0.04)' }}
+        className="rounded-2xl border border-[var(--theme-continuity-accent)]/10 bg-[var(--theme-continuity-accent)]/5 p-3"
         role="status"
         aria-live="polite"
       >
@@ -37,8 +36,7 @@ export function ReadingContextStatusCard({ isLoading, error }: ReadingContextSta
     return (
       <section
         aria-labelledby="reader-context-unavailable-heading"
-        className="rounded-2xl p-3"
-        style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}
+        className="rounded-2xl border border-[var(--theme-error)]/30 bg-[var(--theme-error)]/10 p-3"
         role="alert"
       >
         <h3

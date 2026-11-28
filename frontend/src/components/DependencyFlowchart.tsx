@@ -509,7 +509,7 @@ export default function DependencyFlowchart({
             ←
           </button>
           <span
-            className="text-[rgba(203,213,225,0.7)] text-xs font-bold"
+            className="text-[var(--theme-text-muted)] text-xs font-bold"
           >
             {page + 1}/{totalPages}
           </span>

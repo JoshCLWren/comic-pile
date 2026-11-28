@@ -16,11 +16,7 @@ export function CrossoverAnalytics({ crossovers }: CrossoverAnalyticsProps) {
   return (
     <section
       aria-labelledby="crossover-analytics-heading"
-      className="rounded-2xl p-3 space-y-2"
-      style={{
-        border: '1px solid rgba(168,85,247,0.15)',
-        backgroundColor: 'var(--theme-bg-panel)',
-      }}
+      className="rounded-2xl border border-[var(--theme-continuity-accent)]/15 bg-[var(--theme-bg-panel)] p-3 space-y-2"
     >
       <h4
         id="crossover-analytics-heading"
@@ -32,11 +28,7 @@ export function CrossoverAnalytics({ crossovers }: CrossoverAnalyticsProps) {
         {applicable.map((c) => (
           <div
             key={c.id}
-            className="rounded-xl p-2.5"
-            style={{
-              border: '1px solid rgba(168,85,247,0.1)',
-              backgroundColor: 'rgba(168,85,247,0.04)',
-            }}
+            className="rounded-xl border border-[var(--theme-continuity-accent)]/10 bg-[var(--theme-continuity-accent)]/5 p-2.5"
           >
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[11px] font-black text-[var(--theme-text-primary)] truncate">

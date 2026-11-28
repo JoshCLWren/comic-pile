@@ -107,8 +107,7 @@ export function ReadingPathPanel({
   return (
     <section
       aria-labelledby="reading-path-heading"
-      className="rounded-2xl p-4"
-      style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}
+      className="rounded-2xl border border-[var(--theme-continuity-accent)]/30 bg-[var(--theme-continuity-accent)]/10 p-4"
     >
       <h3
         id="reading-path-heading"
@@ -149,7 +148,7 @@ export function ReadingPathPanel({
                       aria-hidden="true"
                       className="flex-shrink-0 font-black"
                       style={{
-                        color: step.status === 'read' ? 'rgb(52, 211, 153)' : 'rgba(250, 204, 21, 0.7)',
+                        color: step.status === 'read' ? 'var(--theme-success)' : 'var(--theme-comic-accent)',
                       }}
                     >
                       {step.status === 'read' ? '✓' : '○'}
@@ -191,7 +190,7 @@ export function ReadingPathPanel({
         className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-3 py-2"
         style={{
           borderLeft: '4px solid var(--theme-continuity-accent)',
-          backgroundColor: 'rgba(6,182,212,0.14)',
+          backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 14%, transparent)',
         }}
         data-testid="reading-path-anchor"
         aria-label={`Current issue: ${anchorLabel}`}
@@ -265,14 +264,18 @@ function EdgeRow({
   subdued?: boolean
 }) {
   const arrow = edge.kind === 'dependency' ? '→' : '↝'
-  const accent = subdued ? 'rgba(165,243,252,0.45)' : 'rgb(165,243,252)'
+  const accent = subdued
+    ? 'color-mix(in srgb, var(--theme-continuity-accent) 45%, transparent)'
+    : 'var(--theme-continuity-accent)'
   const copy = edge.explanation ?? edge.note
   return (
     <div
       className={`flex items-start gap-3 rounded-lg px-3 py-2${subdued ? ' opacity-80' : ''}`}
       style={{
         borderLeft: `3px solid ${accent}`,
-        backgroundColor: subdued ? 'rgba(255,255,255,0.02)' : 'rgba(165, 243, 252, 0.05)',
+        backgroundColor: subdued
+          ? 'var(--theme-bg-panel)'
+          : 'color-mix(in srgb, var(--theme-continuity-accent) 5%, transparent)',
       }}
     >
       <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: accent }}></div>

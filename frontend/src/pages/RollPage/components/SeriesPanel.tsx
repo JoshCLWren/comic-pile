@@ -31,11 +31,7 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
     return (
       <section
         aria-labelledby="series-panel-heading"
-        className="rounded-2xl p-3 space-y-2"
-        style={{
-          border: '1px solid rgba(168,85,247,0.15)',
-          backgroundColor: 'var(--theme-bg-panel)',
-        }}
+        className="rounded-2xl border border-[var(--theme-personal-accent)]/15 bg-[var(--theme-bg-panel)] p-3 space-y-2"
       >
         <h4
           id="series-panel-heading"
@@ -55,11 +51,7 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
   return (
     <section
       aria-labelledby="series-panel-heading"
-      className="rounded-2xl p-3 space-y-3"
-      style={{
-        border: '1px solid rgba(168,85,247,0.15)',
-        backgroundColor: 'var(--theme-bg-panel)',
-      }}
+      className="rounded-2xl border border-[var(--theme-personal-accent)]/15 bg-[var(--theme-bg-panel)] p-3 space-y-3"
     >
       <h4
         id="series-panel-heading"

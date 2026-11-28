@@ -399,7 +399,7 @@ export default function PositionMenu({
         <OverlayPortal>
           <div
             ref={menuRef}
-            className="fixed w-52 bg-[#1a1410]/95 border border-[var(--theme-border)] rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
+            className="fixed w-52 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
             style={menuPosition}
             role="menu"
             aria-label="Series actions"

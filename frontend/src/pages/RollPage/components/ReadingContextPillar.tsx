@@ -215,7 +215,7 @@ export function ReadingContextPillar({
       </section>
 
       {readerContext && seriesName && (
-        <section aria-labelledby="local-series-heading" className="rounded-2xl p-4" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
+        <section aria-labelledby="local-series-heading" className="rounded-2xl border border-[var(--theme-continuity-accent)]/30 bg-[var(--theme-continuity-accent)]/10 p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3
               id="local-series-heading"
