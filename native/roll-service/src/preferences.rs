@@ -10,17 +10,12 @@
 //! * `GET /api/v1/users/me/taste-signals`
 //! * `PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict`
 //!
-//! The wire contract is preserved: the same JSON fields, the same
-//! `classic` default when no preference row exists, the same
-//! seed-on-empty-PATCH behaviour, the same canonical Taste Bank signal
-//! ordering (signal type, then external key), the same verdict upsert that
-//! never touches inferred evidence columns, and the same 422 validation
-//! status for unknown themes, signal types, verdicts and oversized keys.
-//! Every operation is scoped to the authenticated owner and issues a
-//! bounded constant number of statements: one read for each GET, one atomic
-//! upsert for a theme write or a verdict write, and insert-then-read for the
-//! empty-PATCH seeding path (matching the Python repository). There is no
-//! per-row fan-out.
+//! Night Shift is the sole application-wide visual identity (#5980). The
+//! preferences endpoints therefore expose only the authenticated user id and
+//! never read, validate, default, or persist the retired theme column. The
+//! endpoint remains available for unrelated preference fields without a schema
+//! migration. Taste Bank keeps its canonical signal ordering, verdict upsert,
+//! and 422 validation for signal types, verdicts, and oversized keys.
 
 #![forbid(unsafe_code)]
 
@@ -50,8 +45,6 @@ pub static PREFERENCES_STATEMENTS_ISSUED: AtomicU64 = AtomicU64::new(0);
 /// the connection or for authentication.
 pub static TASTE_STATEMENTS_ISSUED: AtomicU64 = AtomicU64::new(0);
 
-pub const DEFAULT_THEME: &str = "classic";
-pub const SUPPORTED_THEMES: [&str; 3] = ["classic", "ink-gold", "command-center"];
 pub const SIGNAL_TYPES: [&str; 5] = ["creator", "character", "team", "publisher", "era"];
 pub const VERDICTS: [&str; 3] = ["confirmed", "sometimes", "rejected"];
 
