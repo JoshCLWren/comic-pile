@@ -3,8 +3,8 @@ import {
   type DieStateResponse,
   type EligibleIssueIdsResponse,
   type IssueCardsResponse,
-  type RollLastRead,
-  type RollRecovery,
+  type LastReadResponse,
+  type RecoveryResponse,
 } from '../generated/nativeV2Client'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
@@ -12,9 +12,10 @@ export type {
   DieStateResponse,
   EligibleIssueIdsResponse,
   IssueCardsResponse,
-  RollLastRead,
-  RollRecovery,
 }
+
+export type RollLastRead = NonNullable<LastReadResponse>
+export type RollRecovery = NonNullable<RecoveryResponse>
 
 /**
  * Build the scoped Roll resource service bound to an HTTP client.

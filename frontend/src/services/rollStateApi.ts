@@ -1,10 +1,11 @@
 import {
   createNativeV2Client,
   type IssueCardsResponse,
-  type RollRecovery,
+  type RecoveryResponse,
 } from '../generated/nativeV2Client'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import { readRollSnoozes } from './api-roll'
+import { parseIssueCardTags } from './issueCardsApi'
 import { readPendingSelection } from './rollPendingSelection'
 import { parseRollRecovery } from './rollRecovery'
 import { queryClient } from '../query/queryClient'
@@ -60,7 +61,7 @@ export function createRollStateApi(client: HttpClient) {
           format: card.thread_format ?? '',
           issue_id: card.issue_id,
           issue_number: card.display_issue_number ?? card.issue_number,
-          tags: card.tags ?? [],
+          tags: parseIssueCardTags(card.tags),
           route_labels: card.route_labels?.slice(0, 3) ?? [],
           overflow_routes_count: card.overflow_routes_count ?? 0,
         }]
@@ -85,7 +86,7 @@ export function createRollStateApi(client: HttpClient) {
       const blockedIssueId = pending != null && !issueIds.includes(pending.issue_id)
         ? pending.issue_id
         : null
-      let recovery: RollRecovery | null = null
+      let recovery: RecoveryResponse = null
       if (blockedIssueId != null) {
         const query: RollRecoveryQuery = { issue_id: blockedIssueId }
         if (snoozes.length > 0) query.snoozed = snoozes.join(',')

@@ -1,6 +1,7 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { components } from '../generated/openapi'
 import { clearPendingSelectionForIssue } from './rollPendingSelection'
+import type { Tag } from './api-tags'
 
 export type IssueCard = components['schemas']['IssueCard'] & {
   /** Alternate overall/story number for the same physical comic (#4652). */
@@ -11,6 +12,26 @@ export type IssueCard = components['schemas']['IssueCard'] & {
   provider_issue_number?: string | null
 }
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
+
+/** Validate card tags at the generated-wire boundary before UI consumers use them. */
+export function parseIssueCardTags(
+  tags: components['schemas']['IssueCard']['tags'],
+): Tag[] {
+  if (!tags) return []
+  return tags.flatMap((tag) => {
+    if (tag.scope !== 'global' && tag.scope !== 'private') return []
+    return [{
+      id: tag.id,
+      name: tag.name,
+      normalized_name: tag.normalized_name,
+      scope: tag.scope,
+      owner_user_id: tag.owner_user_id ?? null,
+      color: tag.color,
+      created_at: tag.created_at,
+      updated_at: tag.updated_at,
+    }]
+  })
+}
 
 /** Server-bound batch ceiling for one `POST /v2/issues/cards` call (#4443). */
 const MAX_CARD_ISSUES = 200

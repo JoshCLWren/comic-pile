@@ -6,6 +6,7 @@ import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { readRollSnoozes } from '../services/api-roll'
 import { threadsApi } from '../services/api-threads'
+import { parseIssueCardTags } from '../services/issueCardsApi'
 import { rollResourcesApi } from '../services/rollResourcesApi'
 import { parseRollRecovery } from '../services/rollRecovery'
 import {
@@ -121,7 +122,7 @@ export function useRollState(): UseRollStateResult {
         format: card.thread_format ?? '',
         issue_id: card.issue_id,
         issue_number: card.display_issue_number ?? card.issue_number,
-        tags: card.tags ?? [],
+        tags: parseIssueCardTags(card.tags),
         route_labels: card.route_labels?.slice(0, 3) ?? [],
         overflow_routes_count: card.overflow_routes_count ?? 0,
       }]
@@ -136,7 +137,7 @@ export function useRollState(): UseRollStateResult {
             format: card.thread_format ?? '',
             issue_id: card.issue_id,
             issue_number: card.display_issue_number ?? card.issue_number,
-            tags: card.tags ?? [],
+            tags: parseIssueCardTags(card.tags),
             route_labels: card.route_labels?.slice(0, 3) ?? [],
             overflow_routes_count: card.overflow_routes_count ?? 0,
           } : null
