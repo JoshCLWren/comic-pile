@@ -175,6 +175,37 @@ fn compact_refs(value: &Value) -> Value {
     )
 }
 
+/// Validate a provider creator roster before it is compacted into metadata.
+///
+/// A roster must be an array: `null`, a scalar or an object is a malformed
+/// provider answer, while `[]` is a genuine "this issue has no credits" answer.
+/// Every entry must be an object that can actually identify a creator, by a
+/// positive numeric `id` or a non-blank `name`. Empty objects and objects with
+/// neither identifier used to survive `compact_refs` and turn a broken payload
+/// into a false `Complete` credit list; they are now `invalid_response`.
+fn compact_creator_credits(value: &Value) -> Result<Value, ProviderFailure> {
+    let Some(entries) = value.as_array() else {
+        return Err(ProviderFailure::InvalidResponse);
+    };
+    for entry in entries {
+        let Some(object) = entry.as_object() else {
+            return Err(ProviderFailure::InvalidResponse);
+        };
+        let identifiable = object
+            .get("id")
+            .and_then(Value::as_u64)
+            .is_some_and(|id| id > 0)
+            || object
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| !name.trim().is_empty());
+        if !identifiable {
+            return Err(ProviderFailure::InvalidResponse);
+        }
+    }
+    Ok(compact_refs(value))
+}
+
 /// Normalize a roster row for catalog commit without claiming a deep refresh.
 pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
     let volume = result
@@ -208,19 +239,39 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
             .filter_map(|key| image.get(*key).and_then(Value::as_str))
             .find(|value| !value.is_empty())
         });
-    json!({
-        "name": result.get("name"),
-        "issue_number": result.get("issue_number"),
-        "cover_date": result.get("cover_date"),
-        "store_date": result.get("store_date"),
-        "volume": volume,
-        "primary_image": primary_image,
-        "creator_credits": compact_refs(&result["person_credits"]),
-        "characters": compact_refs(&result["character_credits"]),
-        "teams": compact_refs(&result["team_credits"]),
-        "story_arcs": compact_refs(&result["story_arc_credits"]),
-        "raw_provider_payload": result,
-    })
+    // This preview path has no typed outcome channel: fail closed to an empty
+    // roster rather than compacting a malformed one into apparent credits. The
+    // deep hydration path below rejects the same payload as `invalid_response`.
+    let creator_credits = compact_creator_credits(&result["person_credits"])
+        .unwrap_or_else(|_| Value::Array(Vec::new()));
+    let mut metadata = Map::new();
+    metadata.insert("name".to_owned(), result.get("name").cloned().unwrap_or(Value::Null));
+    metadata.insert(
+        "issue_number".to_owned(),
+        result.get("issue_number").cloned().unwrap_or(Value::Null),
+    );
+    metadata.insert(
+        "cover_date".to_owned(),
+        result.get("cover_date").cloned().unwrap_or(Value::Null),
+    );
+    metadata.insert(
+        "store_date".to_owned(),
+        result.get("store_date").cloned().unwrap_or(Value::Null),
+    );
+    metadata.insert("volume".to_owned(), volume.unwrap_or(Value::Null));
+    // Never emit a null cover: a later merge must not erase stored artwork.
+    if let Some(cover) = primary_image {
+        metadata.insert("primary_image".to_owned(), Value::String(cover.to_owned()));
+    }
+    metadata.insert("creator_credits".to_owned(), creator_credits);
+    metadata.insert(
+        "characters".to_owned(),
+        compact_refs(&result["character_credits"]),
+    );
+    metadata.insert("teams".to_owned(), compact_refs(&result["team_credits"]));
+    metadata.insert("story_arcs".to_owned(), compact_refs(&result["story_arc_credits"]));
+    metadata.insert("raw_provider_payload".to_owned(), result.clone());
+    Value::Object(metadata)
 }
 
 fn normalized_metadata(
@@ -265,15 +316,16 @@ fn normalized_metadata(
         .filter_map(|k| v.get(*k).and_then(Value::as_str))
         .find(|s| !s.is_empty())
     });
-    let person = compact_refs(&result["person_credits"]);
+    // A malformed roster is not "no credits": reject it so the caller reports
+    // invalid_response instead of persisting a fabricated complete result.
+    let person = compact_creator_credits(&result["person_credits"])?;
     let present = person.as_array().is_some_and(|v| !v.is_empty());
-    let patch = json!({
+    let mut patch = json!({
         "name": result["name"],
         "issue_number": result["issue_number"],
         "cover_date": result["cover_date"],
         "store_date": result["store_date"],
         "volume": compact_refs(&json!([result["volume"]])).as_array().and_then(|v|v.first()).cloned(),
-        "primary_image": cover,
         "creator_credits": person,
         "characters": compact_refs(&result["character_credits"]),
         "teams": compact_refs(&result["team_credits"]),
@@ -281,6 +333,15 @@ fn normalized_metadata(
         "raw_provider_payload": result,
         "deep_metadata_refreshed_at": chrono::Utc::now().to_rfc3339(),
     });
+    // A null/absent cover must leave a previously stored cover alone. The
+    // persistence merge is a jsonb `||`, so emitting `"primary_image": null`
+    // would erase the stored artwork; omit the field entirely instead.
+    if let Some(cover) = cover {
+        patch
+            .as_object_mut()
+            .expect("normalized patch is an object")
+            .insert("primary_image".to_owned(), Value::String(cover.to_owned()));
+    }
     let url = result["site_detail_url"]
         .as_str()
         .filter(|s| s.starts_with("https://comicvine.gamespot.com/"))
@@ -691,6 +752,50 @@ fn cached_has_credits(metadata: &Value) -> bool {
     creator || raw
 }
 
+/// Creator credits actually usable from a metadata object: the normalized
+/// list first, falling back to the provider's raw `person_credits`. Both
+/// representations are honoured so valid stored credits are never reported as
+/// missing just because an older row only kept one of the two sources.
+fn retained_creator_credits(metadata: &Value) -> Value {
+    if let Some(credits) = metadata
+        .get("creator_credits")
+        .and_then(Value::as_array)
+        .filter(|credits| !credits.is_empty())
+    {
+        return Value::Array(credits.clone());
+    }
+    metadata
+        .get("raw_provider_payload")
+        .and_then(|raw| raw.get("person_credits"))
+        .and_then(Value::as_array)
+        .filter(|credits| !credits.is_empty())
+        .map(|credits| compact_refs(&Value::Array(credits.clone())))
+        .unwrap_or_else(|| Value::Array(Vec::new()))
+}
+
+/// Credit state of metadata that was actually persisted by an inline write.
+/// Callers use this to report `no credits` only when nothing was retained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RetainedCredits {
+    /// At least one identifiable creator credit is stored.
+    Present,
+    /// The provider answered with a genuinely empty roster and no credit was kept.
+    Empty,
+}
+
+impl RetainedCredits {
+    fn from_metadata(metadata: &Value) -> Self {
+        if retained_creator_credits(metadata)
+            .as_array()
+            .is_some_and(|credits| !credits.is_empty())
+        {
+            Self::Present
+        } else {
+            Self::Empty
+        }
+    }
+}
+
 fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
     let deep = metadata
         .get("deep_metadata_refreshed_at")
@@ -854,14 +959,16 @@ async fn hydrate_catalog_commit_with_key(
 /// Evidence provenance is not part of eligibility: imported
 /// (`comicvine_issue_adoption`) and user-confirmed identities are both
 /// recoverable through the explicit synchronous Retry path. One set-based
-/// query: no per-row round trips and no N+1. Returns the identity id, its
-/// external id and the already-cached metadata used to preserve credits when
-/// the fresh roster is empty.
+/// query: no per-row round trips and no N+1.
+///
+/// A query failure is *not* "no matching row". The caller maps `Err` to
+/// `persist_failed` and `Ok(None)` to `not_confirmed`, so a broken database is
+/// never reported as a user with no confirmed identity.
 async fn confirmed_identity_for_issue(
     conn: &deadpool_postgres::Object,
     user_id: i32,
     issue_id: i32,
-) -> Option<(i32, String, Option<Value>)> {
+) -> Result<Option<(i32, String, Option<Value>)>, tokio_postgres::Error> {
     let row = conn
         .query_opt(
             "SELECT e.id, e.external_id, e.metadata_json::text
@@ -878,15 +985,16 @@ async fn confirmed_identity_for_issue(
              LIMIT 1",
             &[&issue_id, &user_id],
         )
-        .await
-        .ok()
-        .flatten()?;
+        .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
     let id: i32 = row.get(0);
     let external_id: String = row.get(1);
     let metadata = row
         .get::<_, Option<String>>(2)
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
-    Some((id, external_id, metadata))
+    Ok(Some((id, external_id, metadata)))
 }
 
 /// Synchronous, bounded creator-credit hydration for identity confirm/replace
@@ -989,32 +1097,25 @@ fn issue_id_from_external(external_id: &str) -> Option<u32> {
     issue_id(external_id)
 }
 
-/// Keep cached creator credits when a fresh fetch did not include a roster.
-fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
-    let Some(existing) = cached else {
-        return;
+/// Keep creator credits from the row's *current* metadata when a fresh fetch
+/// did not include a roster. `current` must come from a read at write time,
+/// not from the snapshot taken before the provider call, or a concurrent
+/// metadata write would be lost. Returns the credits retained in the patch so
+/// the caller can derive its outcome from what was actually stored.
+fn preserve_cached_credits(patch: &mut Value, current: Option<&Value>) -> Value {
+    let Some(existing) = current else {
+        return retained_creator_credits(patch);
     };
-    if existing["creator_credits"]
+    let credits = retained_creator_credits(existing);
+    let patch_has_no_credits = patch["creator_credits"]
         .as_array()
-        .is_some_and(|v| !v.is_empty())
-    {
+        .is_none_or(|credits| credits.is_empty());
+    if patch_has_no_credits && credits.as_array().is_some_and(|v| !v.is_empty()) {
         if let Some(obj) = patch.as_object_mut() {
-            obj.insert(
-                "creator_credits".to_owned(),
-                existing["creator_credits"].clone(),
-            );
-        }
-    } else if existing["raw_provider_payload"]["person_credits"]
-        .as_array()
-        .is_some_and(|v| !v.is_empty())
-    {
-        if let Some(obj) = patch.as_object_mut() {
-            obj.insert(
-                "creator_credits".to_owned(),
-                compact_refs(&existing["raw_provider_payload"]["person_credits"]),
-            );
+            obj.insert("creator_credits".to_owned(), credits);
         }
     }
+    retained_creator_credits(patch)
 }
 
 #[cfg(test)]
