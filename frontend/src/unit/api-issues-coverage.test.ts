@@ -19,6 +19,8 @@ beforeEach(() => {
   client.post.mockResolvedValue({})
   client.put.mockResolvedValue(undefined)
   client.delete.mockResolvedValue(undefined)
+  localStorage.clear()
+  resetRollPendingSelectionMemory()
 })
 
 describe('issuesApi', () => {
@@ -67,6 +69,20 @@ describe('issuesApi', () => {
     expect(client.post).toHaveBeenNthCalledWith(3, '/v2/threads/1/issues/preview', { issue_range: '9', append_to_end: true })
     expect(client.post).toHaveBeenNthCalledWith(4, '/v2/threads/1/issues/preview', { issue_range: '10', strategy: 'numeric_resort' })
     expect(client.post).toHaveBeenNthCalledWith(5, '/v2/threads/1/issues', { issue_range: '11', insert_after_issue_id: 4, strategy: 'safe_default' })
+  })
+
+  it('clears matching pending selections only after single and bulk reads commit', async () => {
+    writePendingSelection(11, { issue_id: 2, thread_id: 7, selected_at: 1 })
+    writePendingSelection(12, { issue_id: 3, thread_id: 8, selected_at: 1 })
+
+    await issuesApi.markRead(2)
+    expect(readPendingSelection(11)).toBeNull()
+    expect(readPendingSelection(12)?.issue_id).toBe(3)
+
+    writePendingSelection(11, { issue_id: 4, thread_id: 7, selected_at: 2 })
+    client.post.mockRejectedValueOnce(new Error('offline'))
+    await expect(issuesApi.bulkMarkRead([4])).rejects.toThrow('offline')
+    expect(readPendingSelection(11)?.issue_id).toBe(4)
   })
 
   it('calls issue mutations and migration endpoints', async () => {

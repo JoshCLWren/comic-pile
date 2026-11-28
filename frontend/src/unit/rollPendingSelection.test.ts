@@ -118,6 +118,16 @@ describe('browser-owned roll pending selection', () => {
     expect(readPendingSelection(12)?.issue_id).toBe(9)
   })
 
+  it('clears a committed exact issue across partitions without touching unrelated selections', () => {
+    writePendingSelection(11, SELECTION)
+    writePendingSelection(12, { ...SELECTION, issue_id: 9, thread_id: 3 })
+
+    clearPendingSelectionForIssue(SELECTION.issue_id)
+
+    expect(readPendingSelection(11)).toBeNull()
+    expect(readPendingSelection(12)?.issue_id).toBe(9)
+  })
+
   it('rejects malformed or foreign storage records', () => {
     localStorage.setItem(pendingSelectionStorageKey(11), '{not json')
     expect(readPendingSelection(11)).toBeNull()

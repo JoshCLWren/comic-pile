@@ -49,6 +49,24 @@ describe('bounded exact-issue card transport', () => {
     expect(client.patch).toHaveBeenLastCalledWith('/v2/issues/75', { source: 'direct', idempotency_key: 'unchanged-key' })
   })
 
+  it('clears only the matching browser selection after a committed read or rating', async () => {
+    writePendingSelection(11, { issue_id: 75, thread_id: 7, selected_at: 1 })
+    writePendingSelection(12, { issue_id: 95, thread_id: 8, selected_at: 1 })
+
+    await api.patchIssue(75, { status: 'read', rating: 4, idempotencyKey: 'read-key' })
+    expect(readPendingSelection(11)).toBeNull()
+    expect(readPendingSelection(12)?.issue_id).toBe(95)
+
+    writePendingSelection(11, { issue_id: 75, thread_id: 7, selected_at: 2 })
+    client.patch.mockRejectedValueOnce(new Error('offline'))
+    await expect(api.patchIssue(75, {
+      status: 'read',
+      rating: 4,
+      idempotencyKey: 'retry-key',
+    })).rejects.toThrow('offline')
+    expect(readPendingSelection(11)?.issue_id).toBe(75)
+  })
+
   it('sends an explicit alias set/clear and leaves it out when it was not provided', async () => {
     await api.patchIssue(75, {
       issueNumberAlias: '100',
