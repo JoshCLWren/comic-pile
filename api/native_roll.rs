@@ -400,10 +400,8 @@ fn app() -> Router {
         // native_not_found is required for a 404 rather than a 405.
         .route("/api/v1/threads/check-duplicates", post(native_not_found))
         .route("/api/v1/threads/groups:batch", post(native_not_found))
-        .route(
-            "/api/v1/threads/{thread_id}",
-            put(native_not_found).delete(native_not_found),
-        )
+        .route("/api/v1/threads/{thread_id}", put(native_not_found))
+        .route("/api/v1/threads/{thread_id}", delete(native_not_found))
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))

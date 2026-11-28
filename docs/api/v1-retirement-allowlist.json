@@ -8,8 +8,8 @@
   "require_runtime": "native-rust",
   "known_unowned_baseline": [],
   "summary": {
-    "total_entries": 132,
-    "with_owner": 132,
+    "total_entries": 133,
+    "with_owner": 133,
     "baseline_debt": 0,
     "nonconforming_v2": 98
   },
@@ -330,6 +330,27 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "version": "v1",
+      "owner_issue": 5958,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/api-issues.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
       "path": "/api/v1/threads/{thread_id}",
       "version": "v1",
       "owner_issue": 5958,
