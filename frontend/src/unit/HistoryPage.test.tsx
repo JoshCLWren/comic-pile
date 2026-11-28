@@ -153,7 +153,13 @@ describe('History page contracts', () => {
         screen.getByRole('list', { name: 'Activity history' }).querySelectorAll('[role="listitem"]'),
       ).toHaveLength(2),
     )
-    expect(listMock).toHaveBeenLastCalledWith('page-2')
+    expect(listMock).toHaveBeenLastCalledWith('page-2', {
+      q: '',
+      series: '',
+      type: '',
+      dateFrom: '',
+      dateTo: '',
+    })
   })
 
   it('shows a bounded indicator while a later activity page is loading', async () => {

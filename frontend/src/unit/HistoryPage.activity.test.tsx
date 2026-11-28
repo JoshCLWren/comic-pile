@@ -153,14 +153,12 @@ describe('History activity timeline (#4822)', () => {
 
     renderHistory()
 
-    await screen.findByRole('list', { name: 'Activity history' })
-    expect(screen.getAllByText('Rated 4.5')).toHaveLength(1)
-    expect(screen.getAllByText('Snoozed')).toHaveLength(2)
-    expect(screen.getAllByText('Rolled')).toHaveLength(3)
+    const list = await screen.findByRole('list', { name: 'Activity history' })
+    expect(within(list).getAllByText('Rated 4.5')).toHaveLength(1)
+    expect(within(list).getAllByText('Snoozed')).toHaveLength(2)
+    expect(within(list).getAllByText('Rolled')).toHaveLength(3)
 
-    const rows = within(await screen.findByRole('list', { name: 'Activity history' })).getAllByRole(
-      'listitem',
-    )
+    const rows = within(list).getAllByRole('listitem')
     const link = within(rows[5]).getByRole('link', { name: 'Astro City: Astra' })
     expect(link).toHaveAttribute('href', '/thread/8417')
   })

@@ -149,6 +149,26 @@ export default function HistoryPage() {
   const cardsQuery = useIssueCards(visibleIssueIds)
   const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
+  // Controls stay mounted across loading, failure and empty states so a reader
+  // can change or clear a filter without waiting for the current request.
+  const pageHeader = (
+    <header className="flex flex-wrap items-end justify-between gap-3 px-2">
+      <div>
+        <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
+        <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
+        {restoreMessage && <p className="mt-2 text-sm text-stone-400">{restoreMessage}</p>}
+        {bulkUndoMessage && (
+          <p className="mt-2 text-sm text-stone-400" role="status">{bulkUndoMessage}</p>
+        )}
+      </div>
+    </header>
+  )
+  const filterPanel = (
+    <div className="px-2">
+      <HistoryFilters filters={filterDraft} onChange={setFilterDraft} onClear={clearFilters} />
+    </div>
+  )
+
   const handleRestoreUnread = useCallback(async (threadId: number) => {
     setRestoringThreadId(threadId)
     setRestoreMessage(null)
@@ -188,24 +208,38 @@ export default function HistoryPage() {
     // back onto the bare splash.
     if (isRetrying) {
       return (
-        <div className="flex flex-col items-center justify-center h-screen gap-4">
-          <p role="status" className="text-sm font-bold text-stone-400">
-            Still loading your history… your library is safe.
-          </p>
-          <RetryHistoryButton onRetry={() => void refetch()} />
+        <div className="space-y-6 md:space-y-8 pb-20">
+          {pageHeader}
+          {filterPanel}
+          <div className="flex flex-col items-center justify-center gap-4 py-20">
+            <p role="status" className="text-sm font-bold text-stone-400">
+              Still loading your history… your library is safe.
+            </p>
+            <RetryHistoryButton onRetry={() => void refetch()} />
+          </div>
         </div>
       )
     }
-    return <div className="flex items-center justify-center h-screen">Loading...</div>
+    return (
+      <div className="space-y-6 md:space-y-8 pb-20">
+        {pageHeader}
+        {filterPanel}
+        <div className="flex items-center justify-center py-20">Loading...</div>
+      </div>
+    )
   }
 
   if (error && !isLoadingMore && (!activity || activity.length === 0)) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4">
-        <p role="alert" className="error-message">
-          Failed to load activity
-        </p>
-        <RetryHistoryButton onRetry={() => void refetch()} />
+      <div className="space-y-6 md:space-y-8 pb-20">
+        {pageHeader}
+        {filterPanel}
+        <div className="flex flex-col items-center justify-center gap-4 py-20">
+          <p role="alert" className="error-message">
+            Failed to load activity
+          </p>
+          <RetryHistoryButton onRetry={() => void refetch()} />
+        </div>
       </div>
     )
   }
@@ -213,15 +247,8 @@ export default function HistoryPage() {
   if (!activity || activity.length === 0) {
     return (
       <div className="space-y-6 md:space-y-8 pb-20">
-        <header className="flex flex-wrap items-end justify-between gap-3 px-2">
-          <div>
-            <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-            <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
-          </div>
-        </header>
-        <div className="px-2">
-          <HistoryFilters filters={filterDraft} onChange={setFilterDraft} onClear={clearFilters} />
-        </div>
+        {pageHeader}
+        {filterPanel}
         <div className="text-center text-stone-500" role="status">
           {hasFilters ? 'No activity matches these filters' : 'No activity yet'}
         </div>
@@ -231,20 +258,8 @@ export default function HistoryPage() {
 
   return (
     <div className="space-y-6 md:space-y-8 pb-20">
-      <header className="flex flex-wrap items-end justify-between gap-3 px-2">
-        <div>
-          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-          <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
-          {restoreMessage && <p className="mt-2 text-sm text-stone-400">{restoreMessage}</p>}
-          {bulkUndoMessage && (
-            <p className="mt-2 text-sm text-stone-400" role="status">{bulkUndoMessage}</p>
-          )}
-        </div>
-      </header>
-
-      <div className="px-2">
-        <HistoryFilters filters={filterDraft} onChange={setFilterDraft} onClear={clearFilters} />
-      </div>
+      {pageHeader}
+      {filterPanel}
 
       {bulkReadOperations.length > 0 && (
         <section
