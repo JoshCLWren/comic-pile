@@ -323,11 +323,10 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     assert!(body["next_page_token"].is_null());
     assert_eq!(body["issues"][0]["issue_number"], "33");
     assert_eq!(body["issues"][0]["status"], "unread");
-    assert!(body["issues"][0]["read_at"].is_null());
-    assert!(body["issues"][0]["created_at"]
-        .as_str()
-        .unwrap()
-        .ends_with('Z'));
+    // The v2 issue-create item carries identity/state fields; the v1
+    // read_at/created_at wire fields are not part of this resource.
+    assert!(body["issues"][0]["id"].as_i64().unwrap() > 0);
+    assert_eq!(body["issues"][0]["thread_id"], thread);
 
     // Natural placement seats #2 ahead of #33 and shifts the rest.
     let (status, body) = send(
@@ -343,7 +342,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     assert_eq!(status, StatusCode::CREATED, "{body}");
     assert_eq!(body["total_count"], 4);
     assert_eq!(body["issues"].as_array().unwrap().len(), 1);
-    assert_eq!(body["issues"][0]["position"], 1);
+    assert_eq!(body["issues"][0]["issue_number"], "2");
     let rows = positions(&conn, thread).await;
     assert_eq!(
         rows.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(),
@@ -402,7 +401,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
-    assert_eq!(body["issues"][0]["position"], 2);
+    assert_eq!(body["issues"][0]["issue_number"], "Annual 1");
     let numbers: Vec<String> = positions(&conn, thread)
         .await
         .into_iter()
