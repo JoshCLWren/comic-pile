@@ -478,9 +478,13 @@ async fn write_entries(
     ids: &[i32],
     intents: &JsonValue,
 ) -> Result<(), ApiError> {
+    // Rebuild the whole ordered membership in one statement pair. A partial
+    // delete would leave retained entries at their old positions and collide
+    // with the unique (list_id, position) constraint when the reviewed order
+    // changes; intents for retained issues are carried in `intents`.
     tx.execute(
-        "DELETE FROM custom_cbl_entries WHERE list_id = $1 AND NOT (issue_id = ANY($2::int[]))",
-        &[&list_id, &ids],
+        "DELETE FROM custom_cbl_entries WHERE list_id = $1",
+        &[&list_id],
     )
     .await
     .map_err(qe)?;
