@@ -309,4 +309,201 @@ test.describe('CBL add/update into an owned Reading List', () => {
     expect(commits[1].idempotency_key).toBeTruthy()
     expect(commits[1].entry_decisions).toEqual(commits[0].entry_decisions)
   })
+
+  test('reopen shows stale-preview explanation and preserves per-series graph decisions', async ({
+    authenticatedPage: page,
+  }) => {
+    const commits: CommitPayload[] = []
+    const overlap = {
+      overlap_id: 'provider-series:comicvine:4000|provider-series:comicvine:5000',
+      continuing_series: {
+        comicvine_volume_id: '4000',
+        series_name: 'Ultimate Spider-Man',
+        year: 2000,
+      },
+      waiting_series: {
+        comicvine_volume_id: '5000',
+        series_name: 'Ultimates',
+        year: 2002,
+      },
+      question: 'Should Ultimate Spider-Man continue while Ultimates waits?',
+      blocked_issue_ids: [11],
+      choices: [
+        {
+          choice: 'protect_order' as const,
+          label: 'Ultimates waits; Ultimate Spider-Man continues',
+          detail: 'Keeps the original reading order.',
+          rollable_issue_ids: [11],
+          waiting_issue_ids: [],
+          series: [],
+        },
+        {
+          choice: 'continue_series' as const,
+          label: 'Continue Ultimate Spider-Man',
+          detail: 'Lets the continuing series roll.',
+          rollable_issue_ids: [11, 12],
+          waiting_issue_ids: [],
+          series: [],
+        },
+      ],
+      selected_choice: null,
+    }
+    const graphPreview = {
+      source_list_id: SOURCE_ID,
+      content_hash: CONTENT_HASH,
+      revision_sha: REVISION_SHA,
+      series: [],
+      overlaps: [overlap],
+      issues: [],
+      rollable_issue_ids: [11],
+      waiting_issue_ids: [],
+      cycle_errors: [],
+    }
+
+    await page.route(/\/api\/v1\/issue-identity\/cbl-sources\/browse(?:\?|$)/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          scope: 'folder',
+          folder: '',
+          query: null,
+          breadcrumbs: [{ name: 'All CBLs', path: '' }],
+          folders: [],
+          items: [source],
+          page: 1,
+          page_size: 50,
+          total: 1,
+          catalog_total: 1,
+          total_pages: 1,
+          has_next: false,
+          has_previous: false,
+        }),
+      }),
+    )
+    await page.route(/\/api\/v1\/issue-identity\/cbl-sources\/42(?:\?|$)/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...source,
+          source_ref: 'JoshCLWren/CBL-ReadingLists:Marvel/Ultimate.cbl',
+          entries_total: 2,
+          entries_offset: 0,
+          entries_limit: 200,
+          entries: preview.entries.map((entry) => ({
+            position: entry.cbl_position,
+            series_name: entry.series_name,
+            issue_number: entry.issue_number,
+            volume_year: null,
+            publication_year: null,
+            comicvine_issue_id: entry.comicvine_issue_id,
+            comicvine_volume_id: null,
+          })),
+        }),
+      }),
+    )
+    await page.route(/\/api\/v1\/issue-identity\/cbl\/42\/adoption-preview(?:\?|$)/, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(preview) }),
+    )
+    await page.route(/\/api\/v1\/issue-identity\/cbl\/42\/reading-graph-preview(?:\?|$)/, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graphPreview) }),
+    )
+    await page.route(/\/api\/v2\/reading-lists\/42\/adoption-commits(?:\?|$)/, async (route) => {
+      // SAFETY: Playwright route body is the JSON sent by the app under test.
+      const payload = route.request().postDataJSON() as CommitPayload & {
+        overlap_decisions?: Array<{ overlap_id: string; choice: string }>
+      }
+      commits.push(payload)
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: LIST_ID,
+          user_id: 1,
+          name: source.name,
+          ordering_mode: 'informational',
+          lanes: {},
+          nodes: {},
+          created_at: '2026-11-28T00:00:00Z',
+          updated_at: '2026-11-28T00:00:00Z',
+          custom_cbl_list_id: LIST_ID,
+          list_version: 1,
+          reused_positions: [],
+          created_positions: [],
+          excluded_positions: [],
+          unresolved_positions: [],
+          selections: { entry_decisions: payload.entry_decisions, series_overrides: {} },
+          overlap_decisions: payload.overlap_decisions ?? [],
+        }),
+      })
+    })
+
+    let staleDetail = false
+    await page.route(/\/api\/v2\/reading-lists\/900(?:\?|$)/, (route) => {
+      const last = commits.at(-1)
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: LIST_ID,
+          user_id: 1,
+          name: source.name,
+          description: null,
+          mode: 'strict',
+          issue_count: 2,
+          entries: [],
+          created_at: '2026-11-28T00:00:00Z',
+          updated_at: '2026-11-28T00:00:00Z',
+          list_version: 1,
+          source_content_hash: staleDetail ? 'stale-hash' : CONTENT_HASH,
+          source_revision_sha: staleDetail ? 'stale-rev' : REVISION_SHA,
+          selections: last
+            ? { entry_decisions: last.entry_decisions, series_overrides: {} }
+            : null,
+          overlap_decisions: last?.overlap_decisions ?? [],
+        }),
+      })
+    })
+
+    await page.goto('/cbl-sources?list=42')
+    await expect(page.getByRole('heading', { name: 'Ultimate Universe' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Add this reading order' }).click()
+    const graphDialog = page.getByTestId('reading-graph-overlap-dialog')
+    await expect(graphDialog).toBeVisible()
+    await graphDialog.getByRole('radio', { name: /Continue Ultimate Spider-Man/ }).click()
+    await graphDialog.getByRole('button', { name: 'Apply decision' }).click()
+    await page.getByRole('button', { name: 'Add reading order' }).click()
+    await expect(page).toHaveURL(/\/reading-lists\/900$/)
+    expect(commits).toHaveLength(1)
+    expect(commits[0].overlap_decisions).toEqual([
+      {
+        overlap_id: 'provider-series:comicvine:4000|provider-series:comicvine:5000',
+        choice: 'continue_series',
+      },
+    ])
+
+    // Reopen with the same source fingerprint: the saved overlap decision is restored.
+    await page.goto('/cbl-sources?list=42')
+    await expect(page.getByTestId('cbl-owned-list')).toContainText(
+      'Previously added. Linked to Reading List #900',
+    )
+    await page.getByRole('button', { name: 'Add this reading order' }).click()
+    const restoredDialog = page.getByTestId('reading-graph-overlap-dialog')
+    await expect(restoredDialog).toBeVisible()
+    await expect(
+      restoredDialog.getByRole('radio', { name: /Continue Ultimate Spider-Man/ }),
+    ).toHaveAttribute('aria-checked', 'true')
+    await restoredDialog.getByRole('button', { name: 'Close' }).click()
+
+    // A changed source fingerprint must explain why the preview is stale.
+    staleDetail = true
+    await page.goto('/cbl-sources?list=42')
+    await expect(
+      page.getByText(
+        'This source or its Reading List changed after you reviewed it. Refresh the preview before adding it again.',
+      ),
+    ).toBeVisible()
+  })
 })
