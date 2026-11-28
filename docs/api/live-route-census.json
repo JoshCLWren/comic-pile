@@ -2111,7 +2111,7 @@
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
-      "owner_issue": null,
+      "owner_issue": 5958,
       "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",

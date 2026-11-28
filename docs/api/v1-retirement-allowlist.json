@@ -8,10 +8,10 @@
   "require_runtime": "native-rust",
   "known_unowned_baseline": [],
   "summary": {
-    "total_entries": 134,
-    "with_owner": 134,
+    "total_entries": 135,
+    "with_owner": 135,
     "baseline_debt": 0,
-    "nonconforming_v2": 98
+    "nonconforming_v2": 99
   },
   "entries": [
     {
@@ -984,6 +984,17 @@
         "frontend/src/services/creatorTeamChemistryApi.ts",
         "frontend/src/services/creatorsApi.ts"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/cron/release-sync",
+      "version": "v2",
+      "owner_issue": 5958,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
     },
     {
       "method": "GET",

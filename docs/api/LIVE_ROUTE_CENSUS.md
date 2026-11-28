@@ -19,7 +19,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 - Routes with unresolved production ingress: 0.
 - Scanned first-party call sites: 918.
 - Stale AIP baseline entries (no live route): 4.
-- Allowlist entries: 134 (owner 134, baseline debt 0, nonconforming v2 98).
+- Allowlist entries: 135 (owner 135, baseline debt 0, nonconforming v2 99).
 
 ## Ownership matrix
 
@@ -113,7 +113,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}` | `creators_v2::get_series_drilldown` | v2 | frontend/src/services/api-creators.ts, frontend/src/services/creatorComparisonApi.ts, frontend/src/services/creatorDiscoveryApi.ts, frontend/src/services/creatorMetricDrilldownApi.ts, frontend/src/services/creatorTeamChemistryApi.ts, frontend/src/services/creatorsApi.ts | /api/native_roll.rs | #4836 | canonical-v2 | live-target |
 | GET | `/api/v2/creators/{creator_key}/metrics/{metric_type}` | `creators_v2::get_metric_drilldown` | v2 | frontend/src/services/creatorMetricDrilldownApi.ts, frontend/src/unit/creatorMetricDrilldownApi.test.ts | /api/native_roll.rs | #4836 | canonical-v2 | live-target |
 | GET | `/api/v2/creators/{creator_key}/series/{series_key}/issues` | `creators_v2::get_series_issues` | v2 | frontend/src/services/api-creators.ts, frontend/src/unit/api-creators.test.ts | /api/native_roll.rs | #4836 | canonical-v2 | live-target |
-| GET | `/api/v2/cron/release-sync` | `reading_plan_sync::scheduled_release_sync_cron` | v2 | none | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
+| GET | `/api/v2/cron/release-sync` | `reading_plan_sync::scheduled_release_sync_cron` | v2 | none | /api/native_roll.rs | #5958 | canonical-v2 | live-target |
 | GET | `/api/v2/demo-roll` | `demo::read_demo_roll` | v2 | frontend/src/unit/api-demo.test.ts | /api/native_roll.rs | #4855 | canonical-v2 | live-target |
 | POST | `/api/v2/dependencies/` | `dependencies::create_dependency` | v2 | frontend/src/services/api-dependencies.ts, frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts, frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts, frontend/src/test/reading-plan-reader.spec.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
 | GET | `/api/v2/dependencies/blocked` | `legacy_dependencies::blocked` | v2 | frontend/src/services/api-dependencies.ts, frontend/src/test/fixtures.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #4838 | canonical-v2 | live-target |
