@@ -905,10 +905,13 @@ pub async fn sync_cbl_lists<C: GenericClient>(
             "CBL source paths must be unique within one sync",
         ));
     }
-    if parsed_lists
-        .iter()
-        .any(|item| item.content_hash.is_empty() || item.content_hash.len() != 64)
-    {
+    if parsed_lists.iter().any(|item| {
+        item.content_hash.len() != 64
+            || !item
+                .content_hash
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+    }) {
         return Err(IngestError::new(
             "CBL content hashes must be 64 hex characters",
         ));
@@ -927,9 +930,21 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         }
     }
 
+    if !dry_run {
+        client
+            .execute(
+                "SELECT pg_advisory_xact_lock($1::bigint)",
+                &[&CBL_INGEST_LOCK_ID],
+            )
+            .await
+            .map_err(|error| IngestError::new(format!("cbl ingest lock failed: {error}")))?;
+    }
     let (mut source_id, existing_revision) = lookup_source(client, &repository, dry_run).await?;
     let source_created = source_id.is_none();
     let mut repository_reconciled = false;
+    if source_id.is_some() && !aliases.is_empty() {
+        reject_active_alias_conflict(client, &aliases).await?;
+    }
     if source_id.is_none() && !aliases.is_empty() {
         let alias_rows = source_query(
             client,
@@ -998,24 +1013,36 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         .iter()
         .filter(|(path, existing)| existing.active && !keep_paths.contains(path.as_str()))
         .count();
+    let protected_lists = existing_lists
+        .iter()
+        .filter(|(path, existing)| {
+            existing.active && protected_paths.contains(path.as_str())
+        })
+        .count();
     let source_changed = source_created
         || existing_revision.as_deref() != Some(revision_sha.as_str())
         || repository_reconciled;
     let changed = inserted > 0 || updated > 0 || deactivated > 0 || source_changed;
 
     if dry_run || !changed {
+        let identities_upserted = if dry_run {
+            count_missing_identities(client, &pending).await?
+        } else {
+            0
+        };
         return Ok(SyncSummary {
             source_created,
             inserted_lists: if dry_run { inserted } else { 0 },
             updated_lists: if dry_run { updated } else { 0 },
             deactivated_lists: if dry_run { deactivated } else { 0 },
+            protected_lists,
             unchanged_lists: unchanged,
             entries_written: if dry_run {
                 pending.iter().map(|item| item.books.len()).sum()
             } else {
                 0
             },
-            identities_upserted: 0,
+            identities_upserted,
             dry_run,
             changed,
             repository_reconciled: dry_run && repository_reconciled,
@@ -1046,6 +1073,7 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         inserted_lists: inserted,
         updated_lists: updated,
         deactivated_lists: usize::try_from(deactivated_applied).unwrap_or(deactivated),
+        protected_lists,
         unchanged_lists: unchanged,
         entries_written,
         identities_upserted,
@@ -1092,6 +1120,28 @@ async fn lookup_source<C: GenericClient>(
     Ok(rows.first().map_or((None, None), |row| {
         (Some(row.get::<_, i32>(0)), Some(row.get::<_, String>(1)))
     }))
+}
+
+async fn reject_active_alias_conflict<C: GenericClient>(
+    client: &C,
+    aliases: &[String],
+) -> Result<(), IngestError> {
+    let row = client
+        .query_one(
+            "SELECT COUNT(*)::bigint
+             FROM cbl_sources s
+             JOIN cbl_source_lists l ON l.source_id = s.id
+             WHERE s.repository = ANY($1::text[]) AND l.active IS TRUE",
+            &[&aliases],
+        )
+        .await
+        .map_err(|error| IngestError::new(format!("cbl alias lookup failed: {error}")))?;
+    if row.get::<_, i64>(0) > 0 {
+        return Err(IngestError::new(
+            "canonical repository and an active repository alias both exist; reconcile the ambiguous source identities before ingestion",
+        ));
+    }
+    Ok(())
 }
 
 async fn upsert_source<C: GenericClient>(
@@ -1194,12 +1244,7 @@ async fn delete_entries<C: GenericClient>(client: &C, list_ids: &[i32]) -> Resul
     Ok(())
 }
 
-/// Insert missing (provider, entity type, external id) identities in batches.
-async fn upsert_identities<C: GenericClient>(
-    client: &C,
-    pending: &[&CBLList],
-    synced_at: DateTime<Utc>,
-) -> Result<usize, IngestError> {
+fn collect_identity_ids(pending: &[&CBLList]) -> (Vec<String>, Vec<String>) {
     let mut series_ids = BTreeSet::new();
     let mut issue_ids = BTreeSet::new();
     for list in pending {
@@ -1212,8 +1257,42 @@ async fn upsert_identities<C: GenericClient>(
             }
         }
     }
-    let series_ids: Vec<String> = series_ids.into_iter().collect();
-    let issue_ids: Vec<String> = issue_ids.into_iter().collect();
+    (
+        series_ids.into_iter().collect(),
+        issue_ids.into_iter().collect(),
+    )
+}
+
+async fn count_missing_identities<C: GenericClient>(
+    client: &C,
+    pending: &[&CBLList],
+) -> Result<usize, IngestError> {
+    let (series_ids, issue_ids) = collect_identity_ids(pending);
+    let mut existing = 0usize;
+    for (entity_type, ids) in [("series", &series_ids), ("issue", &issue_ids)] {
+        for chunk in ids.chunks(BATCH_SIZE) {
+            let row = client
+                .query_one(
+                    "SELECT COUNT(*)::bigint FROM external_identities
+                     WHERE provider = 'comicvine' AND entity_type = $1::text
+                       AND external_id = ANY($2::text[])",
+                    &[&entity_type, &chunk],
+                )
+                .await
+                .map_err(|error| IngestError::new(format!("cbl identity lookup failed: {error}")))?;
+            existing += usize::try_from(row.get::<_, i64>(0)).unwrap_or(0);
+        }
+    }
+    Ok((series_ids.len() + issue_ids.len()).saturating_sub(existing))
+}
+
+/// Insert missing (provider, entity type, external id) identities in batches.
+async fn upsert_identities<C: GenericClient>(
+    client: &C,
+    pending: &[&CBLList],
+    synced_at: DateTime<Utc>,
+) -> Result<usize, IngestError> {
+    let (series_ids, issue_ids) = collect_identity_ids(pending);
     let mut inserted = 0;
     for (entity_type, ids) in [("series", &series_ids), ("issue", &issue_ids)] {
         for chunk in ids.chunks(BATCH_SIZE) {
