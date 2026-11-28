@@ -48,8 +48,8 @@ function readQueueGeometry() {
 test.describe('Queue tablet title width (#2284)', () => {
   test('keeps titles readable and stacked at an 800x1094 tablet viewport', async ({ page }) => {
     await setupAuthenticatedPage(page);
-    await createThread(page, { title: LONG_TITLE, format: 'Annual', issues_remaining: 1, total_issues: 1 });
-    await createThread(page, { title: 'Short Title', format: 'Issue', issues_remaining: 1, total_issues: 1 });
+    await createThread(page, { title: LONG_TITLE,issues_remaining: 1, total_issues: 1 });
+    await createThread(page, { title: 'Short Title',issues_remaining: 1, total_issues: 1 });
 
     await page.setViewportSize(TABLET);
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
@@ -71,8 +71,8 @@ test.describe('Queue tablet title width (#2284)', () => {
 
   test('keeps the horizontal row layout when enough content width exists (1280 desktop)', async ({ page }) => {
     await setupAuthenticatedPage(page);
-    await createThread(page, { title: LONG_TITLE, format: 'Annual', issues_remaining: 1, total_issues: 1 });
-    await createThread(page, { title: 'Short Title', format: 'Issue', issues_remaining: 1, total_issues: 1 });
+    await createThread(page, { title: LONG_TITLE,issues_remaining: 1, total_issues: 1 });
+    await createThread(page, { title: 'Short Title',issues_remaining: 1, total_issues: 1 });
 
     await page.setViewportSize(DESKTOP);
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });

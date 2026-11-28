@@ -679,8 +679,8 @@ describe('RollPage parent handlers', () => {
 
   it('does not expose retired stale or blocked candidates as Roll actions', () => {
     staleData = [
-      { id: 8, title: 'Blocked old', format: 'Comic', status: 'active', is_blocked: true, created_at: '2000-01-01' },
-      { id: 9, title: 'Recent', format: 'Comic', status: 'active', is_blocked: false, last_activity_at: new Date().toISOString(), created_at: '2000-01-01' },
+      { id: 8, title: 'Blocked old',status: 'active', is_blocked: true, created_at: '2000-01-01' },
+      { id: 9, title: 'Recent',status: 'active', is_blocked: false, last_activity_at: new Date().toISOString(), created_at: '2000-01-01' },
     ]
     render(<RollPage />)
     expect(screen.queryByRole('button', { name: 'read stale' })).not.toBeInTheDocument()

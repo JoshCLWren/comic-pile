@@ -5,7 +5,7 @@ import { createThread } from './helpers'
 for (const width of [375, 1280]) {
   test(`tag color radios support keyboard selection at ${width}px`, async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width, height: 900 })
-    const thread = await createThread(page, { title: 'Tag keyboard fixture', format: 'Issue', issues_remaining: 1, total_issues: 1 })
+    const thread = await createThread(page, { title: 'Tag keyboard fixture',issues_remaining: 1, total_issues: 1 })
     await page.goto(`/thread/${thread.id}`)
     await page.getByRole('button', { name: 'Edit tags', exact: true }).first().click()
     const group = page.getByRole('radiogroup', { name: 'Tag color', exact: true })

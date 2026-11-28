@@ -9,7 +9,7 @@ test('standalone saved Reading Lists can be reopened by stable ID across session
   const series = [`List First ${suffix}`, `List Second ${suffix}`]
   await registerUser(page, reader)
   for (const title of series) {
-    await createThread(page, { title, format: 'Comics', issues_remaining: 1, total_issues: 1 })
+    await createThread(page, { title,issues_remaining: 1, total_issues: 1 })
   }
 
   await page.goto('/continuity-plans')

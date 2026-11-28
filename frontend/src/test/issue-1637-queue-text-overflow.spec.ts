@@ -62,8 +62,8 @@ function auditCardTextOverflow() {
 test.describe('Queue card text overflow (#1637)', () => {
   test('keeps long titles and notes inside their cards at 900px', async ({ page }) => {
     await setupAuthenticatedPage(page);
-    await createThread(page, { title: LONG_TITLE, format: 'Annual', issues_remaining: 1, total_issues: 1 });
-    await createThread(page, { title: 'Short Title', format: 'Issue', issues_remaining: 1, total_issues: 1 });
+    await createThread(page, { title: LONG_TITLE,issues_remaining: 1, total_issues: 1 });
+    await createThread(page, { title: 'Short Title',issues_remaining: 1, total_issues: 1 });
 
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
@@ -78,7 +78,7 @@ test.describe('Queue card text overflow (#1637)', () => {
 
   test('keeps the longest thread title discoverable via tooltip', async ({ page }) => {
     await setupAuthenticatedPage(page);
-    await createThread(page, { title: LONG_TITLE, format: 'Annual', issues_remaining: 1, total_issues: 1 });
+    await createThread(page, { title: LONG_TITLE,issues_remaining: 1, total_issues: 1 });
 
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });

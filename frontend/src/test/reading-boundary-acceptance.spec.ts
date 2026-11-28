@@ -5,9 +5,9 @@ import { createThread } from './helpers'
 for (const width of [390, 1280]) {
   test(`canonical boundaries keep JLI available and name Fourth World at ${width}px`, async ({ authenticatedPage: page }) => {
     await page.setViewportSize({ width, height: 900 })
-    const jli = await createThread(page, { title: 'JLI', format: 'Issue', issues_remaining: 2, total_issues: 2 })
-    const miracle = await createThread(page, { title: 'Mister Miracle', format: 'Issue', issues_remaining: 2, total_issues: 2 })
-    const fourth = await createThread(page, { title: 'Fourth World', format: 'Issue', issues_remaining: 2, total_issues: 2 })
+    const jli = await createThread(page, { title: 'JLI',issues_remaining: 2, total_issues: 2 })
+    const miracle = await createThread(page, { title: 'Mister Miracle',issues_remaining: 2, total_issues: 2 })
+    const fourth = await createThread(page, { title: 'Fourth World',issues_remaining: 2, total_issues: 2 })
     const requested: number[][] = []
     await page.route('**/api/v2/reading-boundaries', async route => {
       // SAFETY: this intercept targets the batch client, which posts its typed thread_ids array.

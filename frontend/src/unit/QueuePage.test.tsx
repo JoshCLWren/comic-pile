@@ -560,7 +560,7 @@ describe('Keyboard Accessibility', () => {
       let data: ThreadListItem[] = []
       if (searchTerm === 'done') {
         data = [
-          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [], last_activity_at: null },
+          { id: 2, title: 'Done',status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [], last_activity_at: null },
         ]
       }
       return {

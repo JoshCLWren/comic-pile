@@ -667,7 +667,7 @@ describe('QueueThreadCard', () => {
   })
 
   it('renders format label', () => {
-    const thread = createMockThread({ format: 'Trade Paperback' })
+    const thread = createMockThread({})
     renderCard(thread)
     expect(screen.getByText('Trade Paperback')).toBeInTheDocument()
   })
