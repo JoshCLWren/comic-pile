@@ -431,7 +431,7 @@ export function CblReplaceReviewPanel({
           data-testid="confirm-replace"
           onClick={() => onConfirm(after.filter((entry) => selected.has(entry.comicId)).map((entry) => entry.comicId))}
           disabled={selectedCount === 0}
-          className="min-h-10 rounded-lg bg-[var(--theme-continuity-accent)] px-3 text-sm font-black text-black disabled:opacity-50"
+          className="min-h-10 rounded-lg bg-[var(--theme-continuity-accent)] px-3 text-sm font-black text-[var(--theme-primary-action-text)] disabled:opacity-50"
         >
           Confirm replacement of this list
         </button>

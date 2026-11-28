@@ -39,7 +39,7 @@ export function CblAdoptionConfirmModal({
         <button
           type="button"
           onClick={onConfirm}
-          className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black"
+          className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-primary-action-text)]"
         >
           {target ? 'Update Reading Plan' : 'Add reading order'}
         </button>

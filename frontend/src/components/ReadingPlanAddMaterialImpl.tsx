@@ -291,7 +291,7 @@ export default function ReadingPlanAddMaterial({
             <button
               type="submit"
               disabled={isSearching || isCommitting}
-              className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+              className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] disabled:opacity-50"
             >
               {isSearching ? 'Searching…' : 'Search'}
             </button>
@@ -476,7 +476,7 @@ export default function ReadingPlanAddMaterial({
                 type="button"
                 onClick={commit}
                 disabled={commitBlocked}
-                className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+                className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] disabled:opacity-50"
               >
                 {isCommitting ? 'Adding material…' : 'Add selected material'}
               </button>

@@ -824,7 +824,7 @@ export default function CblBrowserPage() {
         <button
           type="submit"
           disabled={isCommitting}
-          className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+          className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] disabled:opacity-50"
         >
           Search
         </button>
@@ -1003,7 +1003,7 @@ export default function CblBrowserPage() {
                 disabled={commitBlocked}
                 aria-disabled={commitBlocked}
                 title={commitBlockedReason ?? undefined}
-                className={`min-h-11 rounded-xl px-4 text-sm font-black text-black transition-all duration-200 ${
+                className={`min-h-11 rounded-xl px-4 text-sm font-black text-[var(--theme-primary-action-text)] transition-all duration-200 ${
                   commitBlocked
                     ? 'bg-[var(--theme-border)] border border-[var(--theme-border)] text-[var(--theme-text-muted)] cursor-not-allowed'
                     : 'bg-[var(--theme-continuity-accent)] hover:bg-[var(--theme-continuity-accent)]/80'

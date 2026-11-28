@@ -294,7 +294,7 @@ export default function CrossoverDetailPage() {
               <Link
                 key={plan.id}
                 to={`/continuity-plans/${plan.id}`}
-                className="rounded-lg bg-[var(--theme-continuity-accent)] px-4 py-2 text-sm font-bold text-black"
+                className="rounded-lg bg-[var(--theme-continuity-accent)] px-4 py-2 text-sm font-bold text-[var(--theme-primary-action-text)]"
               >
                 Reading Plan: {plan.name}
               </Link>

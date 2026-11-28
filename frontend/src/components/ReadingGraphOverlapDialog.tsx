@@ -281,7 +281,7 @@ export default function ReadingGraphOverlapDialog({
             type="button"
             onClick={goForward}
             disabled={selected === null || busy}
-            className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] disabled:opacity-50"
           >
             {isLastStep ? 'Use these choices' : 'Next series'}
           </button>

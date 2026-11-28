@@ -197,7 +197,7 @@ describe('Night Shift single-palette contract (#5980)', () => {
     }
     for (const path of visit(resolve(process.cwd(), 'src'))) {
       for (const line of readFrontendFile(path).split('\n')) {
-        if (/bg-\[var\(--theme-(?:primary-action|danger)\)\](?!\/)/.test(line)) {
+        if (/bg-\[var\(--theme-(?:primary-action|primary-action-hover|continuity-accent|danger)\)\](?!\/)/.test(line)) {
           expect(line, `${path} solid action must use primary-action foreground`).not.toMatch(
             /text-\[var\(--theme-text-primary\)\]|text-black/,
           )
