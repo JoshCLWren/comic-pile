@@ -813,19 +813,17 @@ async fn create_once(
     input: &CreateInput,
 ) -> Result<i32, LifecycleError> {
     with_tx!(state, tx, db::tx_error, {
-        let format_value = normalize_format_value(&input.format);
         // #3466: a double-clicked "Create Series" merges into the first create.
         let existing = tx
             .query_opt(
                 "SELECT id FROM threads
-             WHERE user_id = $1 AND lower(title) = $2 AND format = $3
-               AND issues_remaining = $4
+             WHERE user_id = $1 AND lower(title) = $2
+               AND issues_remaining = $3
                AND created_at >= NOW() - interval '5 seconds'
              ORDER BY created_at DESC, id DESC LIMIT 1",
                 &[
                     &user.id(),
                     &input.title.to_lowercase(),
-                    &format_value,
                     &input.issues_remaining,
                 ],
             )
@@ -840,14 +838,13 @@ async fn create_once(
         let row = tx
             .query_one(
                 "INSERT INTO threads
-               (title, format, issues_remaining, total_issues, queue_position, user_id,
+               (title, issues_remaining, total_issues, queue_position, user_id,
                 notes, manual_creator_credits, is_test, status, is_blocked,
                 queue_position_is_manual, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', false, false, NOW())
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', false, false, NOW())
              RETURNING id",
                 &[
                     &input.title,
-                    &format_value,
                     &input.issues_remaining,
                     &input.total_issues,
                     &(max_position + 1),
@@ -906,7 +903,6 @@ pub async fn create_thread_v2(
 
 struct UpdateInput {
     title: Option<String>,
-    format: Option<String>,
     issues_remaining: Option<i32>,
     notes_present: bool,
     notes: Option<String>,
@@ -944,17 +940,6 @@ fn parse_update(
         false,
     );
     validate_title(check, &["body", "title"], &title);
-    let format = str_field(
-        check,
-        &["body", "format"],
-        map.get("format"),
-        StrRules {
-            min: Some(1),
-            max: None,
-        },
-        true,
-        false,
-    );
     let issues_remaining = int_field(
         check,
         &["body", "issues_remaining"],
@@ -1002,7 +987,6 @@ fn parse_update(
     Ok((
         UpdateInput {
             title,
-            format,
             issues_remaining,
             notes_present: map.contains_key("notes"),
             notes,
@@ -1021,7 +1005,6 @@ fn check_errors(check: &Check) -> Vec<Value> {
 #[derive(Debug, Default)]
 struct PatchPrecondition {
     title: Option<String>,
-    format: Option<String>,
     notes_present: bool,
     notes: Option<String>,
     credits: Option<Vec<Value>>,
@@ -1085,10 +1068,7 @@ fn parse_precondition(check: &mut Check, value: &Value) -> PatchPrecondition {
         return precondition;
     };
     for key in object.keys() {
-        if !matches!(
-            key.as_str(),
-            "title" | "format" | "notes" | "manual_creator_credits"
-        ) {
+        if !matches!(key.as_str(), "title" | "notes" | "manual_creator_credits") {
             check.push(
                 &["body", "expected", key],
                 "extra_forbidden",
@@ -1103,17 +1083,6 @@ fn parse_precondition(check: &mut Check, value: &Value) -> PatchPrecondition {
         StrRules {
             min: Some(1),
             max: Some(200),
-        },
-        false,
-        false,
-    );
-    precondition.format = str_field(
-        check,
-        &["body", "expected", "format"],
-        object.get("format"),
-        StrRules {
-            min: Some(1),
-            max: None,
         },
         false,
         false,
@@ -1183,12 +1152,6 @@ fn check_precondition(
     if let Some(title) = &expected.title {
         if *title != thread.title {
             current.insert("title".to_owned(), json!(thread.title));
-        }
-    }
-    if let Some(format) = &expected.format {
-        let normalized = normalize_format_value(format);
-        if normalized != thread.format {
-            current.insert("format".to_owned(), json!(thread.format));
         }
     }
     if expected.notes_present {
@@ -1300,15 +1263,6 @@ async fn update_once(
             tx.execute(
                 "UPDATE threads SET title = $2 WHERE id = $1",
                 &[&thread.id, title],
-            )
-            .await
-            .map_err(db::tx_error)?;
-        }
-        if let Some(format) = &input.format {
-            let format_value = normalize_format_value(format);
-            tx.execute(
-                "UPDATE threads SET format = $2 WHERE id = $1",
-                &[&thread.id, &format_value],
             )
             .await
             .map_err(db::tx_error)?;
@@ -2015,7 +1969,6 @@ fn parse_set_pending(body: Option<Value>) -> Result<Option<i32>, LifecycleError>
 struct SetPendingSelection {
     thread_id: i32,
     title: String,
-    format: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
     reading_progress: Option<String>,
@@ -2101,7 +2054,6 @@ async fn validate_set_pending_selection(
     Ok(SetPendingSelection {
         thread_id: thread.id,
         title: thread.title.clone(),
-        format: normalize_format_value(&thread.format),
         issues_remaining: thread.issues_remaining,
         total_issues: thread.total_issues,
         reading_progress: thread.reading_progress.clone(),
