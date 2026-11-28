@@ -866,9 +866,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/excluded/threads",
             get(thread_lifecycle::list_excluded_threads),
         )
-        // #5958: the retired `groups:batch` URL is no longer pinned in the
-        // inner router. It falls through to the same Rust JSON 404 as every
-        // other unregistered legacy path; v2 is the membership authority.
+        // #5958: the retired `groups:batch` URL is pinned to an explicit 404
+        // with the other retired method pins below. It dispatches no
+        // application logic; v2 is the membership authority.
         .route(
             "/api/v2/threads/{thread_id}/reading-order-group-memberships",
             get(dependency_groups::list_thread_groups),
