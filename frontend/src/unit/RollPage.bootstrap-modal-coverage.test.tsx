@@ -5,9 +5,9 @@ import RollPage from '../pages/RollPage'
 import { ToastProvider } from '../contexts/ToastProvider'
 
 // SAFETY: Hoisted bootstrap modal state holds nullable manualDie; null represents automatic die mode in the fixture.
-const state = vi.hoisted(() => ({ overridePending: false, setDiePending: false, manualDie: null as number | null }))
+const state = vi.hoisted(() => ({ setDiePending: false, manualDie: null as number | null }))
 const spies = vi.hoisted(() => ({
-  list: vi.fn(), override: vi.fn(), refetch: vi.fn(), navigate: vi.fn(), setDie: vi.fn(), clearDie: vi.fn(),
+  list: vi.fn(), refetch: vi.fn(), navigate: vi.fn(), setDie: vi.fn(), clearDie: vi.fn(),
 }))
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
@@ -40,7 +40,6 @@ vi.mock('../hooks/useRoll', () => ({
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),
   useDismissPending: () => ({ mutate: vi.fn(), isPending: false }),
-  useOverrideRoll: () => ({ mutate: spies.override, isPending: state.overridePending }),
 }))
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: () => ({ mutate: vi.fn(), isPending: false }),
@@ -96,21 +95,11 @@ vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: () => <d
 describe('RollPage bootstrap modal coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    state.overridePending = false
     state.setDiePending = false
     state.manualDie = null
     spies.list.mockResolvedValue({
       threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }],
       next_page_token: null,
-    })
-    spies.override.mockResolvedValue({
-      thread_id: 1,
-      title: 'Saga',
-      format: 'Comic',
-      result: 3,
-      issues_remaining: 2,
-      queue_position: 1,
-      total_issues: 10,
     })
     spies.setDie.mockResolvedValue(undefined)
     spies.clearDie.mockResolvedValue(undefined)
@@ -136,13 +125,11 @@ describe('RollPage bootstrap modal coverage', () => {
 
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
-    expect(spies.override).not.toHaveBeenCalled()
     expect(screen.getByText('Direct issue card for Saga')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument())
   })
 
   it('opens the manual picker without a pending-offer mutation and retains die selection', async () => {
-    state.overridePending = true
     state.manualDie = 6
     const user = userEvent.setup()
     render(

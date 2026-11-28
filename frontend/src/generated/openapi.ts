@@ -3188,23 +3188,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/roll/override": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for the mounted v2 manual pick. */
-        post: operations["override_roll_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/roll/reset": {
         parameters: {
             query?: never;
@@ -7005,35 +6988,6 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
-        /** @description Response body: the Python `RollResponse` projection for a manual pick. */
-        NativeRollResponse: {
-            /** Format: int32 */
-            die_size: number;
-            explanation?: string | null;
-            format: string;
-            /** Format: int32 */
-            issue_id?: number | null;
-            issue_number?: string | null;
-            /** Format: int32 */
-            issues_remaining: number;
-            /** Format: int32 */
-            next_issue_id?: number | null;
-            next_issue_number?: string | null;
-            /** Format: int32 */
-            offset: number;
-            /** Format: int32 */
-            queue_position: number;
-            reading_progress?: string | null;
-            /** Format: int32 */
-            result: number;
-            /** Format: int32 */
-            snoozed_count: number;
-            /** Format: int32 */
-            thread_id: number;
-            title: string;
-            /** Format: int32 */
-            total_issues?: number | null;
-        };
         NativeSeriesMappingPreviewCounts: {
             /** Format: int64 */
             already_confirmed: number;
@@ -8789,14 +8743,6 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
-        };
-        /** @description Request body for the manual override. */
-        RollOverrideRequest: {
-            /**
-             * Format: int32
-             * @description Reader-selected thread identifier.
-             */
-            thread_id: number;
         };
         /** @description Request body for accepting one current recovery recommendation. */
         RollPrerequisiteSwitchRequest: {
@@ -18776,58 +18722,6 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    override_roll_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RollOverrideRequest"];
-            };
-        };
-        responses: {
-            /** @description Manually selected thread */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NativeRollResponse"];
-                };
-            };
-            /** @description Thread is skipped or on snooze backoff */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread was not found for this reader */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread is blocked or not active */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -11,7 +11,7 @@ const spies = vi.hoisted(() => ({
   invalidateRollBootstrapOnNavigation: vi.fn().mockResolvedValue({}),
   setDie: vi.fn().mockResolvedValue({}),
   roll: vi.fn().mockResolvedValue({}), dismissPending: vi.fn().mockResolvedValue({}),
-  override: vi.fn().mockResolvedValue({}), snooze: vi.fn().mockResolvedValue({}),
+  snooze: vi.fn().mockResolvedValue({}),
   unsnooze: vi.fn().mockResolvedValue({}), unsnoozeNative: vi.fn().mockResolvedValue({}), moveFront: vi.fn().mockResolvedValue({}),
   moveBack: vi.fn().mockResolvedValue({}), shuffle: vi.fn().mockResolvedValue({}),
   rate: vi.fn().mockResolvedValue({}),
@@ -80,7 +80,6 @@ vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: spies.roll, isPending: false }), useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
-  useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
 }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
 vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }), useActiveSeriesCount: () => null, useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }) }))
@@ -203,7 +202,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.snoozed_threads = sessionData.snoozed_threads
     bootstrapData.snoozed_count = 0
     bootstrapData.pool_reason = 'ready'
-    for (const mutation of [spies.setDie, spies.roll, spies.dismissPending, spies.override, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
+    for (const mutation of [spies.setDie, spies.roll, spies.dismissPending, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
     // Rate publishes its authoritative bootstrap snapshot to the page; the mock
     // mirrors that contract so no page-level bootstrap refetch is expected.
     spies.rate.mockImplementation(async () => ({
@@ -378,12 +377,15 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
+<<<<<<< HEAD
     expect(spies.override).not.toHaveBeenCalled()
+=======
+    expect(spies.setPending).not.toHaveBeenCalled()
+>>>>>>> origin/main
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'cancel rating' }))
-    expect(spies.override).not.toHaveBeenCalled()
   })
 
   it('leaves for the queue from the header chrome without dropping the pending read', async () => {
@@ -521,7 +523,11 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
+<<<<<<< HEAD
     expect(spies.override).not.toHaveBeenCalled()
+=======
+    expect(spies.setPending).not.toHaveBeenCalled()
+>>>>>>> origin/main
   })
 
   it('handles normal roll failures and unresolved pending conflicts', async () => {
@@ -975,7 +981,11 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'skip migration' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'complete migration' })).not.toBeInTheDocument()
+<<<<<<< HEAD
     expect(spies.override).not.toHaveBeenCalled()
+=======
+    expect(spies.setPending).not.toHaveBeenCalled()
+>>>>>>> origin/main
   })
 
   it('refreshes matching active metadata and reopens pending rolls', async () => {

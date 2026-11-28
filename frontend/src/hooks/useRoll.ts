@@ -1,7 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { rollApi } from '../services/api-roll'
 import type { RollApi } from '../services/apiTypes'
-import type { OverrideRollPayload } from '../types'
 import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 
@@ -19,19 +18,6 @@ export function useRoll(api?: RollApi) {
       // pre-roll die until the next navigation.
       await invalidateAfterRollDieModeUpdate(queryClient)
     },
-  })
-
-  return {
-    mutate: mutation.mutateAsync,
-    isPending: mutation.isPending,
-    isError: mutation.isError,
-  }
-}
-
-export function useOverrideRoll(api?: RollApi) {
-  const rollApiInstance = getRollApi(api)
-  const mutation = useMutation({
-    mutationFn: (data: OverrideRollPayload) => rollApiInstance.override(data),
   })
 
   return {
