@@ -69,31 +69,19 @@ export function useActivity(api?: ActivityApi) {
   }, [query.failureCount, query.isSuccess])
 
   return useMemo(
-    () => {
-      const seenEventIds = new Set<number>()
-      const items: ActivityItem[] =
-        query.data?.pages
-          .flatMap((page) => page.items)
-          .filter((item) => {
-            if (seenEventIds.has(item.event_id)) return false
-            seenEventIds.add(item.event_id)
-            return true
-          }) ?? []
-
-      return {
-        data: items,
-        isPending: query.isPending,
-        isLoadingMore: query.isFetchingNextPage,
-        isError: query.isError,
-        error: normalizeQueryError(query.error, 'Failed to fetch activity'),
-        hasMore: !!query.hasNextPage,
-        loadMore: () => query.fetchNextPage(),
-        refetch: query.refetch,
-        // True while the initial load is still trying after at least one
-        // failure, including user-started retries from the Retry button.
-        isRetrying: query.isPending && hasFailedLoad,
-      }
-    },
+    () => ({
+      data: query.items,
+      isPending: query.isInitialLoading,
+      isLoadingMore: query.isNextPageLoading,
+      isError: query.isError,
+      error: normalizeQueryError(query.error, 'Failed to fetch activity'),
+      hasMore: query.hasNextPage,
+      loadMore: query.fetchNextPage,
+      refetch: query.refetch,
+      // True while the initial load is still trying after at least one
+      // failure, including user-started retries from the Retry button.
+      isRetrying: query.isInitialLoading && hasFailedLoad,
+    }),
     [query, hasFailedLoad],
   )
 }
