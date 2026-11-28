@@ -521,7 +521,9 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
         return Err(IngestError::new("CBL document has an unclosed element"));
     }
     if !books_seen {
-        return Err(IngestError::new("CBL ReadingList is missing its Books element"));
+        return Err(IngestError::new(
+            "CBL ReadingList is missing its Books element",
+        ));
     }
     let name = name.filter(|value| !value.is_empty()).unwrap_or_else(|| {
         Path::new(source_path).file_stem().map_or_else(
@@ -1015,9 +1017,7 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         .count();
     let protected_lists = existing_lists
         .iter()
-        .filter(|(path, existing)| {
-            existing.active && protected_paths.contains(path.as_str())
-        })
+        .filter(|(path, existing)| existing.active && protected_paths.contains(path.as_str()))
         .count();
     let source_changed = source_created
         || existing_revision.as_deref() != Some(revision_sha.as_str())
@@ -1279,7 +1279,9 @@ async fn count_missing_identities<C: GenericClient>(
                     &[&entity_type, &chunk],
                 )
                 .await
-                .map_err(|error| IngestError::new(format!("cbl identity lookup failed: {error}")))?;
+                .map_err(|error| {
+                    IngestError::new(format!("cbl identity lookup failed: {error}"))
+                })?;
             existing += usize::try_from(row.get::<_, i64>(0)).unwrap_or(0);
         }
     }
@@ -1508,10 +1510,18 @@ mod tests {
             git(&root, &["init", "--quiet"]);
             git(
                 &root,
-                &["remote", "add", "origin", &format!("https://github.com/{repository}.git")],
+                &[
+                    "remote",
+                    "add",
+                    "origin",
+                    &format!("https://github.com/{repository}.git"),
+                ],
             );
-            fs::write(root.join("DC.cbl"), minimal_cbl("<Book Series=\"X\" Number=\"1\" />"))
-                .unwrap();
+            fs::write(
+                root.join("DC.cbl"),
+                minimal_cbl("<Book Series=\"X\" Number=\"1\" />"),
+            )
+            .unwrap();
             git(&root, &["add", "."]);
             git(
                 &root,
@@ -1625,27 +1635,43 @@ mod tests {
         let fixture = GitFixture::new(DEFAULT_REPOSITORY);
         verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
             .expect("clean pinned checkout");
-        assert!(verify_pinned_checkout(
-            &fixture.root,
-            &"0".repeat(40),
-            DEFAULT_REPOSITORY
-        )
-        .is_err());
+        assert!(
+            verify_pinned_checkout(&fixture.root, &"0".repeat(40), DEFAULT_REPOSITORY).is_err()
+        );
 
-        fs::write(fixture.root.join("DC.cbl"), "<ReadingList><Books /></ReadingList>").unwrap();
-        assert!(verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
-            .expect_err("dirty checkout")
-            .to_string()
-            .contains("clean"));
+        fs::write(
+            fixture.root.join("DC.cbl"),
+            "<ReadingList><Books /></ReadingList>",
+        )
+        .unwrap();
+        assert!(
+            verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
+                .expect_err("dirty checkout")
+                .to_string()
+                .contains("clean")
+        );
         git(&fixture.root, &["checkout", "--", "DC.cbl"]);
-        fs::write(fixture.root.join("untracked.cbl"), "<ReadingList><Books /></ReadingList>")
-            .unwrap();
-        assert!(verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
-            .is_err());
+        fs::write(
+            fixture.root.join("untracked.cbl"),
+            "<ReadingList><Books /></ReadingList>",
+        )
+        .unwrap();
+        assert!(
+            verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY).is_err()
+        );
         fs::remove_file(fixture.root.join("untracked.cbl")).unwrap();
-        git(&fixture.root, &["remote", "set-url", "origin", "https://github.com/other/fork.git"]);
-        assert!(verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
-            .is_err());
+        git(
+            &fixture.root,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "https://github.com/other/fork.git",
+            ],
+        );
+        assert!(
+            verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY).is_err()
+        );
     }
 
     #[test]

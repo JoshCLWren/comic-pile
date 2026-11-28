@@ -530,7 +530,10 @@ async fn canonical_repository_and_active_alias_fail_closed() {
         "SELECT id FROM cbl_sources WHERE repository = '/mnt/bigdata/CBL-ReadingLists'",
     )
     .await;
-    for (source_id, path) in [(canonical_id, "DC/Canonical.cbl"), (alias_id, "DC/Alias.cbl")] {
+    for (source_id, path) in [
+        (canonical_id, "DC/Canonical.cbl"),
+        (alias_id, "DC/Alias.cbl"),
+    ] {
         conn.execute(
             "INSERT INTO cbl_source_lists
                  (source_id, source_path, name, declared_issue_count, content_hash,
@@ -573,34 +576,47 @@ async fn concurrent_first_ingests_are_serialized() {
     let (state, _guard) = setup().await;
     let fixture = MirrorFixture::new(&[("DC/One.cbl", &cbl("One", &[("One", "1", None, None)]))]);
     let (parsed, failures) = fixture.parse();
-    let mut first_conn = state.pool.get().await.unwrap();
-    let mut second_conn = state.pool.get().await.unwrap();
-    let first_tx = first_conn.transaction().await.unwrap();
-    let second_tx = second_conn.transaction().await.unwrap();
-    let (first, second) = tokio::join!(
-        sync_cbl_lists(
-            &*first_tx,
+    let parsed = Arc::new(parsed);
+    let protected_paths = Arc::new(protected(&failures));
+    let first_conn = state.pool.get().await.unwrap();
+    let second_conn = state.pool.get().await.unwrap();
+    let first_task = tokio::spawn(async move {
+        let mut conn = first_conn;
+        let transaction = conn.transaction().await.unwrap();
+        let summary = sync_cbl_lists(
+            &*transaction,
             "JoshCLWren/CBL-ReadingLists",
             &test_revision('a'),
             &parsed,
-            &protected(&failures),
+            &protected_paths,
             &[],
             false,
             synced_at(),
-        ),
-        sync_cbl_lists(
-            &*second_tx,
+        )
+        .await
+        .unwrap();
+        transaction.commit().await.unwrap();
+        summary
+    });
+    let second_task = tokio::spawn(async move {
+        let mut conn = second_conn;
+        let transaction = conn.transaction().await.unwrap();
+        let summary = sync_cbl_lists(
+            &*transaction,
             "JoshCLWren/CBL-ReadingLists",
             &test_revision('a'),
             &parsed,
-            &protected(&failures),
+            &protected_paths,
             &[],
             false,
             synced_at() + Duration::seconds(1),
-        ),
-    );
-    first_tx.commit().await.unwrap();
-    second_tx.commit().await.unwrap();
+        )
+        .await
+        .unwrap();
+        transaction.commit().await.unwrap();
+        summary
+    });
+    let (first, second) = tokio::join!(first_task, second_task);
     let first = first.unwrap();
     let second = second.unwrap();
     let mut created = [first.source_created, second.source_created];
