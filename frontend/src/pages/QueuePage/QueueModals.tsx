@@ -353,7 +353,6 @@ export function QueueModals({
   // because an invalid entry is held outside the form state.
   const createFormIsDirty =
     createForm.title !== DEFAULT_CREATE_STATE.title ||
-    createForm.format !== DEFAULT_CREATE_STATE.format ||
     createForm.issues !== DEFAULT_CREATE_STATE.issues ||
     createForm.notes !== DEFAULT_CREATE_STATE.notes ||
     createForm.lastIssueRead !== DEFAULT_CREATE_STATE.lastIssueRead ||
@@ -402,12 +401,10 @@ export function QueueModals({
   // context for the reader, never a block on a legitimate same-named volume.
   const createDuplicates = usePotentialDuplicates({
     title: openModal === 'create' ? createForm.title : '',
-    format: createForm.format,
     enabled: openModal === 'create',
   })
   const editDuplicates = usePotentialDuplicates({
     title: openModal === 'edit' ? editForm.title : '',
-    format: editForm.format,
     excludeThreadId: editingThread?.id,
     enabled: openModal === 'edit' && editingThread != null,
   })
@@ -454,27 +451,12 @@ export function QueueModals({
               </p>
             )}
             <PotentialDuplicateAdvisory
-              candidateKey={`create|${createForm.title.trim()}|${createForm.format}`}
+              candidateKey={`create|${createForm.title.trim()}`}
               matches={createDuplicates.matches}
               isChecking={createDuplicates.isChecking}
               isError={createDuplicates.isError}
             />
           </div>
-          <div className="space-y-2">
-            <label
-              htmlFor="create-thread-format"
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
-            >
-              Format
-            </label>
-            <FormatSelect
-              id="create-thread-format"
-              value={createForm.format}
-              onChange={(value) => setCreateForm({ ...createForm, format: value })}
-              required
-            />
-          </div>
-
           <div className="space-y-2">
             <label
               htmlFor="create-thread-issues"
@@ -674,7 +656,7 @@ export function QueueModals({
                 </p>
               )}
               <PotentialDuplicateAdvisory
-                candidateKey={`edit|${editingThread?.id ?? 'none'}|${editForm.title.trim()}|${editForm.format}`}
+                candidateKey={`edit|${editingThread?.id ?? 'none'}|${editForm.title.trim()}`}
                 matches={editDuplicates.matches}
                 isChecking={editDuplicates.isChecking}
                 isError={editDuplicates.isError}
