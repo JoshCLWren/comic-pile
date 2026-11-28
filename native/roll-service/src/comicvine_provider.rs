@@ -2002,7 +2002,7 @@ mod tests {
             classify_lookup::<(), &str>(Err("database disconnected")),
             Err(ProviderFailure::PersistFailed)
         );
-        assert_eq!(classify_lookup(Ok(Some(7_i32))), Ok(Some(7)));
+        assert_eq!(classify_lookup::<i32, &str>(Ok(Some(7))), Ok(Some(7)));
     }
 
     #[test]
