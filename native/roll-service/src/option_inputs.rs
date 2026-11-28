@@ -1454,7 +1454,10 @@ mod tests {
             assert_eq!(private.0, notes);
             assert_eq!(private.1, rating);
             assert_eq!(private.2, queue);
-            assert_eq!(private.3, progress, "read progress must stay reader-private");
+            assert_eq!(
+                private.3, progress,
+                "read progress must stay reader-private"
+            );
             let reader_event: (String, f64, Option<i32>) = {
                 let row = conn
                     .query_one(
