@@ -35,6 +35,13 @@ test.describe('Issue #4350: browser-owned Roll pending', () => {
       issues_remaining: 3,
       total_issues: 3,
     })
+    // A second mapped face keeps the die usable after the first issue is rated.
+    await createThread(page, {
+      title: 'Browser Pending Follow-up',
+      format: 'Comic',
+      issues_remaining: 3,
+      total_issues: 3,
+    })
     const ledger = startRequestLedger(page)
     await gotoRollPage(page)
 
@@ -67,6 +74,12 @@ test.describe('Issue #4350: browser-owned Roll pending', () => {
     const page = freshUserPage
     await createThread(page, {
       title: 'Cancel Pending Series',
+      format: 'Comic',
+      issues_remaining: 2,
+      total_issues: 2,
+    })
+    await createThread(page, {
+      title: 'Cancel Pending Follow-up',
       format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
