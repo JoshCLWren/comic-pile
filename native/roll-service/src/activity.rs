@@ -353,7 +353,7 @@ WITH primaries AS (
                              AND d.context->>'dice_command_key' LIKE 'roll-rating-%'
                              AND 'roll-rating-' || d.thread_id || '-'
                                  || (e.context->>'issue_command_key')
-                                 = d.context->>'dice_command_key'))))
+                                 = d.context->>'dice_command_key')))
             OR ($7 = 'roll'
                 AND e.type = 'snooze'
                 AND e.context->>'dice_command_key' LIKE '%-snooze'
