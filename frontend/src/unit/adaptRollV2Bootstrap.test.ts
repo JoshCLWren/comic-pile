@@ -10,7 +10,7 @@ const sample = {
   pool_reason: 'ready',
   rollable: [{
     thread: {
-      id: 101, title: 'Tagged comic', format: 'Comic',
+      id: 101, title: 'Tagged comic',
       tags: [{
         id: 1, name: 'Favorites', normalized_name: 'favorites',
         scope: 'global', owner_user_id: null, color: '#336699',
@@ -23,7 +23,7 @@ const sample = {
   }],
 // SAFETY: This intentionally partial v2 fixture covers only the adapter's
 // relevant runtime invariants; unused session fields are never inspected.
-} as RollV2BootstrapResponse
+} as unknown as RollV2BootstrapResponse
 
 describe('native v2 Roll bootstrap compatibility', () => {
   it('retains die-face tags, exact issue and route labels without diagnostic reports', () => {
@@ -42,18 +42,18 @@ describe('native v2 Roll bootstrap compatibility', () => {
   it('fails closed when the native response omits rollable candidates', () => {
     const { rollable: _ignored, ...incomplete } = sample
     // SAFETY: deliberately incomplete fixture exercises the adapter's runtime guard.
-    expect(() => adaptRollV2Bootstrap(incomplete as RollV2BootstrapResponse))
+    expect(() => adaptRollV2Bootstrap(incomplete as unknown as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 bootstrap response')
   })
 
   it('fails closed when the native response omits or invents an empty-pool reason', () => {
     const { pool_reason: _ignored, ...withoutReason } = sample
     // SAFETY: deliberately incomplete fixture exercises the adapter's runtime guard.
-    expect(() => adaptRollV2Bootstrap(withoutReason as RollV2BootstrapResponse))
+    expect(() => adaptRollV2Bootstrap(withoutReason as unknown as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 bootstrap response')
     const malformed = { ...sample, pool_reason: 'mystery' }
     // SAFETY: deliberately malformed fixture exercises the reason allow-list.
-    expect(() => adaptRollV2Bootstrap(malformed as RollV2BootstrapResponse))
+    expect(() => adaptRollV2Bootstrap(malformed as unknown as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 bootstrap response')
   })
 
@@ -63,22 +63,22 @@ describe('native v2 Roll bootstrap compatibility', () => {
       rollable: [{ ...sample.rollable[0], overflow_routes_count: -1 }],
     }
     // SAFETY: This deliberately malformed candidate must fail at the adapter boundary.
-    expect(() => adaptRollV2Bootstrap(negative as RollV2BootstrapResponse))
+    expect(() => adaptRollV2Bootstrap(negative as unknown as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 candidate')
     const { overflow_routes_count: _ignored, ...missing } = sample.rollable[0]
     const withoutOverflow = { ...sample, rollable: [missing] }
     // SAFETY: This deliberately incomplete candidate must fail at the adapter boundary.
-    expect(() => adaptRollV2Bootstrap(withoutOverflow as RollV2BootstrapResponse))
+    expect(() => adaptRollV2Bootstrap(withoutOverflow as unknown as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 candidate')
   })
 
   it('refuses native candidate rows without visible tags', () => {
     const withoutTags = {
       ...sample,
-      rollable: [{ ...sample.rollable[0], thread: { id: 101, title: 'No tags', format: 'Comic' } }],
+      rollable: [{ ...sample.rollable[0], thread: { id: 101, title: 'No tags' } }],
     }
     // SAFETY: This deliberately malformed candidate must fail at the adapter boundary.
-    expect(() => adaptRollV2Bootstrap(withoutTags as RollV2BootstrapResponse))
+    expect(() => adaptRollV2Bootstrap(withoutTags as unknown as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 candidate')
   })
 
@@ -89,7 +89,6 @@ describe('native v2 Roll bootstrap compatibility', () => {
       active_thread: {
         id: 101,
         title: 'Saga',
-        format: 'Comic',
         issues_remaining: 5,
         queue_position: 1,
         issues_read: 2,
@@ -101,7 +100,7 @@ describe('native v2 Roll bootstrap compatibility', () => {
         next_issue_id: 404,
         next_issue_number: '3',
       },
-    } as RollV2BootstrapResponse)
+    } as unknown as RollV2BootstrapResponse)
     expect(state.active_thread).toMatchObject({
       issue_number: '3',
       issue_number_alias: '100',

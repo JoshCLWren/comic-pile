@@ -280,9 +280,9 @@ describe('nullish operand branches', () => {
     // L31 `metadata.id ?? metadata.thread_id ?? Number(threadId)` — both metadata ids nullish
     // SAFETY: the rating helper reads only the thread fields the assertion checks
     expect(buildRatingThread(7, null, { title: 'Meta', id: undefined, thread_id: undefined } as never)?.id).toBe(7)
-    // L33 `metadata.format ?? sessionThread?.format ?? ''` — metadata.format and sessionThread both nullish
+    // L31 `issues_remaining ?? 0` — metadata and sessionThread both omit the count
     // SAFETY: the rating helper reads only the thread fields the assertion checks
-    expect(buildRatingThread(7, null, { title: 'Meta', format: undefined } as never)?.format).toBe('')
+    expect(buildRatingThread(7, null, { title: 'Meta', issues_remaining: undefined } as never)?.issues_remaining).toBe(0)
     // L61 `issues_remaining || 0` — issues_remaining falsy (0)
     expect(getProgressPercentage({ total_issues: 4, issues_remaining: 0 })).toBe(100)
     // L67 `if (!layer) return` — explosion layer absent

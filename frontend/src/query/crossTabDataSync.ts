@@ -7,7 +7,7 @@ import { isObject, isString } from '../utils/runtimeChecks'
  * only. This channel carries committed product-data changes, so an already
  * open view in another tab can invalidate the affected queries instead of
  * serving a stale cache until the reader manually reloads. Plan writes (#5686)
- * and Thread title/format edits (#5862) both announce themselves here.
+ * and Thread title edits (#5862) both announce themselves here.
  *
  * Delivery is best-effort: when `BroadcastChannel` is unavailable or blocked,
  * publishers and subscribers are no-ops and each view falls back to its own
@@ -73,7 +73,7 @@ export function notifyReadingPlansChanged(): void {
   broadcastCrossTabChange({ type: 'reading-plans-changed' })
 }
 
-/** Announce a committed Thread title or format edit (#5862). */
+/** Announce a committed Thread title edit (#5862). */
 export function notifyThreadMetadataChanged(): void {
   broadcastCrossTabChange({ type: 'thread-metadata-changed' })
 }
