@@ -66,7 +66,7 @@ The state roles form a graded scale. `--theme-danger` carries destructive or can
 
 Raw Tailwind palette utilities, hex values, RGB/RGBA values, or one-off opacity colors are acceptable only when they express a genuinely local visual effect that has no reusable semantic meaning, for example a WebGL effect or a deliberately translucent overlay. Product meaning such as comic, continuity, personal context, danger, focus, page, panel, border, or text hierarchy must use the semantic roles above.
 
-A repeated raw color is evidence that a semantic role may be missing. The retired `stone-*`, `amber-*`, and translucent `white/*` Tailwind palette utilities must not remain in runtime source; use the semantic roles above so every surface follows Night Shift.
+A repeated raw color is evidence that a semantic role may be missing. Retired Tailwind palette utilities (including `stone-*`, `amber-*`, status-color families, and translucent `white/*`) must not remain in runtime source; use the semantic roles above so every surface follows Night Shift.
 
 ## Spacing and density
 
