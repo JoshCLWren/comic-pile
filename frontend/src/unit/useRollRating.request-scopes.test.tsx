@@ -248,3 +248,44 @@ it('optional reading-detail state is not requested before the user asks for it',
   expect(result.current.readingOrdersIsError).toBe(false)
   expect(result.current.connectedThreadsIsError).toBe(false)
 })
+
+it('migration completion refreshes Roll state and keeps the offered rating target', async () => {
+  mockRefetchBootstrap.mockClear()
+  mockRateMutation.mutate.mockClear()
+  const offered = { ...ACTIVE_THREAD, id: 7, issue_id: 777, issue_number: '7', next_issue_id: 778 }
+  const { result, state } = renderUseRollRating({ threadToMigrate: offered })
+  const migratedThread = {
+    id: 7,
+    title: 'Saga',
+    format: 'Comic',
+    total_issues: 12,
+    issues_remaining: 5,
+    reading_progress: 'in_progress',
+    queue_position: 3,
+    next_unread_issue_id: 900,
+    next_unread_issue_number: '8',
+  }
+
+  await act(async () => { await result.current.handleMigrationComplete(migratedThread as never) })
+
+  // Roll state is re-read from the server after the v2 migration writes.
+  expect(mockRefetchBootstrap).toHaveBeenCalledTimes(1)
+  expect(state.setShowMigrationDialog).toHaveBeenCalledWith(false)
+  expect(state.setThreadToMigrate).toHaveBeenCalledWith(null)
+  expect(state.setIsRatingView).toHaveBeenCalledWith(true)
+  expect(state.setRating).toHaveBeenCalledWith(3.0)
+  expect(state.setActiveRatingThread).toHaveBeenCalledWith(expect.objectContaining({
+    id: 7,
+    issues_remaining: 5,
+    reading_progress: 'in_progress',
+    queue_position: 3,
+    // The Roll offer, not the new frontier, stays the issue to be rated.
+    issue_id: 777,
+    issue_number: '7',
+    next_issue_id: 778,
+  }))
+  // Migration does not auto-rate or step the die; those remain explicit actions.
+  expect(mockRateMutation.mutate).not.toHaveBeenCalled()
+  expect(getForThread).not.toHaveBeenCalled()
+  expect(getConnectedThreads).not.toHaveBeenCalled()
+})
