@@ -1,17 +1,30 @@
 {
-  "manualTokenLoops": {
-    "components/DependencyBuilder.tsx": "collect-all while loop",
-    "components/IssueCorrectionDialog.tsx": "collect-all while loop",
-    "pages/ContinuityPlannerPage.tsx": "collect-all do/while loops",
-    "pages/CrossoversPage.tsx": "collect-all while loops",
-    "pages/QueuePage/IssueToggleList.tsx": "collect-all while loop",
-    "pages/RollPage/useRollModals.ts": "collect-all do/while loop"
+  "migration": "issue #2570",
+  "description": "Inventory of formerly bespoke pagination surfaces. Every entry below must now consume the canonical layer in frontend/src/pagination/; documentedExceptions are backend offset/page-number contracts that cannot yet use an opaque cursor.",
+  "manualTokenLoops": {},
+  "handRolledPagers": {},
+  "nextCursorFiles": {},
+  "migratedSurfaces": {
+    "components/DependencyBuilder.tsx": "hooks/useDependencies.ts drains unread issues with collectAllPages",
+    "components/IssueCorrectionDialog.tsx": "loadAllIssues uses collectAllPages",
+    "components/IssueToggleList.tsx": "fetchAllIssues uses collectAllPages and keeps the total_count completeness guard",
+    "hooks/useContinuityPlannerData.ts": "thread and issue drains use collectAllPages",
+    "hooks/useCrossovers.ts": "issue range and thread selectors use collectAllPages",
+    "hooks/useDependencies.ts": "unread issue selector uses collectAllPages",
+    "hooks/useThreadIssueCreators.ts": "creator credit projection uses collectAllPages",
+    "hooks/useThreadIssues.ts": "useThreadAllIssues uses collectAllPages",
+    "pages/HistoryPage.tsx": "handleRestoreUnread uses collectAllPages",
+    "pages/QueuePage/useQueueCompletedSearch.ts": "handleRestoreCompletedSeries uses collectAllPages",
+    "pages/RollPage/useRollModals.ts": "override thread picker uses collectAllPages"
   },
-  "handRolledPagers": {
-    "pages/ThreadDetailView.tsx": "setNextPageToken hand-written paging state"
-  },
-  "nextCursorFiles": {
-    "hooks/useCreatorDetail.ts": "legacy offset next_cursor consumer",
-    "services/api.ts": "legacy offset next_cursor response type"
+  "documentedExceptions": {
+    "hooks/useCreatorDetail.ts": "GET /api/v2/creators/{creator_key} returns limit/offset pages with a string next_cursor; the cursor lives in pageParam and a page first-load is required for summary/coverage (#2569 documented offset exception).",
+    "hooks/useCreatorSeriesIssues.ts": "GET /api/v2/creators/{creator_key}/series/{series_key}/issues returns offset pages with string next_cursor; the cursor lives in pageParam (#2569 documented offset exception).",
+    "hooks/useCreatorsList.ts": "GET /api/v2/creators returns limit/offset pages; next offset lives in pageParam and the browse page exposes explicit pagination controls (#2569 documented offset exception).",
+    "hooks/useReleases.ts": "GET /api/v2/releases is an append-only changelog ledger with limit/offset and authoritative total; the next offset lives in pageParam (#2569 documented offset exception).",
+    "hooks/useComicVineSearch.ts": "GET /api/v2/comicvine/search/series is a provider search with next_offset paging; the offset lives in pageParam (#2569 documented offset exception).",
+    "hooks/useIdentityInbox.ts": "GET /api/v2/identity-inbox uses offset/limit pending a dedicated backend cursor contract; no bespoke client token state machine is maintained.",
+    "components/CblSourceDetailPanel.tsx": "CBL source detail uses provider offset paging; the offset lives in pageParam (#2569 documented offset exception).",
+    "components/CreatorMetricDrilldownModal.tsx": "Creator metric drill-down follows the creator detail offset contract; next_page_token is only a has-more flag, not client-owned token state."
   }
 }

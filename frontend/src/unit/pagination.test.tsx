@@ -172,6 +172,37 @@ describe('useInfiniteCollection', () => {
     expect(result.current.error).toBeInstanceOf(Error)
   })
 
+  it('stops advancing when the server repeats a cursor', async () => {
+    const queryFn = vi.fn()
+      .mockResolvedValueOnce({ items: [1], nextToken: 'same' })
+      .mockResolvedValueOnce({ items: [2], nextToken: 'same' })
+
+    const { result } = renderHook(
+      () => useInfiniteCollection({
+        queryKey: ['repeated-cursor'],
+        queryFn,
+        initialPageParam: null,
+        getNextPageParam: (p: { items: number[]; nextToken: string }) => p.nextToken,
+        selectPage: (p: { items: number[]; nextToken: string }) => p.items,
+        retry: false,
+      }),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => expect(result.current.items).toEqual([1]))
+    await result.current.fetchNextPage()
+    await waitFor(() => expect(result.current.isNextPageLoading).toBe(false))
+
+    // The repeated token is rejected by the shared paginator, so a third page
+    // is never requested and the load-more affordance is retired.
+    expect(result.current.items).toEqual([1, 2])
+    expect(result.current.hasNextPage).toBe(false)
+    expect(result.current.nextPageToken).toBeNull()
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    await result.current.fetchNextPage()
+    expect(queryFn).toHaveBeenCalledTimes(2)
+  })
+
   it('handles disabled state', () => {
     const queryFn = vi.fn()
     const { result } = renderHook(
