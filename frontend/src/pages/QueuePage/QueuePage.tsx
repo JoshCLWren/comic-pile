@@ -47,7 +47,6 @@ export default function QueuePage() {
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
   const isSearching = searchQuery.trim() !== ''
-
   const queueLoader = useQueueThreads(searchQuery, sortBy)
   const {
     data: threads,
@@ -63,14 +62,8 @@ export default function QueuePage() {
   // fully mapped or non-issue-tracked rows) are the bulk action's scope, and an
   // open run keeps reading the cursor so the batch covers the whole queue.
   const bulkMapping = useQueueBulkMapping(queueLoader)
-  // Pending is browser-owned; the Queue needs only the exact selection and the
-  // bounded snooze cookie, with no aggregate Roll read on this route.
   const { pending } = useRollPendingSelection()
-  const rollBootstrap = {
-    pending_thread_id: pending?.thread_id ?? null,
-    snoozed_thread_ids: readRollSnoozes(),
-    snoozed_threads: [],
-  }
+  const rollBootstrap = { pending_thread_id: pending?.thread_id ?? null, snoozed_thread_ids: readRollSnoozes(), snoozed_threads: [] }
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const reactivateMutation = useReactivateThread()

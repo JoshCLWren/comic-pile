@@ -56,7 +56,7 @@ export function ReadingGraphProblemCard() {
       const current = graph.data
       if (!current || current.status === 'ok') return []
       const ids = new Set<number>()
-      for (const cycle of current.cycles) {
+      for (const cycle of current.cycles ?? []) {
         for (const edge of cycle.edges) {
           ids.add(edge.source.issue_id)
           ids.add(edge.target.issue_id)
@@ -108,7 +108,7 @@ export function ReadingGraphProblemCard() {
         </p>
       ) : (
         <ul className="mt-3 space-y-2">
-          {problem.cycles.map((cycle) => (
+          {(problem.cycles ?? []).map((cycle) => (
             <li
               key={cycle.message}
               className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
