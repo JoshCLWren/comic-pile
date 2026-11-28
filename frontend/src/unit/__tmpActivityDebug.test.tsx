@@ -14,13 +14,9 @@ describe('debug', () => {
     const api = { list: vi.fn().mockRejectedValueOnce(new Error('network down')) }
     const { result } = renderHook(() => useActivity(api as never), { wrapper })
     await new Promise((resolve) => setTimeout(resolve, 200))
-    console.log('DEBUG', JSON.stringify({
-      isPending: result.current.isPending,
-      isError: result.current.isError,
-      isRetrying: result.current.isRetrying,
-      error: String(result.current.error),
-      data: result.current.data,
+    writeFileSync('/tmp/opencode/debug-activity.json', JSON.stringify({
+      state: { ...result.current },
       calls: api.list.mock.calls.length,
-    }))
+    }, null, 2))
   })
 })
