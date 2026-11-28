@@ -204,7 +204,12 @@ test('real creator source retains all eleven native v2 browser routes', () => {
   ]) {
     liveOperation(fragment, 'GET', route);
   }
-  assert.equal(liveOperation(fragment, 'GET', '/api/v1/threads/{thread_id}/issues/creators').dest, '/api/native_api.rs');
+  // #5958: the v1 thread-issues/creators alias is retired with the closed
+  // #5706 slice; the canonical v2 creatorCredits route remains.
+  assert.equal(
+    liveOperation(fragment, 'GET', '/api/v2/threads/{thread_id}/creatorCredits').dest,
+    '/api/native_api.rs',
+  );
 });
 
 test('real custom CBL source retains native reading-list route ownership', () => {
