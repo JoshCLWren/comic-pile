@@ -102,6 +102,8 @@ export function MobileGallery({
   }
 
   const coverWidth = galleryCoverWidth(width)
+  // SAFETY: `--gallery-cover-w` is a custom CSS property accepted by the
+  // CSSProperties index signature; height is a px string.
   const trackStyle = {
     height: `${Math.ceil(coverWidth * 1.5 + 19)}px`,
     '--gallery-cover-w': `${coverWidth}px`,
@@ -125,6 +127,8 @@ export function MobileGallery({
         <div className="roll-gallery-track" style={trackStyle}>
           {pool.map((thread, index) => {
             const offset = carouselOffset(index, active, pool.length)
+            // SAFETY: transform/opacity/visibility/zIndex are standard
+            // CSSProperties members built from the computed carousel offset.
             const style = {
               transform: carouselTransform(offset, coverWidth),
               opacity: Math.abs(offset) > 1 ? 0 : offset === 0 ? 1 : 0.55,

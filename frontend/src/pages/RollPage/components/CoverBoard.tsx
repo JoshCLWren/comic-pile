@@ -65,6 +65,8 @@ export function CoverBoard({
   }))
   const middleLeft = Math.ceil(middleCount / 2)
 
+  // SAFETY: the `--roll-*` keys are custom CSS properties, which React's
+  // CSSProperties accepts via its index signature; every value is a px string.
   const boardStyle = {
     '--roll-cover-w': `${layout.coverWidth}px`,
     '--roll-gap': `${layout.gap}px`,
