@@ -302,10 +302,20 @@ describe('CblBrowserPage adoption', () => {
 
   it('keeps an in-flight commit tracked when Back changes the source view (#4136)', async () => {
     const user = userEvent.setup()
-    let resolveCommit: (value: { id: number; name: string }) => void = () => undefined
+    let resolveCommit: (value: {
+      id: number
+      name: string
+      custom_cbl_list_id: number
+      list_version: number
+    }) => void = () => undefined
     mockCommitNew.mockImplementation(
       () =>
-        new Promise<{ id: number; name: string }>((resolve) => {
+        new Promise<{
+          id: number
+          name: string
+          custom_cbl_list_id: number
+          list_version: number
+        }>((resolve) => {
           resolveCommit = resolve
         }),
     )
