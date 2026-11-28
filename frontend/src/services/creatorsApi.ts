@@ -1,11 +1,11 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type { components } from '../generated/openapi'
+import type { SummariesResponse } from '../generated/nativeV2Client'
 
 const RECOVERY_CONFIG = { skipAuthRedirect: true }
 
-export type CreatorSummariesResponse = components['schemas']['CreatorSummariesResponse']
-export type CreatorSummaryItem = components['schemas']['CreatorSummaryItem']
-export type CreatorSummaryCoverage = components['schemas']['CreatorSummaryCoverage']
+export type CreatorSummariesResponse = SummariesResponse
+export type CreatorSummaryItem = CreatorSummariesResponse['summaries'][string]
+export type CreatorSummaryCoverage = CreatorSummariesResponse['coverage']
 
 /**
  * Build the creator-summaries service bound to an HTTP client.
