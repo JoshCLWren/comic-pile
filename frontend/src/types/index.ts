@@ -147,7 +147,6 @@ export interface ManualCreatorCredit {
 
 export interface ThreadCreatePayload {
   title: string;
-  format: string;
   issues_remaining: number;
   total_issues?: number;
   notes?: string | null;
@@ -156,7 +155,6 @@ export interface ThreadCreatePayload {
 
 export interface ThreadUpdatePayload {
   title?: string;
-  format?: string;
   notes?: string | null;
   manual_creator_credits?: ManualCreatorCredit[];
 }
@@ -164,7 +162,6 @@ export interface ThreadUpdatePayload {
 /** AIP-134 partial update body for `PATCH /api/v2/threads/{thread_id}`. */
 export interface ThreadPatchPayload {
   title?: string;
-  format?: string;
   issues_remaining?: number | null;
   notes?: string | null;
   manual_creator_credits?: ManualCreatorCredit[] | null;
