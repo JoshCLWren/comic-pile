@@ -130,12 +130,20 @@ fn runner() -> refinery::Runner {
 /// Tests use this instead of hard-coded version lists so a branch that has not
 /// yet merged newer migrations and the PR merge ref (which has) both assert the
 /// same truth: all migrations this binary knows about are accounted for.
+///
+/// `refinery::embed_migrations` embeds files in *path* order, which is not the
+/// order refinery applies them (it applies by numeric version). A two-digit
+/// version such as `V10` therefore appears before `V1` in the embedded module.
+/// Sort here so this helper reflects the actual application order; production
+/// migration application is unaffected.
 pub fn embedded_versions() -> Vec<i32> {
-    runner()
+    let mut versions: Vec<i32> = runner()
         .get_migrations()
         .iter()
         .map(|migration| migration.version())
-        .collect()
+        .collect();
+    versions.sort_unstable();
+    versions
 }
 
 /// Bring the database to the latest migration. See the module docs.
