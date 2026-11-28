@@ -2450,9 +2450,9 @@ mod tests {
         // thread rows land with a NULL frontier and are linked after the issues.
         connection
             .execute(
-                "INSERT INTO threads (id, title, format, issues_remaining, queue_position, \
+                "INSERT INTO threads (id, title, issues_remaining, queue_position, \
                  status, created_at, user_id, is_blocked) \
-                 SELECT g, 'Series ' || g, 'series', 5, g, 'active', now(), $1, g > $2 \
+                 SELECT g, 'Series ' || g, 5, g, 'active', now(), $1, g > $2 \
                  FROM generate_series(1, $3) g",
                 &[&user_id, &(total - blocked), &total],
             )
