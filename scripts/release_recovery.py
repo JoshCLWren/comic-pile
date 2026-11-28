@@ -139,7 +139,9 @@ def _read_json(request: urllib.request.Request, url_kind: str = "release recover
             f"HTTP {exc.code} from {url_kind}: {detail[:500]}"
         ) from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise RecoveryError(f"Release recovery {url_kind} request failed: {exc}") from exc
+        raise RecoveryError(
+            f"Release recovery request failed for {url_kind}: {exc}"
+        ) from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RecoveryError(f"{url_kind} returned invalid JSON") from exc
 

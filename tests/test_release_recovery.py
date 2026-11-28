@@ -297,3 +297,33 @@ def test_load_candidate_rejects_oversized_files(tmp_path: Path) -> None:
     valid = tmp_path / "valid.json"
     valid.write_text(json.dumps(_candidate()), encoding="utf-8")
     assert recovery._load_candidate(valid)["source_pr_number"] == 9
+
+
+def test_fetch_production_revision_names_url_kind_on_dns_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A DNS failure names the production health URL kind, not the URL."""
+
+    def fake_urlopen(request: object, timeout: int = 30) -> object:
+        raise urllib.error.URLError(
+            socket.gaierror(-2, "Name or service not known")
+        )
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(recovery.RecoveryError, match="production health URL"):
+        recovery.fetch_production_revision("http://does-not-exist.invalid/api/v2/health")
+
+
+def test_github_request_names_url_kind_on_dns_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A DNS failure for GitHub names the GitHub API URL kind."""
+
+    def fake_urlopen(request: object, timeout: int = 30) -> object:
+        raise urllib.error.URLError(
+            socket.gaierror(-2, "Name or service not known")
+        )
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(recovery.RecoveryError, match="GitHub API URL"):
+        recovery._github_request("/repos/JoshCLWren/comic-pile/pulls")
