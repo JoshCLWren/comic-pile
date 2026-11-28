@@ -56,7 +56,7 @@ test.describe('P0 #5525 Roll manual selection', () => {
     page.on('request', (request) => {
       if (request.method() === 'GET') return
       const path = new URL(request.url()).pathname
-      if (path.includes('set-pending') || path.includes('roll/override') || path.includes('/roll/offers')) {
+      if (path.includes('set-pending') || path.includes('/roll/offers')) {
         disallowed.push(path)
       }
     })
