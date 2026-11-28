@@ -602,45 +602,24 @@ async fn source_series_names(
     user_id: i32,
     series_decisions: &HashMap<String, bool>,
     entry_decisions: &HashMap<String, bool>,
-) -> HashMap<i32, (String, String)> {
-    let empty = HashMap::new();
-    let preview = adoption_preview_for(state, user_id, source_list_id, series_decisions, entry_decisions)
-        .await
-        .map_err(identity_error)
-        .unwrap_or_else(|_| CblAdoptionPreviewResponse {
-            source: crate::issue_identity::CblSourceFingerprintResponse {
-                source_list_id,
-                source_repository: String::new(),
-                source_path: String::new(),
-                content_hash: String::new(),
-                revision_sha: String::new(),
-            },
-            total_positions: 0,
-            entries: Vec::new(),
-            summary: crate::issue_identity::CblAdoptionSummaryResponse {
-                reused_existing_count: 0,
-                missing_would_create_count: 0,
-                excluded_count: 0,
-                unresolved_count: 0,
-                awaiting_opt_in_count: 0,
-                final_adopted_count: 0,
-                final_adopted_order: Vec::new(),
-                reused_existing_positions: Vec::new(),
-                missing_would_create_positions: Vec::new(),
-                excluded_positions: Vec::new(),
-                unresolved_positions: Vec::new(),
-                awaiting_opt_in_positions: Vec::new(),
-            },
-        });
-    let _ = empty;
-    preview
+) -> Result<HashMap<i32, (String, String)>, ApiError> {
+    let preview = adoption_preview_for(
+        state,
+        user_id,
+        source_list_id,
+        series_decisions,
+        entry_decisions,
+    )
+    .await
+    .map_err(identity_error)?;
+    Ok(preview
         .entries
         .into_iter()
         .filter_map(|entry| {
             let issue_id = entry.resolved_issue_id?;
             Some((issue_id, (entry.series_name, entry.issue_number)))
         })
-        .collect()
+        .collect())
 }
 
 /// `POST /api/v2/reading-lists/{list_id}/replacements:preview`
@@ -706,7 +685,7 @@ pub async fn preview_replacement(
         &request.series_decisions,
         &request.entry_decisions,
     )
-    .await;
+    .await?;
     let source_set: HashSet<i32> = source_ids.iter().copied().collect();
     let omitted_manual_issue_ids = old
         .iter()
@@ -803,7 +782,7 @@ pub async fn commit_replacement(
         &request.series_decisions,
         &request.entry_decisions,
     )
-    .await;
+    .await?;
 
     let mut conn = db::checkout(&state).await?;
     let mut tx = conn
@@ -920,30 +899,25 @@ pub async fn commit_replacement(
     }
     let owned_count: i64 = tx
         .query_one(
-            "SELECT COUNT(*)::bigint FROM issues WHERE id = ANY($1::int[]) AND user_owned_owner_id IS NOT NULL",
-            &[&request.issue_ids],
+            "SELECT COUNT(*)::bigint FROM issues i JOIN threads t ON t.id = i.thread_id
+             WHERE t.user_id = $1 AND i.id = ANY($2::int[])",
+            &[&user.id(), &request.issue_ids],
         )
         .await
         .map_err(db::query_error)?
         .get(0);
-    // Ownership is ultimately enforced by the Reading List engine below; the
-    // count guard only rejects foreign/phantom Issue IDs before any write.
     if owned_count != request.issue_ids.len() as i64 {
-        let valid: i64 = tx
-            .query_one(
-                "SELECT COUNT(*)::bigint FROM issues WHERE id = ANY($1::int[])",
-                &[&request.issue_ids],
-            )
-            .await
-            .map_err(db::query_error)?
-            .get(0);
-        if valid != request.issue_ids.len() as i64 {
-            return Err(ApiError::NotFound("Issue not found".to_string()));
-        }
+        return Err(ApiError::NotFound("Issue not found".to_string()));
     }
 
+    // The reviewed `issue_ids` are authoritative: a source occurrence the
+    // reader unchecked must not be re-added by the evaluator projection.
+    let selected_source_ids: Vec<i32> = source_ids
+        .into_iter()
+        .filter(|id| requested.contains(id))
+        .collect();
     let after_entries = project_after(
-        &source_ids,
+        &selected_source_ids,
         &old,
         &kept_manual,
         &request.entry_intents,
@@ -961,13 +935,6 @@ pub async fn commit_replacement(
         .overlap_decisions
         .clone()
         .unwrap_or_else(|| overlaps.clone());
-    let after_state = state_json(
-        &list_row.get::<_, String>(0),
-        list_row.get::<_, Option<String>>(1).as_deref(),
-        &list_row.get::<_, String>(2),
-        &after_entries,
-        &new_overlaps,
-    );
 
     write_entries(&tx, list_id, &final_ids, &intent_json(&old, &request.entry_intents)).await?;
     if request.overlap_decisions.is_some() {
