@@ -118,6 +118,7 @@ test('native router reconciliation enumerates every API version and detects inpu
   t.after(() => rmSync(tmp, {recursive: true, force: true}));
 
   const files = stageInputs(tmp);
+  writeFileSync(path.join(tmp, 'docs', 'api', 'sql-budget-sources.json'), '{"operations":[]}\n');
   cpSync(files.fragments, path.join(tmp, 'docs', 'api', 'route-fragments'), {recursive: true});
   const router = path.join(tmp, 'native', 'roll-service', 'src', 'lib.rs');
   mkdirSync(path.dirname(router), {recursive: true});
