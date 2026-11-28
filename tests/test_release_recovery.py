@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import socket
 import urllib.error
+import urllib.request
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -327,3 +328,63 @@ def test_github_request_names_url_kind_on_dns_failure(
     monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
     with pytest.raises(recovery.RecoveryError, match="GitHub API URL"):
         recovery._github_request("/repos/JoshCLWren/comic-pile/pulls")
+
+
+def test_call_sites_pass_one_relative_github_path() -> None:
+    """Each discovery call site passes one relative /repos/... path, never an absolute URL."""
+    paths: list[str] = []
+
+    def capture_one(path: str) -> object:
+        paths.append(path)
+        return _pull(9, DEPLOYED_SHA)
+
+    recovery._fetch_one("JoshCLWren/comic-pile", 9, capture_one)
+    assert paths == ["/repos/JoshCLWren/comic-pile/pulls/9"]
+    assert recovery.GITHUB_API_BASE not in paths[0]
+
+    paths.clear()
+
+    def capture_many(path: str) -> object:
+        paths.append(path)
+        return [_pull(9, DEPLOYED_SHA, hours_ago=0.5)]
+
+    recovery._discover("JoshCLWren/comic-pile", since_hours=1, request_json=capture_many)
+    assert len(paths) == 1
+    assert paths[0].startswith("/repos/JoshCLWren/comic-pile/pulls?")
+    assert recovery.GITHUB_API_BASE not in paths[0]
+
+    paths.clear()
+    recovery._changed_files("JoshCLWren/comic-pile", 9, capture_many)
+    assert len(paths) == 1
+    assert paths[0].startswith("/repos/JoshCLWren/comic-pile/pulls/9/files?")
+    assert recovery.GITHUB_API_BASE not in paths[0]
+
+
+def test_github_request_prepends_exactly_one_api_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_github_request builds exactly one https://api.github.com prefix."""
+    captured: list[str] = []
+
+    class _FakeResponse:
+        """Minimal context-manager response for one bounded JSON GET."""
+
+        def __enter__(self) -> _FakeResponse:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"[]"
+
+    def fake_urlopen(
+        request: urllib.request.Request, timeout: int = 30
+    ) -> _FakeResponse:
+        captured.append(request.full_url)
+        return _FakeResponse()
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
+    recovery._github_request("/repos/JoshCLWren/comic-pile/pulls/9")
+    assert captured == ["https://api.github.com/repos/JoshCLWren/comic-pile/pulls/9"]
+    assert captured[0].count("https://api.github.com") == 1
