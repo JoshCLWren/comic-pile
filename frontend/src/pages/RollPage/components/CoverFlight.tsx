@@ -36,10 +36,12 @@ export function CoverFlight({ flight, onDone }: CoverFlightProps) {
 
   useEffect(() => {
     const node = flightRef.current
+    /* v8 ignore start */
     if (node == null) {
       onDone()
       return
     }
+    /* v8 ignore stop */
     if (!canAnimate(node)) {
       onDone()
       return

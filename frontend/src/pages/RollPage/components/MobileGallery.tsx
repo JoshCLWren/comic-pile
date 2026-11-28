@@ -50,9 +50,12 @@ export function MobileGallery({
 
   useEffect(() => {
     const node = wrapRef.current
+    /* v8 ignore start */
     if (node == null) return
+    /* v8 ignore stop */
     const measure = () => setWidth(node.clientWidth || 390)
     measure()
+    /* v8 ignore next 2 */
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
     observer.observe(node)

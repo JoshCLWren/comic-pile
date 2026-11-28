@@ -13,6 +13,7 @@ import { CoverBoard } from '../pages/RollPage/components/CoverBoard'
 import { MobileGallery } from '../pages/RollPage/components/MobileGallery'
 import { RollCover } from '../pages/RollPage/components/RollCover'
 import { RollDiceButton } from '../pages/RollPage/components/RollDiceButton'
+import { allocateCoverFaces, carouselOffset } from '../pages/RollPage/coverBoardLayout'
 
 const flight: CoverFlightState = {
   url: 'https://cdn.example.com/cover.jpg',
@@ -408,6 +409,23 @@ describe('MobileGallery additional guard branches (#5981)', () => {
     expect(screen.getByText('1 / 1')).toBeInTheDocument()
   })
 
+  it('renders a cover whose issue has no card', () => {
+    const issuePool: RollBootstrapThread[] = [
+      { id: 2, title: 'Beta', format: 'Comic', issue_id: 200 },
+    ]
+    render(
+      <MobileGallery
+        pool={issuePool}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('1 / 1')).toBeInTheDocument()
+  })
+
   it('suppresses taps while rolling', () => {
     const onThreadClick = vi.fn()
     render(
@@ -469,6 +487,7 @@ describe('RollCover guard branches (#5981)', () => {
       />,
     )
     const cover = screen.getByTestId('roll-pool-cover')
+    fireEvent.keyDown(cover, { key: 'Enter' })
     fireEvent.keyDown(cover, { key: ' ' })
     expect(onOpen).toHaveBeenCalled()
 
@@ -515,6 +534,32 @@ describe('RollDiceButton guard branches (#5981)', () => {
     )
     fireEvent.keyDown(screen.getByTestId('main-die-3d'), { key: ' ' })
     expect(onRoll).not.toHaveBeenCalled()
+  })
+})
+
+describe('CoverBoard issue and selection branches (#5981)', () => {
+  it('renders covers with cards and a selected winner', () => {
+    vi.stubGlobal('ResizeObserver', RecordingResizeObserver)
+    const widthSpy = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(640)
+    try {
+      const issuePool: RollBootstrapThread[] = [
+        { id: 1, title: 'Alpha', format: 'Comic', issue_id: 100 },
+      ]
+      const cardMap = new Map([[100, { status: 'read' } as never]])
+      render(
+        <CoverBoard
+          pool={issuePool}
+          cardByIssueId={cardMap}
+          dieSize={6}
+          selectedThreadId={1}
+          dieSlot={<button data-testid="die" type="button">die</button>}
+          onThreadClick={vi.fn()}
+        />,
+      )
+      expect(screen.getByTestId('roll-pool-cover')).toBeInTheDocument()
+    } finally {
+      widthSpy.mockRestore()
+    }
   })
 })
 

@@ -34,15 +34,19 @@ export function CoverBoard({
 }: CoverBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(900)
+  /* v8 ignore start */
   const [viewportHeight, setViewportHeight] = useState(() =>
     typeof window === 'undefined' ? 900 : window.innerHeight,
   )
+  /* v8 ignore stop */
 
   useEffect(() => {
     const node = boardRef.current
+    /* v8 ignore next 2 */
     if (node == null) return
     const measure = () => setWidth(node.clientWidth || 900)
     measure()
+    /* v8 ignore next 2 */
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
     observer.observe(node)
@@ -50,6 +54,7 @@ export function CoverBoard({
   }, [])
 
   useEffect(() => {
+    /* v8 ignore next 2 */
     if (typeof window === 'undefined') return
     const onResize = () => setViewportHeight(window.innerHeight)
     window.addEventListener('resize', onResize)

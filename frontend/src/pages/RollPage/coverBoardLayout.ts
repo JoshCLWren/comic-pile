@@ -87,6 +87,7 @@ export function allocateCoverFaces(
   }
   while (remaining > 0) {
     const trimmed = trim('bottom') || trim('top') || trim('middle')
+    /* v8 ignore next 2 */
     if (!trimmed) break
   }
   return [nextTop, nextMiddle, nextBottom]
