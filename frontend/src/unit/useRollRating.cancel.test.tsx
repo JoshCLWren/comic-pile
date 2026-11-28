@@ -90,12 +90,12 @@ describe('rating exit without server-owned pending', () => {
       state: state(),
       bootstrap: null,
       rateMutation,
-          refetchRollState,
+      refetchRollState,
       clearPending,
     }))
   }
 
-  it('cancels by clearing browser selection with no dismiss or bootstrap call', async () => {
+  it('cancels by clearing browser selection without a server call', async () => {
     const { result } = render()
     await act(async () => { await result.current.handleCancelRating() })
     expect(clearPending).toHaveBeenCalledWith()

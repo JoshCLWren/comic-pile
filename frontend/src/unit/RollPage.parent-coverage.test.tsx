@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { threadsApi } from '../services/api-threads'
+import {
+  clearPendingSelection,
+  resetRollPendingSelectionMemory,
+  writePendingSelection,
+} from '../services/rollPendingSelection'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 const spies = vi.hoisted(() => ({
@@ -155,6 +160,13 @@ vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: 
  * not from an intentional manual Read Now action (#5525).
  */
 function enterPendingRollRating() {
+  writePendingSelection(null, {
+    issue_id: 11,
+    thread_id: 1,
+    issue_number: '2',
+    result: 3,
+    selected_at: Date.now(),
+  })
   bootstrapData.pending_thread_id = 1
   bootstrapData.active_thread ??= {
     id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2,
@@ -178,6 +190,8 @@ describe('RollPage parent handlers', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    resetRollPendingSelectionMemory()
     sessionHook.value = null
     bootstrapHook.value = null
     dieStateHook.value = null
