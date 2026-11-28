@@ -64,4 +64,48 @@ describe('activityApi', () => {
       next_page_token: null,
     })
   })
+
+  it('forwards combined filters and the reader timezone to the native resource', async () => {
+    client.get.mockResolvedValue(response())
+
+    await activityApi.list(null, {
+      q: '  saga  ',
+      series: ' Paper Girls ',
+      type: ' RATE ',
+      dateFrom: '2026-11-08',
+      dateTo: '2026-11-09',
+    })
+
+    expect(client.get).toHaveBeenCalledWith('/v2/activity', {
+      params: {
+        limit: ACTIVITY_PAGE_SIZE,
+        q: 'saga',
+        series: 'Paper Girls',
+        type: 'rate',
+        date_from: '2026-11-08',
+        date_to: '2026-11-09',
+        timezone: expect.any(String),
+      },
+    })
+  })
+
+  it('sends date bounds only for the side the reader supplied', async () => {
+    client.get.mockResolvedValue(response())
+
+    await activityApi.list(null, {
+      q: '',
+      series: '',
+      type: '',
+      dateFrom: '2026-11-08',
+      dateTo: '',
+    })
+
+    expect(client.get).toHaveBeenCalledWith('/v2/activity', {
+      params: {
+        limit: ACTIVITY_PAGE_SIZE,
+        date_from: '2026-11-08',
+        timezone: expect.any(String),
+      },
+    })
+  })
 })

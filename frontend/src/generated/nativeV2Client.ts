@@ -723,6 +723,12 @@ export interface ListActivityRequest {
   query?: {
     limit?: number
     page_token?: string
+    q?: string
+    series?: string
+    type?: string
+    date_from?: string
+    date_to?: string
+    timezone?: string
   }
 }
 

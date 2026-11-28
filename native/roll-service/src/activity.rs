@@ -32,6 +32,22 @@
 //! The cursor is `(primary timestamp, primary id, sub-position)`, so a page can
 //! end between a snooze and its roll without omitting or repeating either.
 //!
+//! ## Reader filters
+//!
+//! `q`, `series`, `type`, `date_from`, `date_to` and `timezone` filter the
+//! logical stream on the server. `q` is a literal, case-insensitive substring
+//! over the primary action's series title, issue number and event type;
+//! `series` narrows to a literal case-insensitive substring of the series
+//! title. A companion is part of its primary's logical action and is emitted
+//! with it, so filtering is decided on the primary event. `type` matches the
+//! reader-visible action type: a coalesced rating counts as `rate` even when
+//! its durable row is an idempotent `issue_command`, and a snooze's linked roll
+//! counts as `roll` while the snooze row itself is suppressed. Date bounds are
+//! inclusive reader-local calendar dates resolved through the supplied IANA
+//! `timezone` (UTC by default), so midnight and DST stay on the reader's day.
+//! Every filter is applied before the bounded page fetch and is carried by the
+//! opaque cursor's primary, so combined filters keep stable chronology.
+//!
 //! ## Ownership
 //!
 //! Ownership is `events.user_id`. Migration `c44050000001` attributed every
@@ -47,16 +63,155 @@ use axum::{
     Json,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 
+/// Query contract for `GET /api/v2/activity`.
+///
+/// The legacy `cursor` alias is retained for clients that predate `page_token`.
+/// Filter fields are strings at the HTTP edge so malformed dates/types can be
+/// rejected with an explicit 400 before any SQL is issued.
 #[derive(Debug, Deserialize)]
 pub struct ActivityQuery {
     limit: Option<i64>,
     page_token: Option<String>,
     cursor: Option<String>,
+    q: Option<String>,
+    series: Option<String>,
+    #[serde(rename = "type")]
+    event_type: Option<String>,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    timezone: Option<String>,
+}
+
+/// Reader-visible action types the History filter may select.
+///
+/// Unknown values are rejected rather than silently returning an empty stream,
+/// so a typo is distinguishable from a reader who genuinely has no such rows.
+const ACTIVITY_TYPES: [&str; 12] = [
+    "roll",
+    "snooze",
+    "unsnooze",
+    "rate",
+    "manual_die",
+    "reset_dice",
+    "dismiss",
+    "undo",
+    "rolled_but_skipped",
+    "read",
+    "issue_command",
+    "issue_unread",
+];
+
+const MAX_FILTER_LENGTH: usize = 200;
+
+/// Validated, normalized reader filters passed to SQL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActivityFilters {
+    search: Option<String>,
+    series: Option<String>,
+    event_type: Option<String>,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    timezone: String,
+}
+
+impl Default for ActivityFilters {
+    fn default() -> Self {
+        Self {
+            search: None,
+            series: None,
+            event_type: None,
+            date_from: None,
+            date_to: None,
+            timezone: "UTC".to_string(),
+        }
+    }
+}
+
+impl ActivityFilters {
+    fn parse(query: &ActivityQuery) -> Result<Self, ApiError> {
+        let search = trimmed_filter(query.q.as_deref(), "q")?;
+        let series = trimmed_filter(query.series.as_deref(), "series")?;
+        let event_type = match query.event_type.as_deref().map(str::trim) {
+            None | Some("") => None,
+            Some(raw) => {
+                let value = raw.to_ascii_lowercase();
+                if !ACTIVITY_TYPES.contains(&value.as_str()) {
+                    return Err(ApiError::BadRequest(format!(
+                        "Unknown activity type filter: {raw}"
+                    )));
+                }
+                Some(value)
+            }
+        };
+        let date_from = parse_date_filter(query.date_from.as_deref())?;
+        let date_to = parse_date_filter(query.date_to.as_deref())?;
+        if let (Some(from), Some(to)) = (&date_from, &date_to) {
+            if from > to {
+                return Err(ApiError::BadRequest(
+                    "Activity date_from must not be after date_to".to_string(),
+                ));
+            }
+        }
+        let timezone = match query.timezone.as_deref().map(str::trim) {
+            None | Some("") => "UTC".to_string(),
+            Some(raw) => {
+                if raw.len() > 64
+                    || !raw
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '+' | '-'))
+                {
+                    return Err(ApiError::BadRequest(
+                        "Invalid activity timezone".to_string(),
+                    ));
+                }
+                raw.to_string()
+            }
+        };
+        Ok(Self {
+            search,
+            series,
+            event_type,
+            date_from,
+            date_to,
+            timezone,
+        })
+    }
+}
+
+/// Trim a bounded substring filter; blank input means "no filter".
+fn trimmed_filter(raw: Option<&str>, name: &str) -> Result<Option<String>, ApiError> {
+    match raw.map(str::trim) {
+        None | Some("") => Ok(None),
+        Some(value) if value.chars().count() > MAX_FILTER_LENGTH => Err(ApiError::BadRequest(
+            format!("Activity {name} filter is too long"),
+        )),
+        Some(value) => Ok(Some(value.to_string())),
+    }
+}
+
+/// Accept only canonical `YYYY-MM-DD` reader-local dates.
+fn parse_date_filter(raw: Option<&str>) -> Result<Option<String>, ApiError> {
+    let Some(value) = raw.map(str::trim) else {
+        return Ok(None);
+    };
+    let bytes = value.as_bytes();
+    let canonical = bytes.len() == 10
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit());
+    let parsed = canonical
+        .then(|| NaiveDate::parse_from_str(value, "%Y-%m-%d").ok())
+        .flatten()
+        .ok_or_else(|| ApiError::BadRequest("Activity dates must be YYYY-MM-DD".to_string()))?;
+    Ok(Some(parsed.format("%Y-%m-%d").to_string()))
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, utoipa::ToSchema)]
@@ -150,8 +305,66 @@ WITH primaries AS (
            e.issue_number, COALESCE(e.thread_id, e.selected_thread_id) AS thread_id,
            e.session_id, e.context
       FROM events e
+      LEFT JOIN threads t ON t.id = COALESCE(e.thread_id, e.selected_thread_id)
      WHERE e.user_id = $1
        AND ($2::timestamptz IS NULL OR (e.timestamp, e.id) >= ($2::timestamptz, $3::int))
+       AND ($5::text IS NULL
+            OR strpos(lower(coalesce(t.title, '')), lower($5)) > 0
+            OR strpos(lower(coalesce(e.issue_number, '')), lower($5)) > 0
+            OR strpos(lower(e.type), lower($5)) > 0)
+       AND ($6::text IS NULL OR strpos(lower(coalesce(t.title, '')), lower($6)) > 0)
+       AND ($8::text::date IS NULL
+            OR e.timestamp >= ((($8::text::date)::timestamp) AT TIME ZONE $10))
+       AND ($9::text::date IS NULL
+            OR e.timestamp < (((($9::text::date + 1)::timestamp)) AT TIME ZONE $10))
+       -- Type filtering must happen before LIMIT, otherwise a bounded fetch of
+       -- non-matching primaries would end the stream early. The predicates
+       -- mirror the companion joins below so the same logical actions qualify.
+       AND ($7::text IS NULL
+            OR ($7 = 'rate'
+                AND e.type IN ('rate', 'issue_command', 'issue_unread')
+                AND e.issue_id IS NOT NULL
+                AND e.context->>'issue_command_key' IS NOT NULL
+                AND EXISTS (
+                      SELECT 1 FROM events d
+                       WHERE d.user_id = $1
+                         AND d.type = 'rate'
+                         AND d.issue_id = e.issue_id
+                         AND d.thread_id IS NOT NULL
+                         AND d.context->>'dice_command_key' LIKE 'roll-rating-%'
+                         AND 'roll-rating-' || d.thread_id || '-'
+                             || (e.context->>'issue_command_key')
+                             = d.context->>'dice_command_key'))
+            OR (e.type = $7
+                -- A coalesced rating is reader-visible `rate` even when its
+                -- durable receipt is issue_command/issue_unread. Excluding it
+                -- here (rather than only at emission) keeps a bounded page from
+                -- spending a primary slot on a row the filter cannot emit.
+                AND NOT (
+                    e.type IN ('rate', 'issue_command', 'issue_unread')
+                    AND e.issue_id IS NOT NULL
+                    AND e.context->>'issue_command_key' IS NOT NULL
+                    AND EXISTS (
+                          SELECT 1 FROM events d
+                           WHERE d.user_id = $1
+                             AND d.type = 'rate'
+                             AND d.issue_id = e.issue_id
+                             AND d.thread_id IS NOT NULL
+                             AND d.context->>'dice_command_key' LIKE 'roll-rating-%'
+                             AND 'roll-rating-' || d.thread_id || '-'
+                                 || (e.context->>'issue_command_key')
+                                 = d.context->>'dice_command_key')))
+            OR ($7 = 'roll'
+                AND e.type = 'snooze'
+                AND e.context->>'dice_command_key' LIKE '%-snooze'
+                AND EXISTS (
+                      SELECT 1 FROM events r
+                       WHERE r.user_id = $1
+                         AND r.timestamp <= e.timestamp
+                         AND r.type = 'roll'
+                         AND r.context->>'roll_offer_key' IS NOT NULL
+                         AND (r.context->>'roll_offer_key') || '-snooze'
+                             = e.context->>'dice_command_key')))
        AND NOT (
              e.type = 'roll'
          AND e.context->>'roll_offer_key' IS NOT NULL
@@ -185,11 +398,14 @@ SELECT p.id, p.type,
        r.id, r.type,
        to_char(r.timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
        r.die, r.die_after, r.rating, r.issue_id, r.issue_number, r.thread_id, rt.title,
-       p.session_id, r.session_id
+       p.session_id, r.session_id,
+       ($7::text IS NULL
+        OR (CASE WHEN d.id IS NOT NULL THEN 'rate' ELSE p.type END) = $7),
+       ($7::text IS NULL OR ($7 = 'roll' AND r.id IS NOT NULL))
   FROM primaries p
   LEFT JOIN threads pt ON pt.id = p.thread_id
   LEFT JOIN LATERAL (
-        SELECT d.die, d.die_after, d.rating
+        SELECT d.id, d.die, d.die_after, d.rating
           FROM events d
          WHERE p.type IN ('rate', 'issue_command', 'issue_unread')
            AND p.issue_id IS NOT NULL
@@ -261,35 +477,45 @@ fn logical_items(row: &tokio_postgres::Row) -> Vec<(StreamKey, ActivityItem)> {
         thread_title: row.get(10),
         session_id: row.get(24),
     };
-    let mut items = vec![(
-        StreamKey {
-            micros,
-            id,
-            sub: SUB_PRIMARY,
-        },
-        primary,
-    )];
-    if let Some(roll_id) = row.get::<_, Option<i32>>(14) {
+    // Type filtering decides on the reader-visible action, not on the raw row.
+    // A snooze whose roll is selected emits only its companion; a coalesced
+    // rating still emits its (possibly `issue_command`) primary as `rate`.
+    let include_primary: bool = row.get(26);
+    let include_companion: bool = row.get(27);
+    let mut items = Vec::with_capacity(2);
+    if include_primary {
         items.push((
             StreamKey {
                 micros,
                 id,
-                sub: SUB_LINKED_ROLL,
+                sub: SUB_PRIMARY,
             },
-            ActivityItem {
-                event_id: roll_id,
-                event_type: row.get(15),
-                timestamp: row.get(16),
-                die_before: row.get(17),
-                die_after: row.get(18),
-                rating: row.get(19),
-                issue_id: row.get(20),
-                issue_number: row.get(21),
-                thread_id: row.get(22),
-                thread_title: row.get(23),
-                session_id: row.get(25),
-            },
+            primary,
         ));
+    }
+    if include_companion {
+        if let Some(roll_id) = row.get::<_, Option<i32>>(14) {
+            items.push((
+                StreamKey {
+                    micros,
+                    id,
+                    sub: SUB_LINKED_ROLL,
+                },
+                ActivityItem {
+                    event_id: roll_id,
+                    event_type: row.get(15),
+                    timestamp: row.get(16),
+                    die_before: row.get(17),
+                    die_after: row.get(18),
+                    rating: row.get(19),
+                    issue_id: row.get(20),
+                    issue_number: row.get(21),
+                    thread_id: row.get(22),
+                    thread_title: row.get(23),
+                    session_id: row.get(25),
+                },
+            ));
+        }
     }
     items
 }
@@ -323,12 +549,9 @@ pub async fn list_activity(
     Query(query): Query<ActivityQuery>,
 ) -> Result<Json<ActivityResponse>, ApiError> {
     let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
-    let after = query
-        .page_token
-        .or(query.cursor)
-        .as_deref()
-        .map(parse_cursor)
-        .transpose()?;
+    let filters = ActivityFilters::parse(&query)?;
+    let token = query.page_token.as_deref().or(query.cursor.as_deref());
+    let after = token.map(parse_cursor).transpose()?;
     // Each primary yields at least one item and the cursor's own primary yields
     // at most two already-returned items, so `limit + 2` primaries always prove
     // whether another item follows the page.
@@ -339,10 +562,30 @@ pub async fn list_activity(
     let after_id: Option<i32> = after.map(|key| key.id);
 
     let connection = db::checkout(&state).await?;
+    // PostgreSQL is the authority on IANA zone names and DST rules. Validate
+    // the reader's zone before the main query so an unknown name is a 400, not
+    // an opaque database error. Only date-filtered requests pay this round trip.
+    if filters.date_from.is_some() || filters.date_to.is_some() {
+        connection
+            .query_one("SELECT now() AT TIME ZONE $1", &[&filters.timezone])
+            .await
+            .map_err(|_| ApiError::BadRequest("Invalid activity timezone".to_string()))?;
+    }
     let rows = connection
         .query(
             ACTIVITY_PAGE_SQL,
-            &[&user.id(), &after_timestamp, &after_id, &primary_limit],
+            &[
+                &user.id(),
+                &after_timestamp,
+                &after_id,
+                &primary_limit,
+                &filters.search,
+                &filters.series,
+                &filters.event_type,
+                &filters.date_from,
+                &filters.date_to,
+                &filters.timezone,
+            ],
         )
         .await
         .map_err(db::query_error)?;
@@ -367,11 +610,17 @@ pub async fn list_activity(
     tag = "activity",
     params(
         ("limit" = Option<i64>, Query, description = "Maximum number of activity rows"),
-        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor")
+        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor"),
+        ("q" = Option<String>, Query, description = "Case-insensitive literal text search over series, issue number and action type"),
+        ("series" = Option<String>, Query, description = "Case-insensitive literal series-title filter"),
+        ("type" = Option<String>, Query, description = "Reader-visible activity type filter"),
+        ("date_from" = Option<String>, Query, description = "Inclusive reader-local start date (YYYY-MM-DD)"),
+        ("date_to" = Option<String>, Query, description = "Inclusive reader-local end date (YYYY-MM-DD)"),
+        ("timezone" = Option<String>, Query, description = "IANA time zone used to resolve reader-local date bounds")
     ),
     responses(
         (status = 200, description = "Owner-scoped activity history", body = ActivityResponse),
-        (status = 400, description = "Malformed or unrecognized page token"),
+        (status = 400, description = "Malformed page token or invalid activity filter"),
         (status = 401, description = "Not authenticated")
     ),
     security(("HTTPBearer" = []))
@@ -459,11 +708,137 @@ mod tests {
     }
 
     #[test]
-    fn activity_openapi_declares_json_response_and_cursor_rejection() {
+    fn activity_openapi_declares_json_response_cursor_rejection_and_filters() {
         let schema = serde_json::to_value(crate::openapi::canonical_openapi()).unwrap();
-        let responses = &schema["paths"]["/api/v2/activity"]["get"]["responses"];
+        let operation = &schema["paths"]["/api/v2/activity"]["get"];
+        let responses = &operation["responses"];
         assert!(responses["200"]["content"]["application/json"]["schema"].is_object());
         assert!(responses["400"].is_object());
+        let params = operation["parameters"]
+            .as_array()
+            .expect("activity query parameters");
+        let names: Vec<&str> = params
+            .iter()
+            .filter_map(|param| param["name"].as_str())
+            .collect();
+        for name in [
+            "limit",
+            "page_token",
+            "q",
+            "series",
+            "type",
+            "date_from",
+            "date_to",
+            "timezone",
+        ] {
+            assert!(names.contains(&name), "OpenAPI must declare {name}");
+        }
+    }
+
+    #[test]
+    fn activity_filters_normalize_and_reject_bad_input() {
+        let filters = ActivityFilters::parse(&ActivityQuery {
+            limit: None,
+            page_token: None,
+            cursor: None,
+            q: Some("  Saga  ".into()),
+            series: Some(" astro ".into()),
+            event_type: Some(" RATE ".into()),
+            date_from: Some(" 2026-11-08 ".into()),
+            date_to: Some("2026-11-09".into()),
+            timezone: Some(" America/Chicago ".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            filters,
+            ActivityFilters {
+                search: Some("Saga".into()),
+                series: Some("astro".into()),
+                event_type: Some("rate".into()),
+                date_from: Some("2026-11-08".into()),
+                date_to: Some("2026-11-09".into()),
+                timezone: "America/Chicago".into(),
+            }
+        );
+
+        let defaults = ActivityFilters::parse(&ActivityQuery {
+            limit: None,
+            page_token: None,
+            cursor: None,
+            q: None,
+            series: None,
+            event_type: None,
+            date_from: None,
+            date_to: None,
+            timezone: None,
+        })
+        .unwrap();
+        assert_eq!(defaults, ActivityFilters::default());
+
+        let bad = [
+            ActivityQuery {
+                event_type: Some("not_a_type".into()),
+                ..defaults_query()
+            },
+            ActivityQuery {
+                q: Some("x".repeat(MAX_FILTER_LENGTH + 1)),
+                ..defaults_query()
+            },
+            ActivityQuery {
+                date_from: Some("11/08/2026".into()),
+                ..defaults_query()
+            },
+            ActivityQuery {
+                date_from: Some("2026-11-10".into()),
+                date_to: Some("2026-11-09".into()),
+                ..defaults_query()
+            },
+            ActivityQuery {
+                timezone: Some("Bad;Zone".into()),
+                ..defaults_query()
+            },
+        ];
+        for query in bad {
+            assert!(
+                matches!(ActivityFilters::parse(&query), Err(ApiError::BadRequest(_))),
+                "{query:?} must be rejected"
+            );
+        }
+    }
+
+    fn defaults_query() -> ActivityQuery {
+        ActivityQuery {
+            limit: None,
+            page_token: None,
+            cursor: None,
+            q: None,
+            series: None,
+            event_type: None,
+            date_from: None,
+            date_to: None,
+            timezone: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn invalid_activity_filters_reject_before_database_access() {
+        use crate::{config::Config, AppState};
+
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        let query = ActivityQuery {
+            event_type: Some("bogus".into()),
+            ..defaults_query()
+        };
+        assert!(matches!(
+            list_activity(State(state), AuthenticatedUser::for_test(1), Query(query)).await,
+            Err(ApiError::BadRequest(_))
+        ));
     }
 
     #[tokio::test]
@@ -573,30 +948,72 @@ mod tests {
         (state, guard)
     }
 
+    fn query_with_filters(
+        limit: i64,
+        page_token: Option<String>,
+        filters: &ActivityFilters,
+    ) -> ActivityQuery {
+        ActivityQuery {
+            limit: Some(limit),
+            page_token,
+            cursor: None,
+            q: filters.search.clone(),
+            series: filters.series.clone(),
+            event_type: filters.event_type.clone(),
+            date_from: filters.date_from.clone(),
+            date_to: filters.date_to.clone(),
+            timezone: Some(filters.timezone.clone()),
+        }
+    }
+
     async fn page(
         state: &Arc<AppState>,
         user_id: i32,
         limit: i64,
         page_token: Option<String>,
     ) -> Result<ActivityResponse, ApiError> {
+        page_with_filters(
+            state,
+            user_id,
+            limit,
+            page_token,
+            ActivityFilters::default(),
+        )
+        .await
+    }
+
+    async fn page_with_filters(
+        state: &Arc<AppState>,
+        user_id: i32,
+        limit: i64,
+        page_token: Option<String>,
+        filters: ActivityFilters,
+    ) -> Result<ActivityResponse, ApiError> {
         list_activity(
             State(state.clone()),
             AuthenticatedUser::for_test(user_id),
-            Query(ActivityQuery {
-                limit: Some(limit),
-                page_token,
-                cursor: None,
-            }),
+            Query(query_with_filters(limit, page_token, &filters)),
         )
         .await
         .map(|Json(response)| response)
     }
 
     async fn all_pages(state: &Arc<AppState>, user_id: i32, limit: i64) -> Vec<ActivityItem> {
+        all_pages_with_filters(state, user_id, limit, ActivityFilters::default()).await
+    }
+
+    async fn all_pages_with_filters(
+        state: &Arc<AppState>,
+        user_id: i32,
+        limit: i64,
+        filters: ActivityFilters,
+    ) -> Vec<ActivityItem> {
         let mut items = Vec::new();
         let mut token = None;
         for _ in 0..50 {
-            let response = page(state, user_id, limit, token).await.expect("page");
+            let response = page_with_filters(state, user_id, limit, token, filters.clone())
+                .await
+                .expect("page");
             assert!(response.items.len() <= limit as usize);
             assert_eq!(response.next_page_token, response.next_cursor);
             items.extend(response.items);
@@ -920,5 +1337,205 @@ mod tests {
                 Err(ApiError::BadRequest(_))
             ));
         }
+    }
+
+    fn ids(items: &[ActivityItem]) -> Vec<i32> {
+        items.iter().map(|item| item.event_id).collect()
+    }
+
+    #[tokio::test]
+    async fn history_filters_combine_and_keep_stable_chronology() {
+        let (state, _db) = seeded_state(PRODUCTION_SEQUENCE).await;
+
+        // Literal text matches the primary action's series title. The roll
+        // companion of the Paper Girls snooze stays with its primary action.
+        let search = ActivityFilters {
+            search: Some("PAPER GIRLS".into()),
+            ..ActivityFilters::default()
+        };
+        for limit in [1, 2, 10] {
+            assert_eq!(
+                ids(&all_pages_with_filters(&state, 1, limit, search.clone()).await),
+                vec![1050514, 1050515],
+                "search limit={limit}"
+            );
+        }
+
+        // Series narrows independently of free text.
+        let series = ActivityFilters {
+            series: Some("astro city".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 3, series).await),
+            vec![1050517]
+        );
+
+        // A coalesced rating is reader-visible `rate` although one durable row
+        // is a dice step; a snooze's linked roll is reader-visible `roll`.
+        let rate = ActivityFilters {
+            event_type: Some("rate".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 1, rate).await),
+            vec![1050517]
+        );
+        let rolls = ActivityFilters {
+            event_type: Some("roll".into()),
+            ..ActivityFilters::default()
+        };
+        for limit in [1, 2, 10] {
+            assert_eq!(
+                ids(&all_pages_with_filters(&state, 1, limit, rolls.clone()).await),
+                vec![1050511, 1050513, 1050515],
+                "roll limit={limit}"
+            );
+        }
+        let snoozes = ActivityFilters {
+            event_type: Some("snooze".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 2, snoozes).await),
+            vec![1050512, 1050514]
+        );
+
+        // Combined filters intersect, and clear/reset is the unfiltered stream.
+        let combined = ActivityFilters {
+            series: Some("Saga".into()),
+            event_type: Some("snooze".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 10, combined).await),
+            vec![1050512]
+        );
+        assert_eq!(
+            ids(&all_pages(&state, 1, 50).await),
+            vec![1050511, 1050512, 1050513, 1050514, 1050515, 1050517]
+        );
+    }
+
+    /// A no-op rating receipt is stored as `issue_command`, but the logical
+    /// action is reader-visible `rate`. Filtering by the durable row type must
+    /// not surface it as "Issue command" or spend a bounded page slot on it.
+    #[tokio::test]
+    async fn type_filter_uses_the_reader_visible_type_of_coalesced_ratings() {
+        let (state, _db) = seeded_state(
+            r#"
+            INSERT INTO users (id, username) VALUES (1, 'reader');
+            INSERT INTO threads
+                (id, user_id, title, format, issues_remaining, status,
+                 queue_position, total_issues, reading_progress)
+            VALUES (10, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%');
+            INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+            VALUES (100, 10, '1', 'read', now(), 1);
+            INSERT INTO events (id, type, timestamp, user_id, thread_id, issue_id, issue_number,
+                                rating, context)
+            VALUES (1, 'issue_command', '2026-11-08 16:02:00.000+00', 1, 10, 100, '1', NULL,
+                    '{"issue_command_key":"no-op-key","source":"roll"}');
+            INSERT INTO events (id, type, timestamp, user_id, die, die_after, thread_id, issue_id,
+                                rating, context)
+            VALUES (2, 'rate', '2026-11-08 16:02:00.050+00', 1, 10, 8, 10, 100, 4.5,
+                    '{"dice_command_key":"roll-rating-10-no-op-key"}');
+            "#,
+        )
+        .await;
+
+        for limit in [1, 10] {
+            let rate = ActivityFilters {
+                event_type: Some("rate".into()),
+                ..ActivityFilters::default()
+            };
+            assert_eq!(
+                ids(&all_pages_with_filters(&state, 1, limit, rate).await),
+                vec![1]
+            );
+            for raw_type in ["issue_command", "issue_unread"] {
+                let filter = ActivityFilters {
+                    event_type: Some(raw_type.into()),
+                    ..ActivityFilters::default()
+                };
+                assert!(
+                    all_pages_with_filters(&state, 1, limit, filter)
+                        .await
+                        .is_empty(),
+                    "{raw_type} must not return a reader-visible rating"
+                );
+            }
+        }
+        assert_eq!(ids(&all_pages(&state, 1, 10).await), vec![1]);
+    }
+
+    #[tokio::test]
+    async fn reader_local_date_filters_resolve_midnight_and_validate_timezone() {
+        let (state, _db) = seeded_state(
+            r#"
+            INSERT INTO users (id, username) VALUES (1, 'reader');
+            INSERT INTO events (id, type, timestamp, user_id, issue_number, context)
+            VALUES (1, 'roll', '2026-11-08 05:30:00+00', 1, '1', '{}'),
+                   (2, 'rate', '2026-11-08 06:30:00+00', 1, '2', '{}');
+            "#,
+        )
+        .await;
+
+        // 05:30 UTC is 2026-11-07 23:30 in Chicago; 06:30 UTC is already the
+        // reader's 2026-11-08. A UTC-bound filter would include both.
+        let chicago_day = ActivityFilters {
+            date_from: Some("2026-11-08".into()),
+            date_to: Some("2026-11-08".into()),
+            timezone: "America/Chicago".into(),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 10, chicago_day).await),
+            vec![2]
+        );
+        let utc_day = ActivityFilters {
+            date_from: Some("2026-11-08".into()),
+            date_to: Some("2026-11-08".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 10, utc_day).await),
+            vec![1, 2]
+        );
+        let chicago_range = ActivityFilters {
+            date_from: Some("2026-11-07".into()),
+            date_to: Some("2026-11-08".into()),
+            timezone: "America/Chicago".into(),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 10, chicago_range).await),
+            vec![1, 2]
+        );
+
+        let bad_zone = ActivityFilters {
+            date_from: Some("2026-11-08".into()),
+            timezone: "Not/AZone".into(),
+            ..ActivityFilters::default()
+        };
+        assert!(matches!(
+            page_with_filters(&state, 1, 10, None, bad_zone).await,
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn filtered_activity_stays_owner_scoped() {
+        let (state, _db) = seeded_state(PRODUCTION_SEQUENCE).await;
+        let other_series = ActivityFilters {
+            search: Some("Other Reader Series".into()),
+            ..ActivityFilters::default()
+        };
+        assert!(all_pages_with_filters(&state, 1, 10, other_series.clone())
+            .await
+            .is_empty());
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 2, 1, other_series).await),
+            vec![1050519, 1050518]
+        );
     }
 }

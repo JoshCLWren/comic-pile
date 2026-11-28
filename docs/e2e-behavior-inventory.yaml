@@ -284,6 +284,13 @@ behaviors:
     status: covered
     specs: ["issue-3429-bootstrap-recovery.spec.ts"]
 
+  - id: HISTORY-001
+    area: feature
+    behavior: "History text, series, activity-type and reader-local date filters reach the activity resource with stable chronology, clear/reset, and truthful empty states"
+    priority: P1
+    status: covered
+    specs: ["issue-3575-history-filters.spec.ts"]
+
   - id: MOBILE-003
     area: mobile
     behavior: "Narrow rating actions keep contained touch targets at tablet and phone widths"

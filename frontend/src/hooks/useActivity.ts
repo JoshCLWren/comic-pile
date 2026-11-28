@@ -8,6 +8,7 @@ import {
   type ActivityPage,
 } from '../services/api-activity'
 import { queryKeys } from '../query/queryKeys'
+import { normalizeActivityFilters, type ActivityFilters } from '../utils/activityFilters'
 
 function normalizeQueryError(error: unknown, fallbackMessage: string): Error | null {
   if (error == null) return null
@@ -25,20 +26,22 @@ function normalizeQueryError(error: unknown, fallbackMessage: string): Error | n
  * the History page can offer in-place recovery (#3429) instead of an
  * indefinite loading splash.
  *
+ * @param filters - Optional server-side filters applied to the whole stream.
  * @param api - Activity service override for tests; production uses the
  *   registered default transport.
  * @returns The accumulated activity items plus bounded loading state.
  */
-export function useActivity(api?: ActivityApi) {
+export function useActivity(filters?: ActivityFilters, api?: ActivityApi) {
   const activityApi = api ?? defaultActivityApi
+  const activeFilters = useMemo(() => normalizeActivityFilters(filters), [filters])
 
   const query = useInfiniteCollection<ActivityItem, ActivityPage>({
-    // The cursor lives in `pageParam`, so the whole stream shares one key and
-    // a refetch restarts from the first page.
-    queryKey: queryKeys.activity.list({ pageSize: ACTIVITY_PAGE_SIZE }),
+    // The cursor lives in `pageParam`; normalized filters belong in the key so
+    // changing one starts a new bounded stream from the first page.
+    queryKey: queryKeys.activity.list({ pageSize: ACTIVITY_PAGE_SIZE, filters: activeFilters }),
     queryFn: async ({ pageParam }) => {
       try {
-        return await activityApi.list(pageParam)
+        return await activityApi.list(pageParam, activeFilters)
       } catch (error: unknown) {
         if (error instanceof Error) throw error
         throw new Error(

@@ -8,7 +8,7 @@
  * against the exact November 8, 2026 sequence (America/Chicago 09:42–10:01)
  * that the reader reported.
  */
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import HistoryPage from '../pages/HistoryPage'
 import type { ActivityItem } from '../services/api-activity'
 import { issueCardsApi } from '../services/issueCardsApi'
+import { EMPTY_ACTIVITY_FILTERS } from '../utils/activityFilters'
 
 const listMock = vi.hoisted(() => vi.fn())
 
@@ -134,7 +135,7 @@ describe('History activity timeline (#4822)', () => {
     const rows = within(list).getAllByRole('listitem')
     expect(rows).toHaveLength(6)
     expect(listMock).toHaveBeenCalledTimes(1)
-    expect(listMock).toHaveBeenCalledWith(null)
+    expect(listMock).toHaveBeenCalledWith(null, EMPTY_ACTIVITY_FILTERS)
 
     expect(rows[0]).toHaveTextContent('Rolled · Saga #4')
     expect(rows[1]).toHaveTextContent('Snoozed · Saga')
@@ -152,14 +153,12 @@ describe('History activity timeline (#4822)', () => {
 
     renderHistory()
 
-    await screen.findByRole('list', { name: 'Activity history' })
-    expect(screen.getAllByText('Rated 4.5')).toHaveLength(1)
-    expect(screen.getAllByText('Snoozed')).toHaveLength(2)
-    expect(screen.getAllByText('Rolled')).toHaveLength(3)
+    const list = await screen.findByRole('list', { name: 'Activity history' })
+    expect(within(list).getAllByText('Rated 4.5')).toHaveLength(1)
+    expect(within(list).getAllByText('Snoozed')).toHaveLength(2)
+    expect(within(list).getAllByText('Rolled')).toHaveLength(3)
 
-    const rows = within(await screen.findByRole('list', { name: 'Activity history' })).getAllByRole(
-      'listitem',
-    )
+    const rows = within(list).getAllByRole('listitem')
     const link = within(rows[5]).getByRole('link', { name: 'Astro City: Astra' })
     expect(link).toHaveAttribute('href', '/thread/8417')
   })
@@ -194,7 +193,7 @@ describe('History activity timeline (#4822)', () => {
     await user.click(screen.getByRole('button', { name: 'Load more activity' }))
 
     await waitFor(() => expect(listMock).toHaveBeenCalledTimes(2))
-    expect(listMock).toHaveBeenLastCalledWith('page-2')
+    expect(listMock).toHaveBeenLastCalledWith('page-2', EMPTY_ACTIVITY_FILTERS)
     await waitFor(() =>
       expect(within(list).getAllByRole('listitem')).toHaveLength(6),
     )
@@ -218,7 +217,7 @@ describe('History activity timeline (#4822)', () => {
       expect(screen.getByRole('list', { name: 'Activity history' })).toBeInTheDocument(),
     )
     expect(listMock).toHaveBeenCalledTimes(2)
-    expect(listMock).toHaveBeenLastCalledWith(null)
+    expect(listMock).toHaveBeenLastCalledWith(null, EMPTY_ACTIVITY_FILTERS)
   })
 
   it('says the history is empty rather than showing a fabricated session', async () => {
@@ -365,5 +364,68 @@ describe('History activity timeline (#4822)', () => {
       '/sessions/1019132',
     )
     expect(within(rows[1]).queryByRole('link', { name: 'Session' })).not.toBeInTheDocument()
+  })
+
+  it('applies combined text, series, type and local-date filters on the server', async () => {
+    const user = userEvent.setup()
+    listMock.mockResolvedValue({ items: PRODUCTION_SEQUENCE, next_page_token: null })
+
+    renderHistory()
+    await screen.findByRole('list', { name: 'Activity history' })
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search activity' }), 'Saga')
+    await user.type(screen.getByRole('searchbox', { name: 'Series' }), 'Paper Girls')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Activity type' }), 'rate')
+    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-11-08' } })
+    fireEvent.change(screen.getByLabelText('To date'), { target: { value: '2026-11-09' } })
+
+    await waitFor(
+      () =>
+        expect(listMock).toHaveBeenLastCalledWith(null, {
+          q: 'Saga',
+          series: 'Paper Girls',
+          type: 'rate',
+          dateFrom: '2026-11-08',
+          dateTo: '2026-11-09',
+        }),
+      { timeout: 2000 },
+    )
+  })
+
+  it('clear filters restores the unfiltered chronological stream', async () => {
+    const user = userEvent.setup()
+    listMock.mockResolvedValue({ items: PRODUCTION_SEQUENCE, next_page_token: null })
+
+    renderHistory()
+    await screen.findByRole('list', { name: 'Activity history' })
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Activity type' }), 'snooze')
+    await waitFor(() =>
+      expect(listMock).toHaveBeenLastCalledWith(null, {
+        ...EMPTY_ACTIVITY_FILTERS,
+        type: 'snooze',
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+
+    await waitFor(() =>
+      expect(listMock).toHaveBeenLastCalledWith(null, EMPTY_ACTIVITY_FILTERS),
+    )
+    expect(screen.getByRole('combobox', { name: 'Activity type' })).toHaveValue('')
+  })
+
+  it('distinguishes a filtered empty result from an empty history', async () => {
+    const user = userEvent.setup()
+    listMock
+      .mockResolvedValueOnce({ items: PRODUCTION_SEQUENCE, next_page_token: null })
+      .mockResolvedValue({ items: [], next_page_token: null })
+
+    renderHistory()
+    await screen.findByRole('list', { name: 'Activity history' })
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Activity type' }), 'reset_dice')
+
+    expect(await screen.findByText('No activity matches these filters')).toBeInTheDocument()
+    expect(screen.queryByText('No activity yet')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeEnabled()
   })
 })
