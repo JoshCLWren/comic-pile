@@ -341,31 +341,22 @@ pub(crate) async fn provider_response(
     extra_query: &str,
     api_key: &str,
 ) -> Result<Value, ProviderFailure> {
-    match provider_exchange(outbound, resource, extra_query, api_key).await? {
-        Exchange::Throttled {
-            status: 420 | 429,
-            retry_after,
-        } => Err(ProviderFailure::RateLimited(repair_retry_after_seconds(
-            retry_after.as_deref(),
-            chrono::Utc::now(),
-        ))),
-        Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
-        Exchange::Payload(payload) => {
-            let status_code = payload.get("status_code").and_then(Value::as_i64);
-            if python_envelope_ok(&payload) {
-                Ok(payload)
-            } else {
-                // Never log provider-controlled error text: it can reflect the
-                // credential-bearing request URL. Keep only typed categories.
-                tracing::warn!(
-                    comicvine_status_code = ?status_code,
-                    resource,
-                    "comicvine provider returned non-success envelope"
-                );
-                Err(ProviderFailure::Unavailable)
-            }
+    let failure = match provider_exchange(outbound, resource, extra_query, api_key).await {
+        Ok(Exchange::Payload(payload)) if python_envelope_ok(&payload) => return Ok(payload),
+        Ok(Exchange::Payload(payload)) => envelope_failure(&payload),
+        Ok(Exchange::Throttled { retry_after }) => ProviderFailure::RateLimited {
+            retry_after_seconds: repair_retry_after_seconds(
+                retry_after.as_deref(),
+                chrono::Utc::now(),
+            ),
+        },
+        Ok(Exchange::HttpStatus { status }) => {
+            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus { status })
         }
-    }
+        Err(failure) => failure,
+    };
+    log_provider_failure("provider_response", failure);
+    Err(failure)
 }
 
 /// Normalize one configured credential value. ComicVine keys are alphanumeric
@@ -395,19 +386,31 @@ pub(crate) async fn provider_exchange(
     extra_query: &str,
     api_key: &str,
 ) -> Result<Exchange, ProviderFailure> {
+    provider_exchange_with_timeout(outbound, resource, extra_query, api_key, PROVIDER_TIMEOUT).await
+}
+
+/// One exchange under an injectable deadline. The production wrapper always
+/// uses [`PROVIDER_TIMEOUT`]; tests use a tiny deadline with a pending fake so
+/// the timeout class is exercised without sleeping or opening a socket.
+async fn provider_exchange_with_timeout(
+    outbound: &Arc<dyn OutboundHttp>,
+    resource: &str,
+    extra_query: &str,
+    api_key: &str,
+    deadline: Duration,
+) -> Result<Exchange, ProviderFailure> {
     // Callers construct only trusted resource names and numeric query values.
     // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
     // Normalizing here as well as at the read boundary makes the invariant hold
     // for every caller, including future ones: whitespace can never turn into
-    // `Unavailable` without a provider round trip (#5695).
+    // `ProviderNotConfigured` being mistaken for an outage (#5695).
     let Some(api_key) = normalize_provider_api_key(api_key) else {
-        tracing::debug!("comicvine provider credential is not configured");
-        return Err(ProviderFailure::Unavailable);
+        return Err(ProviderFailure::ProviderNotConfigured);
     };
     if !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         // Never log the value, any fragment of it, or the credential-bearing URL.
         tracing::warn!("comicvine provider credential contains non-alphanumeric bytes");
-        return Err(ProviderFailure::Unavailable);
+        return Err(ProviderFailure::ProviderNotConfigured);
     }
     // ComicVine's API appends a slash to every resource, singular ones
     // included: `/api/volume/4050-<id>` and `/api/issue/4000-<id>` answer 301
@@ -434,24 +437,15 @@ pub(crate) async fn provider_exchange(
         let response = outbound.send(HOST, request).await.map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
+                "comicvine transport error classified"
             );
-            ProviderFailure::Unavailable
+            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::Transport)
         })?;
         let status = response.status;
-        if status == StatusCode::TOO_MANY_REQUESTS
-            || status == StatusCode::FORBIDDEN
-            || status.as_u16() == 420
-        {
-            // Retain only a redacted status/resource category: never log the
-            // credential-bearing URL, response body, or provider headers.
-            tracing::warn!(
-                status = status.as_u16(),
-                resource,
-                "comicvine provider returned throttled or forbidden status"
-            );
+        if status == StatusCode::TOO_MANY_REQUESTS || status.as_u16() == 420 {
+            // Retain only the raw header; the caller bounds and records the
+            // delay. Never log the credential-bearing URL, body or headers.
             return Ok(Exchange::Throttled {
-                status: status.as_u16(),
                 retry_after: response
                     .headers
                     .get("retry-after")
@@ -460,12 +454,13 @@ pub(crate) async fn provider_exchange(
             });
         }
         if !status.is_success() {
-            tracing::warn!(
-                status = status.as_u16(),
-                resource,
-                "comicvine provider returned non-success status"
-            );
-            return Err(ProviderFailure::Unavailable);
+            // 403 stays a plain provider error (Python parity), now classified
+            // as a distinct HTTP status rather than a generic unavailable.
+            return Err(ProviderFailure::ProviderUnavailable(
+                ProviderUnavailableCategory::HttpStatus {
+                    status: status.as_u16(),
+                },
+            ));
         }
         if response
             .headers
@@ -474,7 +469,7 @@ pub(crate) async fn provider_exchange(
             .and_then(|n| n.parse::<usize>().ok())
             .is_some_and(|n| n > MAX_BODY)
         {
-            return Err(ProviderFailure::InvalidPayload);
+            return Err(ProviderFailure::InvalidResponse);
         }
         let mut data = Vec::new();
         let mut body = response.body;
@@ -482,13 +477,13 @@ pub(crate) async fn provider_exchange(
             let frame = frame.map_err(|e| {
                 tracing::debug!(
                     error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
+                    "comicvine transport error classified"
                 );
-                ProviderFailure::Unavailable
+                ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::Transport)
             })?;
             if let Ok(bytes) = frame.into_data() {
                 if data.len() + bytes.len() > MAX_BODY {
-                    return Err(ProviderFailure::InvalidPayload);
+                    return Err(ProviderFailure::InvalidResponse);
                 }
                 data.extend_from_slice(&bytes);
             }
@@ -496,18 +491,18 @@ pub(crate) async fn provider_exchange(
         let payload: Value = serde_json::from_slice(&data).map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
+                "comicvine malformed payload classified"
             );
-            ProviderFailure::InvalidPayload
+            ProviderFailure::InvalidResponse
         })?;
         Ok(Exchange::Payload(payload))
     };
-    tokio::time::timeout(PROVIDER_TIMEOUT, exchange)
+    tokio::time::timeout(deadline, exchange)
         .await
         .map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
+                "comicvine deadline classified"
             );
             ProviderFailure::Timeout
         })?
@@ -527,7 +522,15 @@ async fn provider_issue(
     .await?
     .get("results")
     .cloned()
-    .ok_or(ProviderFailure::InvalidPayload)
+    .ok_or(ProviderFailure::InvalidResponse)
+}
+
+/// Classify and log a provider failure at a catalog call site before mapping
+/// it to the unchanged public `provider_unavailable` API error. Later children
+/// consume the typed vocabulary directly; this child only adds diagnostics.
+fn log_and_unavailable(failure: ProviderFailure) -> ApiError {
+    log_provider_failure("catalog_volume_roster", failure);
+    ApiError::ServiceUnavailable("provider_unavailable".to_owned())
 }
 
 /// Read the same ComicVine volume and complete, validated issue roster used
@@ -553,11 +556,14 @@ pub(crate) async fn catalog_volume_roster(
         .ok()
         .filter(|v| *v > 0)
         .ok_or_else(unavailable)?;
-    let api_key = provider_api_key().ok_or_else(unavailable)?;
+    let api_key = provider_api_key().ok_or_else(|| {
+        log_provider_failure("catalog_volume_roster", ProviderFailure::ProviderNotConfigured);
+        unavailable()
+    })?;
     let volume = limits
         .call(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
-        .map_err(|_| unavailable())?;
+        .map_err(log_and_unavailable)?;
     let volume_info = volume
         .get("results")
         .filter(|v| v.is_object())
@@ -580,7 +586,7 @@ pub(crate) async fn catalog_volume_roster(
         let page = limits
             .call(outbound, "issues", &query, &api_key)
             .await
-            .map_err(|_| unavailable())?;
+            .map_err(log_and_unavailable)?;
         let results = page
             .get("results")
             .and_then(Value::as_array)
@@ -770,16 +776,26 @@ async fn hydrate_catalog_commit_with_key(
             let Some(comicvine_id) = issue_id(&external_id) else {
                 continue;
             };
-            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, api_key).await
-            else {
-                continue;
+            let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
+                Ok(value) => value,
+                Err(failure) => {
+                    log_provider_failure("catalog_commit_hydration", failure);
+                    continue;
+                }
             };
-            let Ok((patch, _, external_url, provider_updated_at)) =
-                normalized_metadata(&provider_data, comicvine_id)
-            else {
-                continue;
-            };
+            let (patch, _, external_url, provider_updated_at) =
+                match normalized_metadata(&provider_data, comicvine_id) {
+                    Ok(value) => value,
+                    Err(failure) => {
+                        log_provider_failure("catalog_commit_hydration_normalize", failure);
+                        continue;
+                    }
+                };
             let Ok(json_patch) = serde_json::to_string(&patch) else {
+                log_provider_failure(
+                    "catalog_commit_hydration_serialize",
+                    ProviderFailure::InvalidResponse,
+                );
                 continue;
             };
             // The identity transaction has committed; a failed metadata
