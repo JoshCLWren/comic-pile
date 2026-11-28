@@ -59,7 +59,10 @@ const EMPTY_SESSION_MODE: SessionMode = {
 export function useRollBootstrap(): UseRollBootstrapResult {
   const { pending } = useRollPendingSelection()
   const die = useRollDieState()
-  const snoozedIds = useMemo(() => readRollSnoozes(), [])
+  // Read the cookie on every render: a committed snooze/unsnooze changes it
+  // without remounting the Roll page, and the composed pool/chips must follow
+  // the same browser-owned source as the page's scoped face queries.
+  const snoozedIds = readRollSnoozes()
   const eligible = useRollEligibleIssueIds(snoozedIds)
   const issueIds = useMemo(() => eligible.data?.issue_ids ?? [], [eligible.data])
   const threadIds = useMemo(() => eligible.data?.thread_ids ?? [], [eligible.data])

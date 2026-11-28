@@ -198,6 +198,35 @@ describe('useRollBootstrap composed scoped view', () => {
     expect(result.current.data?.snoozed_count).toBe(1)
   })
 
+  it('reflects a snooze-cookie change without remounting', async () => {
+    mockedSnoozes.mockReturnValue([])
+    const { result, rerender } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.data?.snoozed_threads).toHaveLength(0)
+
+    mockedSnoozes.mockReturnValue([7])
+    mockedThreadsList.mockResolvedValue({
+      active_count: 1,
+      threads: [{
+        id: 7,
+        title: 'Newly Snoozed',
+        format: 'Comic',
+        status: 'active',
+        blocking_reasons: [],
+        created_at: '2026-11-28T00:00:00Z',
+        is_blocked: false,
+        issues_remaining: 3,
+        last_activity_at: null,
+        queue_position: 1,
+      }],
+    })
+    rerender()
+
+    await waitFor(() => expect(result.current.data?.snoozed_threads).toHaveLength(1))
+    expect(result.current.data?.snoozed_threads[0]?.title).toBe('Newly Snoozed')
+    expect(result.current.data?.snoozed_count).toBe(1)
+  })
+
   it('stays empty while the scoped pool has no visible cards', async () => {
     mockedResources.eligibleIssueIds.mockResolvedValue({
       die: 6,
