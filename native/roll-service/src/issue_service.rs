@@ -6,7 +6,7 @@ use crate::{
     auth::AuthenticatedUser,
     db,
     dice_mutation::{self, DiceCommand},
-    dice_state, option_inputs, queue, roll_exclusions, ApiError,
+    bootstrap::BootstrapTag, dice_state, option_inputs, queue, roll_exclusions, ApiError,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -110,6 +110,14 @@ pub struct IssueCard {
     pub provider_issue_number: Option<String>,
     /// Exact provider-supplied CDN URL. Null when unmapped; never image bytes.
     pub cover_image_url: Option<String>,
+    /// Thread display format used by the compact Roll face.
+    pub thread_format: Option<String>,
+    /// Owner-visible direct thread tags, in canonical display order.
+    pub tags: Option<Vec<BootstrapTag>>,
+    /// Connected reading-order group labels; the face renders at most three.
+    pub route_labels: Option<Vec<String>>,
+    /// Connected labels beyond the three rendered on the face.
+    pub overflow_routes_count: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
@@ -215,7 +223,7 @@ pub(crate) fn validate_cards(request: &IssueCardsRequest) -> Result<(), ApiError
     Ok(())
 }
 
-fn card_from_row(row: &tokio_postgres::Row) -> IssueCard {
+fn card_from_row(row: &tokio_postgres::Row) -> Result<IssueCard, ApiError> {
     // Only a confirmed mapping may expose provider identity or a cover URL.
     // The exact provider-supplied URL is passed through without rewriting.
     let mapping_state: String = row.get(8);
@@ -232,7 +240,20 @@ fn card_from_row(row: &tokio_postgres::Row) -> IssueCard {
     } else {
         None
     };
-    IssueCard {
+    let raw_tags: Option<String> = row.get(13);
+    let tags = raw_tags
+        .as_deref()
+        .map(|raw| serde_json::from_str::<Vec<BootstrapTag>>(raw))
+        .transpose()
+        .map_err(|error| {
+            tracing::debug!(%error, "Invalid native Roll issue-card tags");
+            ApiError::Internal("Invalid native issue-card projection".to_string())
+        })?;
+    let route_labels: Option<Vec<String>> = row.get(14);
+    let overflow_routes_count = route_labels
+        .as_ref()
+        .map(|labels| labels.len().saturating_sub(3) as i32);
+    Ok(IssueCard {
         issue_id: row.get(0),
         thread_id: row.get(1),
         thread_title: row.get(2),
@@ -247,7 +268,11 @@ fn card_from_row(row: &tokio_postgres::Row) -> IssueCard {
         comicvine_issue_id: if confirmed { row.get(9) } else { None },
         provider_issue_number,
         cover_image_url: if confirmed { row.get(11) } else { None },
-    }
+        thread_format: row.get(12),
+        tags,
+        route_labels,
+        overflow_routes_count,
+    })
 }
 
 async fn card(
@@ -321,7 +346,7 @@ async fn card(
         )
         .await
         .map_err(db::query_error)?;
-    Ok(card_from_row(&row))
+    card_from_row(&row)
 }
 
 /// Bounded owner-scoped batch card projection for one visible issue group.
@@ -404,7 +429,7 @@ pub(crate) async fn cards(
         .map_err(db::query_error)?;
     let mut by_id: HashMap<i32, IssueCard> = HashMap::with_capacity(rows.len());
     for row in &rows {
-        let card = card_from_row(row);
+        let card = card_from_row(row)?;
         by_id.insert(card.issue_id, card);
     }
     Ok(IssueCardsResponse {
