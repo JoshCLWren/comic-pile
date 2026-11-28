@@ -4,6 +4,7 @@ import type {
 } from '../services/api-cbl-sources'
 import { isBoolean, isNumber, isObject, isString } from './runtimeChecks'
 import type { ReadingGraphChoices } from './readingGraphOverlaps'
+import { buildCblSeriesGroups } from './cblAdoptionPlan'
 
 /**
  * Client-side pointer from a shared CBL source to the reader's canonical owned
@@ -118,31 +119,43 @@ export function restoreCommittedChoices(
   if (!isObject(selections)) return { series: {}, entries: {} }
   const entryOverrides = decisionMap(selections.entry_decisions)
   const positionOverrides = decisionMap(selections.series_overrides)
-
-  const byGroup = new Map<string, Array<{ entryId: string; position: string; include: boolean }>>()
-  for (const entry of preview.entries) {
-    const entryId = String(entry.cbl_entry_id)
-    const position = String(entry.cbl_position)
-    const include = entryOverrides[entryId] ?? positionOverrides[position]
-    if (include === undefined) continue
-    const group = byGroup.get(entry.series_group_id) ?? []
-    group.push({ entryId, position, include })
-    byGroup.set(entry.series_group_id, group)
-  }
+  const nameDecisions = decisionMap(selections.series_decisions)
 
   const series: Record<string, boolean> = {}
   const entries: Record<string, boolean> = {}
-  for (const [groupId, decisions] of byGroup) {
-    const allSame =
-      decisions.length > 0 && decisions.every((decision) => decision.include === decisions[0].include)
-    if (allSame) {
-      series[groupId] = decisions[0].include
-    }
-    // An entry that disagrees with its volume (or whose volume has no uniform
-    // decision) is an explicit per-issue choice and must be restored as such.
-    for (const decision of decisions) {
-      if (!allSame || decision.include !== decisions[0].include || decision.entryId in entryOverrides) {
-        entries[decision.entryId] = decision.include
+  for (const group of buildCblSeriesGroups(preview)) {
+    // A volume-level choice is only real when the server stored one for the
+    // whole volume (or the backend's series-name decision). A lone unchecked
+    // issue must not silently become "exclude this entire volume" on reopen.
+    const groupNameDecision = nameDecisions[group.name]
+    const allHavePositionOverride = group.entries.every(
+      (entry) => positionOverrides[String(entry.cbl_position)] !== undefined,
+    )
+    const firstPositionDecision = positionOverrides[String(group.entries[0]?.cbl_position)]
+    const uniformPositionDecision =
+      allHavePositionOverride
+      && group.entries.every(
+        (entry) =>
+          positionOverrides[String(entry.cbl_position)] === firstPositionDecision,
+      )
+    const seriesDecision = groupNameDecision
+      ?? (uniformPositionDecision ? firstPositionDecision : undefined)
+
+    if (seriesDecision !== undefined) series[group.id] = seriesDecision
+    for (const entry of group.entries) {
+      const entryId = String(entry.cbl_entry_id)
+      const position = String(entry.cbl_position)
+      const explicitEntry = entryOverrides[entryId]
+      const positionDecision = positionOverrides[position]
+      if (explicitEntry !== undefined) {
+        entries[entryId] = explicitEntry
+      } else if (
+        seriesDecision === undefined && positionDecision !== undefined
+        || seriesDecision !== undefined
+        && positionDecision !== undefined
+        && positionDecision !== seriesDecision
+      ) {
+        entries[entryId] = positionDecision
       }
     }
   }

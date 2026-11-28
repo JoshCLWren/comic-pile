@@ -111,8 +111,19 @@ describe('cblAdoptionOwnership', () => {
       series_overrides: { '1': 'exclude', '2': 'exclude', '3': 'exclude' },
     })
     expect(restored).toEqual({
-      series: { 'volume-2010': false },
-      entries: { '101': true, '102': false },
+      series: { 'volume-2001': false, 'volume-2010': false },
+      entries: { '101': true },
+    })
+  })
+
+  it('does not turn one unchecked issue into a whole-volume exclusion', () => {
+    const restored = restoreCommittedChoices(preview, {
+      entry_decisions: { '101': 'exclude' },
+      series_overrides: {},
+    })
+    expect(restored).toEqual({
+      series: {},
+      entries: { '101': false },
     })
   })
 
