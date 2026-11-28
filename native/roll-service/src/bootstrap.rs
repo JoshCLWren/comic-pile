@@ -253,7 +253,7 @@ fn identity_state(confirmed: i64, candidate: i64) -> &'static str {
 /// non-string and empty values before falling back through stored image sizes.
 /// URL validation remains separate, so an invalid nonempty source does not
 /// silently select different artwork from a lower-priority field.
-fn extract_cover_source(metadata: &Value) -> Option<&str> {
+pub(crate) fn extract_cover_source(metadata: &Value) -> Option<&str> {
     fn nonempty(value: &Value) -> Option<&str> {
         value.as_str().map(str::trim).filter(|s| !s.is_empty())
     }

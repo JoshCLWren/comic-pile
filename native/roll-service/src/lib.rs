@@ -722,6 +722,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
         .route("/api/metrics", get(metrics::get_metrics))
         .route("/api/v2/roll/die-state", get(roll_resources::die_state))
+        .route("/api/v2/roll/last-read", get(roll_resources::last_read))
         .route(
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),

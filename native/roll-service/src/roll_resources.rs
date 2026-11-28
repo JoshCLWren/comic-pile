@@ -40,6 +40,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     collections::HashSet,
     sync::{
@@ -109,6 +110,33 @@ pub struct RollEligibleIssueIdsResponse {
     /// no in-play faces (`no_series`, `all_blocked`, `all_completed`,
     /// `all_out_of_pool`). It never carries a list or whole-library report.
     pub pool_reason: crate::reading_constraints::PoolReason,
+}
+
+/// Latest durable rated issue for the reader, independent of reading sessions.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct RollLastRead {
+    pub issue_id: Option<i32>,
+    pub issue_number: Option<String>,
+    pub thread_id: Option<i32>,
+    pub thread_title: Option<String>,
+    pub read_at: Option<String>,
+    pub cover_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastReadRow {
+    issue_id: Option<i32>,
+    issue_number: Option<String>,
+    thread_id: Option<i32>,
+    thread_title: Option<String>,
+    read_at: Option<String>,
+    metadata: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LastReadPayload {
+    auth: Option<FoldedAuthRow>,
+    last_read: Option<LastReadRow>,
 }
 
 /// Query parameters for `GET /api/v2/roll/eligible-issue-ids`.
@@ -190,6 +218,52 @@ const DIE_SELECT: &str = r#"SELECT jsonb_build_object(
         'rolled_at', rolled_at
     ) FROM last_roll)
 )::text"#;
+
+const LAST_READ_CTE: &str = r#"last_read AS (
+    SELECT e.issue_id, coalesce(i.issue_number, e.issue_number) AS issue_number,
+           t.id AS thread_id, t.title AS thread_title,
+           to_char(e.timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS read_at,
+           cover_identity.metadata_json::text AS metadata
+    FROM events e
+    LEFT JOIN issues i ON i.id = e.issue_id
+    LEFT JOIN threads t ON t.id = coalesce(i.thread_id, e.thread_id)
+      AND t.user_id = (SELECT user_id FROM me)
+    LEFT JOIN LATERAL (
+        SELECT identity.metadata_json
+        FROM issue_external_identity_mappings mapping
+        JOIN external_identities identity ON identity.id = mapping.external_identity_id
+        WHERE mapping.issue_id = i.id AND mapping.status <> 'rejected'
+          AND identity.provider = 'comicvine' AND identity.entity_type = 'issue'
+        ORDER BY (mapping.status = 'confirmed') DESC,
+                 mapping.confidence DESC NULLS LAST, mapping.id
+        LIMIT 1
+    ) cover_identity ON TRUE
+    WHERE e.user_id = (SELECT user_id FROM me)
+      AND e.type = 'rate'
+      AND e.context->>'undone_by_snapshot_id' IS NULL
+    ORDER BY e.timestamp DESC, e.id DESC
+    LIMIT 1
+)"#;
+
+const LAST_READ_SELECT: &str = r#"SELECT jsonb_build_object(
+    'auth', (SELECT jsonb_build_object(
+        'password_epoch', password_epoch,
+        'revoked', revoked
+    ) FROM auth),
+    'last_read', (SELECT jsonb_build_object(
+        'issue_id', issue_id,
+        'issue_number', issue_number,
+        'thread_id', thread_id,
+        'thread_title', thread_title,
+        'read_at', read_at,
+        'metadata', metadata
+    ) FROM last_read)
+)::text"#;
+
+fn last_read_statement() -> &'static str {
+    static SQL: OnceLock<String> = OnceLock::new();
+    SQL.get_or_init(|| format!("WITH {FOLDED_AUTH_CTES},\n{LAST_READ_CTE}\n{LAST_READ_SELECT}"))
+}
 
 /// The caller's pending offer, resolved by the same shared session rule.
 ///
@@ -430,6 +504,52 @@ pub async fn eligible_issue_ids(
     )?))
 }
 
+/// Read the latest durable rating without creating or resolving a session.
+pub async fn last_read(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+) -> Result<Json<Option<RollLastRead>>, ApiError> {
+    let expected_epoch = claims.expected_epoch()?;
+    let username = claims.username().to_string();
+    let jti = claims.jti().to_string();
+    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 3] = [
+        &username,
+        &jti,
+        &expected_epoch,
+    ];
+    let connection = db::checkout(&state).await?;
+    let encoded: String = db::query_one_optional(&state, connection, last_read_statement(), &bindings)
+        .await?
+        .ok_or_else(invalid_projection)?
+        .try_get(0)
+        .map_err(db::query_error)?;
+    let payload: LastReadPayload = serde_json::from_str(&encoded).map_err(|error| {
+        tracing::error!(%error, "Invalid native Roll last-read projection");
+        invalid_projection()
+    })?;
+    validate_folded_auth(&claims, payload.auth.as_ref())?;
+    let Some(row) = payload.last_read else {
+        return Ok(Json(None));
+    };
+    let metadata: Value = row
+        .metadata
+        .as_deref()
+        .and_then(|source| serde_json::from_str(source).ok())
+        .unwrap_or(Value::Null);
+    let cover_url = crate::bootstrap::extract_cover_source(&metadata)
+        .filter(|source| source.starts_with("https://") || source.starts_with("http://"))
+        .filter(|source| !source.split('/').nth(2).unwrap_or("").contains('@'))
+        .map(str::to_owned);
+    Ok(Json(Some(RollLastRead {
+        issue_id: row.issue_id,
+        issue_number: row.issue_number,
+        thread_id: row.thread_id,
+        thread_title: row.thread_title,
+        read_at: row.read_at,
+        cover_url,
+    })))
+}
+
 /// Documentation-only operation for the mounted v2 Roll die-state read.
 #[utoipa::path(
     get,
@@ -446,6 +566,22 @@ pub async fn eligible_issue_ids(
 )]
 #[allow(dead_code)]
 pub fn die_state_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/roll/last-read",
+    tag = "roll",
+    description = "The reader's latest durable rated issue and exact confirmed provider cover URL, independent of reading sessions.",
+    responses(
+        (status = 200, description = "Latest durable rating, or null", body = Option<RollLastRead>),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Invalid native Roll projection"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn last_read_documentation() {}
 
 /// Documentation-only operation for the mounted v2 eligible-identifier read.
 #[utoipa::path(
@@ -799,6 +935,28 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert!(ints(&all_snoozed, "issue_ids").is_empty());
         assert_eq!(all_snoozed["pool_reason"], "ready");
+    }
+
+    #[tokio::test]
+    async fn last_read_is_owner_scoped_durable_and_sessionless() {
+        let Some(fixture) = Fixture::start().await else {
+            return;
+        };
+        let token = fixture.token("reader-one", "reader-one-jti", STORED_EPOCH);
+        let (status, body) = fixture.get("/api/v2/roll/last-read", Some(&token)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["issue_id"], 300);
+        assert_eq!(body["thread_id"], 30);
+        assert_eq!(body["issue_number"], "1");
+        assert_eq!(body["read_at"], "2026-11-01T10:00:00.000Z");
+
+        let empty = fixture.token("reader-empty", "reader-empty-jti", STORED_EPOCH);
+        let (status, body) = fixture.get("/api/v2/roll/last-read", Some(&empty)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.is_null());
+
+        let (status, _) = fixture.get("/api/v2/roll/last-read", None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
