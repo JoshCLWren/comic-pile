@@ -47,6 +47,7 @@ import {
   expandVolume,
 } from './CblBrowserPage.fixture'
 import { issueCardsApi } from '../services/issueCardsApi'
+import { saveOwnedCblList } from '../utils/cblAdoptionOwnership'
 vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 describe('CblBrowserPage adoption', () => {
@@ -333,7 +334,7 @@ describe('CblBrowserPage adoption', () => {
     // When the request completes it must not drag the reader away from the
     // view that no longer shows the added source; the cache still learns it.
     await act(async () => {
-      resolveCommit({ id: 42, name: 'Ultimate Universe' })
+      resolveCommit({ id: 42, name: 'Ultimate Universe', custom_cbl_list_id: 900, list_version: 1 })
     })
     await waitFor(() => {
       expect(mockApplyCommitted).toHaveBeenCalledTimes(1)
@@ -351,7 +352,7 @@ describe('CblBrowserPage adoption', () => {
   it('does not navigate after Back lands during post-commit cache updates (#4136)', async () => {
     const user = userEvent.setup()
     let resolveCacheUpdate: () => void = () => undefined
-    mockCommitNew.mockResolvedValue({ id: 42, name: 'Ultimate Universe' })
+    mockCommitNew.mockResolvedValue({ id: 42, name: 'Ultimate Universe', custom_cbl_list_id: 900, list_version: 1 })
     // Hold the cache update open so Back can land after the commit settled but
     // before its success callback decides whether to navigate.
     mockApplyCommitted.mockImplementation(
@@ -592,6 +593,8 @@ describe('CblBrowserPage adoption', () => {
     const user = userEvent.setup()
     mockCommitNew.mockResolvedValue({
       id: 88,
+      custom_cbl_list_id: 900,
+      list_version: 1,
       reused_positions: [],
       created_positions: [2],
       excluded_positions: [1],
@@ -1090,7 +1093,7 @@ describe('CblBrowserPage adoption', () => {
       '3 series · 2 rollable · 3 waiting',
     )
 
-    mockCommitNew.mockResolvedValue({ id: 51 })
+    mockCommitNew.mockResolvedValue({ id: 51, custom_cbl_list_id: 900, list_version: 1 })
     mockApplyCommitted.mockResolvedValue(undefined)
     await user.click(screen.getByRole('button', { name: 'Add reading order' }))
     await waitFor(() => {
@@ -1126,7 +1129,7 @@ describe('CblBrowserPage adoption', () => {
       screen.queryByRole('heading', { name: 'Resolve overlapping series' }),
     ).not.toBeInTheDocument()
 
-    mockCommitNew.mockResolvedValue({ id: 52 })
+    mockCommitNew.mockResolvedValue({ id: 52, custom_cbl_list_id: 900, list_version: 1 })
     mockApplyCommitted.mockResolvedValue(undefined)
     await user.click(screen.getByRole('button', { name: 'Add reading order' }))
     await waitFor(() => {
@@ -1180,7 +1183,7 @@ describe('CblBrowserPage adoption', () => {
 
   it('keeps the one-decision flow when the reading graph is unavailable (#4020)', async () => {
     const user = userEvent.setup()
-    const committed = { id: 42, name: 'Ultimate Universe' }
+    const committed = { id: 42, name: 'Ultimate Universe', custom_cbl_list_id: 900, list_version: 1 }
     mockCommitNew.mockResolvedValue(committed)
     mockApplyCommitted.mockResolvedValue(undefined)
     mockGraphPreview.mockRejectedValue(new Error('Not Found'))
@@ -1421,7 +1424,7 @@ describe('CblBrowserPage adoption', () => {
     ).not.toBeChecked()
 
     // The commit uses Source A's restored choice.
-    mockCommitNew.mockResolvedValue({ id: 88 })
+    mockCommitNew.mockResolvedValue({ id: 88, custom_cbl_list_id: 900, list_version: 1 })
     mockApplyCommitted.mockResolvedValue(undefined)
     await confirmAdd(user)
     await waitFor(() => {
