@@ -607,20 +607,21 @@ async fn group_writers_serialize_with_sibling_issue_and_queue_writes() {
     };
     wait_for_queue_lock_waiters(&conn, user_id, 2).await;
 
-    // Sibling queue-affecting write: set current issue takes queue lock.
+    // Sibling queue-affecting write: another read marker takes queue lock.
     let sibling_queue = {
         let state = state.clone();
         let token = token.clone();
         let csrf = csrf.clone();
+        let issue_id = issue_ids[1];
         tokio::spawn(async move {
             send(
                 &state,
                 authed(
                     "POST",
-                    &format!("/api/v1/threads/{thread_id}:setCurrentIssue"),
+                    &format!("/api/v2/issues/{issue_id}/read-markers"),
                     &token,
                     &csrf,
-                    Some(json!({"issue_number": "2"})),
+                    None,
                 ),
             )
             .await
