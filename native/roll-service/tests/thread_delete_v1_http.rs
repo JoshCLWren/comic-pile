@@ -277,7 +277,7 @@ async fn delete_thread_removes_events_and_reading_order_items() {
 
     let (status, body) = send(
         &state,
-        delete(&format!("/api/v1/threads/{thread_id}"), &token, &csrf),
+        delete(&format!("/api/v2/threads/{thread_id}"), &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
@@ -332,7 +332,7 @@ async fn delete_thread_removes_events_and_reading_order_items() {
 #[tokio::test]
 async fn delete_thread_not_found_returns_404() {
     let (state, token, csrf, _user_id, _guard) = setup_user("thread-delete-404").await;
-    let (status, _body) = send(&state, delete("/api/v1/threads/999999", &token, &csrf)).await;
+    let (status, _body) = send(&state, delete("/api/v2/threads/999999", &token, &csrf)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -369,7 +369,7 @@ async fn delete_thread_removes_non_cascading_event_reference() {
 
     let (status, body) = send(
         &state,
-        delete(&format!("/api/v1/threads/{thread_id}"), &token, &csrf),
+        delete(&format!("/api/v2/threads/{thread_id}"), &token, &csrf),
     )
     .await;
     let event_count: i64 = conn
@@ -468,7 +468,7 @@ async fn delete_thread_removes_non_cascading_snapshot_reference() {
 
     let (status, body) = send(
         &state,
-        delete(&format!("/api/v1/threads/{thread_id}"), &token, &csrf),
+        delete(&format!("/api/v2/threads/{thread_id}"), &token, &csrf),
     )
     .await;
 
@@ -592,7 +592,7 @@ async fn delete_and_update_with_dependent_rows_do_not_deadlock() {
         tokio::spawn(async move {
             send(
                 &state,
-                delete(&format!("/api/v1/threads/{thread_id}"), &token, &csrf),
+                delete(&format!("/api/v2/threads/{thread_id}"), &token, &csrf),
             )
             .await
         })
@@ -607,7 +607,7 @@ async fn delete_and_update_with_dependent_rows_do_not_deadlock() {
                 &state,
                 Request::builder()
                     .method("PUT")
-                    .uri(format!("/api/v1/threads/{thread_id}"))
+                    .uri(format!("/api/v2/threads/{thread_id}"))
                     .header(header::AUTHORIZATION, format!("Bearer {token}"))
                     .header("x-csrf-token", &csrf)
                     .header(header::COOKIE, format!("csrf_token={csrf}"))

@@ -365,8 +365,9 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
-        // #5958: the v1 thread action dispatcher (`{thread_id}:action`) is
-        // retired along with its closed-owner v2 slices.
+        // #5958: retain the action dispatcher for the still-open #5707/#5709
+        // migrations; closed-owner actions no longer dispatch.
+        .route("/api/v1/threads/{thread_id}", post(native_dispatch))
         .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
         .route(
             "/api/v1/threads/{thread_id}/connected",

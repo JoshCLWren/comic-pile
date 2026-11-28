@@ -221,7 +221,7 @@ async fn send_router(router: Router, request: Request<Body>) -> (StatusCode, Val
 fn creators_test_router(state: &Arc<AppState>) -> Router {
     Router::new()
         .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
+            "/api/v2/threads/{thread_id}/creatorCredits",
             route_get(comicpile_roll_service::thread_issues::list_thread_issue_creators),
         )
         .with_state(state.clone())
@@ -260,7 +260,7 @@ async fn positions(conn: &Conn, thread_id: i32) -> Vec<(String, i32, String)> {
 async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tiss-auth").await;
     for (method, path) in [
-        ("POST", "/api/v1/threads/1/issues"),
+        ("POST", "/api/v2/threads/1/issues"),
         ("POST", "/api/v1/threads/1/issues:reorder"),
         ("POST", "/api/v1/threads/1:migrateToIssues"),
         ("POST", "/api/v1/threads/1:migrateToIssuesSimple"),
@@ -288,14 +288,14 @@ async fn every_operation_requires_authentication() {
         creators_test_router(&state),
         Request::builder()
             .method("GET")
-            .uri("/api/v1/threads/1/issues/creators")
+            .uri("/api/v2/threads/1/creatorCredits")
             .body(Body::empty())
             .unwrap(),
     )
     .await;
     assert!(
         status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN,
-        "GET /api/v1/threads/1/issues/creators -> {status}"
+        "GET /api/v2/threads/1/creatorCredits -> {status}"
     );
 }
 
@@ -310,7 +310,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "33-35"})),
@@ -333,7 +333,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "2"})),
@@ -380,7 +380,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, _) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "3", "insert_after_issue_id": null})),
@@ -394,7 +394,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "Annual 1", "insert_after_issue_id": first})),
@@ -414,7 +414,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "33-34"})),
@@ -426,7 +426,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "5-3"})),
@@ -438,7 +438,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "9", "insert_after_issue_id": 99999999})),
@@ -481,7 +481,7 @@ async fn create_issues_validation_isolation_and_not_found() {
         let (status, payload) = send(
             &state,
             post(
-                &format!("/api/v1/threads/{thread}/issues"),
+                &format!("/api/v2/threads/{thread}/issues"),
                 &token,
                 &csrf,
                 Some(body),
@@ -494,7 +494,7 @@ async fn create_issues_validation_isolation_and_not_found() {
     let (status, _) = send(
         &state,
         post(
-            "/api/v1/threads/not-an-int/issues",
+            "/api/v2/threads/not-an-int/issues",
             &token,
             &csrf,
             Some(json!({"issue_range": "1"})),
@@ -505,7 +505,7 @@ async fn create_issues_validation_isolation_and_not_found() {
     let (status, body) = send(
         &state,
         post(
-            "/api/v1/threads/987654/issues",
+            "/api/v2/threads/987654/issues",
             &token,
             &csrf,
             Some(json!({"issue_range": "1"})),
@@ -518,7 +518,7 @@ async fn create_issues_validation_isolation_and_not_found() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &other_token,
             &other_csrf,
             Some(json!({"issue_range": "1"})),
@@ -653,7 +653,7 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
     )
     .await
     .unwrap();
-    let path = format!("/api/v1/threads/{thread}/issues/creators");
+    let path = format!("/api/v2/threads/{thread}/creatorCredits");
     let router = creators_test_router(&state);
     let (status, body) = send_router(router.clone(), get(&path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -672,13 +672,13 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
     assert_eq!(body["detail"], format!("Thread {thread} not found"));
     let (status, _) = send_router(
         router.clone(),
-        get("/api/v1/threads/987654/issues/creators", &token, &csrf),
+        get("/api/v2/threads/987654/creatorCredits", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, body) = send_router(
         router,
-        get("/api/v1/threads/abc/issues/creators", &token, &csrf),
+        get("/api/v2/threads/abc/creatorCredits", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);

@@ -13,13 +13,13 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 212 (v1 32, v2 177, unversioned 3).
-- v1 routes with a named retirement owner: 32.
+- Live API routes: 213 (v1 33, v2 177, unversioned 3).
+- v1 routes with a named retirement owner: 33.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
 - Scanned first-party call sites: 918.
 - Stale AIP baseline entries (no live route): 4.
-- Allowlist entries: 133 (owner 133, baseline debt 0, nonconforming v2 98).
+- Allowlist entries: 134 (owner 134, baseline debt 0, nonconforming v2 98).
 
 ## Ownership matrix
 
@@ -48,6 +48,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v1/threads/reactivate` | `thread_lifecycle::reactivate_thread` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5704 | POST /api/v2/threads/{thread_id}:reactivate | slice-open |
 | GET | `/api/v1/threads/stale` | `thread_lifecycle::list_stale_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts | /api/native_roll.rs | #5701 | GET /api/v2/threads?filter=stale | slice-open |
 | GET | `/api/v1/threads/{thread_id}` | `threads::get_thread_detail` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5701 | GET /api/v2/threads/{thread_id} | slice-open |
+| POST | `/api/v1/threads/{thread_id}` | `thread_ordering::post_thread_action` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-issues.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5707 | POST /api/v2/threads/{thread_id}/issues \| PATCH /api/v2/issues/{issue_id} | slice-open |
 | PUT | `/api/v1/threads/{thread_id}` | `<inline>` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
 | DELETE | `/api/v1/threads/{thread_id}` | `<inline>` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
 | GET | `/api/v1/threads/{thread_id}/connected` | `thread_ordering::get_thread_connected_threads` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
@@ -227,7 +228,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | PATCH | `/api/v2/threads/{thread_id}` | `thread_lifecycle::patch_thread` | v2 | frontend/src/services/api-threads.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api-threads.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/threads/{thread_id}/creatorCredits` | `thread_issues::list_thread_creator_credits` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | PUT | `/api/v2/threads/{thread_id}/issue-order` | `issue_mutation::reorder_issues` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
-| POST | `/api/v2/threads/{thread_id}/issues` | `issue_mutation::create_issues` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
+| POST | `/api/v2/threads/{thread_id}/issues` | `issue_mutation::create_issues` | v2 | frontend/src/services/api-issues.ts, frontend/src/test/fixtures.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
 | POST | `/api/v2/threads/{thread_id}/issues/preview` | `issue_mutation::preview_issue_create` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | POST | `/api/v2/threads/{thread_id}/issues/structure-preview` | `issue_mutation::preview_issue_structure` | v2 | frontend/src/services/api-issues.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/threads/{thread_id}/reading-order-group-memberships` | `dependency_groups::list_thread_groups` | v2 | frontend/src/services/api-dependency-groups.ts, frontend/src/unit/api-dependency-groups.test.ts | /api/native_roll.rs | #4841 | canonical-v2 | live-target |
@@ -240,7 +241,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Owner issue cross-reference
 
-Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5435, #5701, #5704, #5709, #5712, #5713, #5714, #5717, #5718, #5958.
+Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5435, #5701, #5704, #5707, #5709, #5712, #5713, #5714, #5717, #5718, #5958.
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:
@@ -305,7 +306,6 @@ Non-browser / helper / infrastructure surface included in the census:
 - #5715: `GET /api/v1/threads/{thread_id}/reading-orders` — not-live; GET /api/v2/threads/{thread_id}/readingOrders.
 - #5525: `POST /api/v1/threads/{thread_id}/set-pending` — live-p0-evidence; retire-without-replacement.
 - #4335: `PUT /api/v1/threads/{thread_id}/test-backdate` — not-live; retire-without-replacement.
-- #5707: `POST /api/v1/threads/{thread_id}:setCurrentIssue` — not-live; POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}.
 
 ## Baseline debt requiring an owner issue
 

@@ -38,6 +38,16 @@ export function isLegacyPath(pathname) {
 
 export const routeKey = (method, pathname) => `${method} ${pathname}`;
 
+/** Match a concrete fragment path against a registered parameterized pattern. */
+export function registeredPathMatches(pattern, pathname) {
+  const source = String(pattern).split(/(\{[^}]+\})/).map(part => (
+    part.startsWith('{') && part.endsWith('}')
+      ? '[^/]+'
+      : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  )).join('');
+  return new RegExp(`^${source}$`).test(pathname);
+}
+
 /** Extract registered METHOD/path pairs from an axum router's source text. */
 export function parseRegisteredRoutes(source) {
   // Unit tests contain fixture routes and intentional negative probes; they
@@ -113,6 +123,7 @@ export function collectViolations(root = DEFAULT_ROOT) {
   }
 
   const fragmentDir = path.join(root, FRAGMENT_DIR);
+  const allRegistered = routers.flatMap(([, routes]) => routes);
   const retiredSources = [];
   for (const name of readdirSync(fragmentDir).sort()) {
     if (!name.endsWith('.json') || name === 'vercel-rewrites.json') continue;
@@ -121,7 +132,14 @@ export function collectViolations(root = DEFAULT_ROOT) {
       if (!isLegacyPath(operation.path)) continue;
       const key = routeKey(operation.method, operation.path);
       if (!allowed.has(key)) {
-        violations.push(`${FRAGMENT_DIR}/${name}: legacy fragment operation ${key}`);
+        // A custom-method fragment path can be served by an explicitly
+        // registered dispatcher pattern (e.g. #5707/#5709 thread actions).
+        const dispatched = allRegistered.some(route => (
+          route.method === operation.method && registeredPathMatches(route.path, operation.path)
+        ));
+        if (!dispatched) {
+          violations.push(`${FRAGMENT_DIR}/${name}: legacy fragment operation ${key}`);
+        }
       }
     }
     const generation = fragment.vercel_generation || {};

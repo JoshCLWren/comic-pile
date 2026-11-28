@@ -225,7 +225,7 @@ async fn every_operation_requires_authentication() {
         ("GET", "/api/v1/threads/1/connected"),
         ("GET", "/api/v1/threads/1/dependency-order-check"),
         ("GET", "/api/v1/threads/1/issues:validateOrder"),
-        ("GET", "/api/v1/threads/1/reading-orders"),
+        ("GET", "/api/v2/threads/1/readingOrders"),
         ("GET", "/api/v2/threads/1/readingOrders"),
     ] {
         let (status, body) = send(
@@ -673,7 +673,7 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
     let (status, body) = send(
         &state,
         get(
-            &format!("/api/v1/threads/{a}/reading-orders"),
+            &format!("/api/v2/threads/{a}/readingOrders"),
             &token,
             &csrf,
         ),
@@ -704,7 +704,7 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
     let (_, body) = send(
         &state,
         get(
-            &format!("/api/v1/threads/{a}/reading-orders"),
+            &format!("/api/v2/threads/{a}/readingOrders"),
             &token2,
             &csrf2,
         ),
@@ -735,7 +735,7 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
 
     let (status, body) = send(
         &state,
-        get("/api/v1/threads/999999/reading-orders", &token, &csrf),
+        get("/api/v2/threads/999999/readingOrders", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -749,7 +749,7 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
     assert_eq!(v2_body, json!({"reading_orders": []}));
     let (status, _) = send(
         &state,
-        get("/api/v1/threads/x/reading-orders", &token, &csrf),
+        get("/api/v2/threads/x/readingOrders", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);

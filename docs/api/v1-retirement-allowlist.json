@@ -8,8 +8,8 @@
   "require_runtime": "native-rust",
   "known_unowned_baseline": [],
   "summary": {
-    "total_entries": 133,
-    "with_owner": 133,
+    "total_entries": 134,
+    "with_owner": 134,
     "baseline_debt": 0,
     "nonconforming_v2": 98
   },
@@ -318,6 +318,28 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/api-issues.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}",
+      "version": "v1",
+      "owner_issue": 5707,
+      "disposition": "POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",

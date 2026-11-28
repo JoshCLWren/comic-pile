@@ -803,9 +803,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(threads::get_thread_detail),
         )
         .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
-        // #5958: the v1 Thread issues slices and `{thread_id}:action` legacy
-        // dispatcher were retired after their owning v2 slices landed. Only
-        // the still-owned v1 read and the bare alias remain mounted.
+        // #5958: the `{thread_id}:action` dispatcher stays mounted only for
+        // the still-open #5707 (migrate/current-issue) and #5709
+        // (blocking-info) migrations. Closed-owner actions were retired; no
+        // new caller may use these v1 custom methods.
+        .route(
+            "/api/v1/threads/{thread_id}",
+            post(thread_ordering::post_thread_action),
+        )
         .route(
             "/api/v2/issues/{issue_id}/read-markers",
             post(issue_read_state::create_read_marker).delete(issue_read_state::delete_read_marker),

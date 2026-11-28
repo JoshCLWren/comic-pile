@@ -432,14 +432,6 @@
       "disposition": "retire-without-replacement",
       "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
       "retired_by_issue": 5958
-    },
-    {
-      "issue": 5707,
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
-      "status": "not-live",
-      "disposition": "POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}",
-      "notes": "Both :setCurrentIssue and :migrateToIssues are absent from the live Rust router; no v1 registration remains. Existing v2 issue creation/patch is the destination."
     }
   ],
   "families": [
@@ -655,6 +647,12 @@
       "replacement": "retire-without-replacement",
       "rollout_status": "pinned-404",
       "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
+    },
+    "POST /api/v1/threads/{thread_id}": {
+      "owner_issue": 5707,
+      "replacement": "POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}",
+      "rollout_status": "slice-open",
+      "notes": "#5958: retained only for the still-open #5707/#5707 custom actions; the closed-owner slices are gone."
     }
   },
   "known_stale_callers": [
