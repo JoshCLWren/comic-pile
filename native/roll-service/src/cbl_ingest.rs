@@ -478,7 +478,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                 if open_tag != tag {
                     return Err(IngestError::new("mismatched CBL XML tags"));
                 }
-                match tag.as_str() {
+                match tag {
                     "Name" if capture == Some(CapturedField::Name) => {
                         capture = None;
                         name = Some(captured_text.trim().to_string());
