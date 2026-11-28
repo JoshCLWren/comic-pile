@@ -29,17 +29,15 @@
       "verified_against": "vercel.json"
     },
     {
-      "method": "GET",
-      "path": "/api/v2/auth/csrf",
+      "owning_issue": 4459,
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4459,
       "consumers": [
-        "frontend/src/services/api.ts"
+        "frontend/src/services/api.ts",
+        "frontend/src/services/api-auth.ts"
       ],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "method": "GET",
+      "path": "/api/v2/auth/csrf",
       "sql_budget": {
         "application_statements": 0,
         "transaction_control_statements": 0,
@@ -50,21 +48,21 @@
         "proof_reference": "native/roll-service/src/auth/handlers.rs",
         "measurement_status": "db-free"
       },
-      "db_free": true
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/auth/forgot-password",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4459,
-      "consumers": [
-        "frontend/src/services/api-auth.ts",
-        "frontend/src/services/api.ts"
-      ],
+      "db_free": true,
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4459,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api.ts",
+        "frontend/src/services/api-auth.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/auth/forgot-password",
       "sql_budget": {
         "application_statements": 3,
         "transaction_control_statements": 2,
@@ -74,17 +72,21 @@
         "max_statements": 5,
         "proof_reference": "native/roll-service/src/auth/services.rs",
         "measurement_status": "pending-fixture"
-      }
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/auth/login",
+      "owning_issue": 4459,
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4459,
       "consumers": [
-        "frontend/src/services/api.ts"
+        "frontend/src/services/api.ts",
+        "frontend/src/services/api-auth.ts"
       ],
+      "method": "POST",
+      "path": "/api/v2/auth/login",
       "sql_budget": {
         "application_statements": 6,
         "transaction_control_statements": 2,
@@ -102,15 +104,15 @@
       "verified_against": "vercel.json"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/auth/logout",
+      "owning_issue": 4459,
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4459,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "consumers": [
+        "frontend/src/services/api.ts",
+        "frontend/src/services/api-auth.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/auth/logout",
       "sql_budget": {
         "application_statements": 2,
         "transaction_control_statements": 0,
@@ -120,18 +122,21 @@
         "max_statements": 2,
         "proof_reference": "native/roll-service/src/auth/services.rs",
         "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/auth/me",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4459,
-      "consumers": [],
+      },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4459,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api.ts",
+        "frontend/src/services/api-auth.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/auth/me",
       "sql_budget": {
         "application_statements": 2,
         "transaction_control_statements": 0,
@@ -141,20 +146,21 @@
         "max_statements": 2,
         "proof_reference": "native/roll-service/src/auth/services.rs",
         "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/auth/refresh",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4459,
-      "consumers": [
-        "frontend/src/services/api.ts"
-      ],
+      },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4459,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api.ts",
+        "frontend/src/services/api-auth.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/auth/refresh",
       "sql_budget": {
         "application_statements": 2,
         "transaction_control_statements": 0,
@@ -164,20 +170,21 @@
         "max_statements": 2,
         "proof_reference": "native/roll-service/src/auth/services.rs",
         "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/auth/register",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4459,
-      "consumers": [
-        "frontend/src/services/api.ts"
-      ],
+      },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4459,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api.ts",
+        "frontend/src/services/api-auth.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/auth/register",
       "sql_budget": {
         "application_statements": 2,
         "transaction_control_statements": 0,
@@ -187,21 +194,21 @@
         "max_statements": 2,
         "proof_reference": "native/roll-service/src/auth/services.rs",
         "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v2/auth/reset-password",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4459,
-      "consumers": [
-        "frontend/src/services/api-auth.ts",
-        "frontend/src/services/api.ts"
-      ],
+      },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4459,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api.ts",
+        "frontend/src/services/api-auth.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/auth/reset-password",
       "sql_budget": {
         "application_statements": 2,
         "transaction_control_statements": 2,
@@ -211,7 +218,10 @@
         "max_statements": 4,
         "proof_reference": "native/roll-service/src/auth/services.rs",
         "measurement_status": "pending-fixture"
-      }
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "runtime": "native-rust",
