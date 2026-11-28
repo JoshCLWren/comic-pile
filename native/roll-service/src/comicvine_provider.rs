@@ -26,12 +26,126 @@ const COMPLETE_FRESH_DAYS: i64 = 30;
 const EMPTY_CREDIT_RECHECK_DAYS: i64 = 7;
 
 pub(crate) const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
-#[derive(Debug)]
+
+/// Closed set of *safe* reasons a provider call can be unavailable. No variant
+/// carries provider-controlled text, headers or a credential-bearing URL.
+/// Callers use this to tell a real HTTP status from a reported error envelope
+/// from a connectivity failure instead of collapsing all three into one class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProviderUnavailableCategory {
+    /// A non-success HTTP status was observed before any body was trusted.
+    HttpStatus { status: u16 },
+    /// A 2xx response whose ComicVine envelope reported failure.
+    ErrorEnvelope,
+    /// Connect/TLS/HTTP/body-stream failure: no usable provider response.
+    Transport,
+}
+
+impl ProviderUnavailableCategory {
+    /// Stable diagnostic code; safe to log and to use as a wire discriminator.
+    pub(crate) fn code(self) -> &'static str {
+        match self {
+            Self::HttpStatus { .. } => "http_status",
+            Self::ErrorEnvelope => "error_envelope",
+            Self::Transport => "transport",
+        }
+    }
+}
+
+/// Bounded, typed vocabulary for every ComicVine boundary failure.
+///
+/// Each variant is deliberately small and secret-free so it can be logged and
+/// eventually surfaced to handlers without exposing the request URL (which
+/// embeds `api_key`). `RateLimited` always carries a bounded delay sourced from
+/// the provider's `Retry-After` (or the local cooldown when none was sent).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ProviderFailure {
-    RateLimited(u32),
-    Unavailable,
+    /// No usable credential is configured (empty, whitespace or malformed).
+    ProviderNotConfigured,
+    /// The provider failed without a usable payload; category says how.
+    ProviderUnavailable(ProviderUnavailableCategory),
+    /// The provider asked for a bounded backoff before retrying.
+    RateLimited { retry_after_seconds: u32 },
+    /// The request exceeded the bounded provider deadline.
     Timeout,
-    InvalidPayload,
+    /// Missing, oversized or non-JSON provider payload.
+    InvalidResponse,
+    /// A successful fetch could not be persisted.
+    PersistFailed,
+}
+
+impl ProviderFailure {
+    /// Stable snake-case diagnostic code for this failure class.
+    pub(crate) fn code(self) -> &'static str {
+        match self {
+            Self::ProviderNotConfigured => "provider_not_configured",
+            Self::ProviderUnavailable(_) => "provider_unavailable",
+            Self::RateLimited { .. } => "rate_limited",
+            Self::Timeout => "timeout",
+            Self::InvalidResponse => "invalid_response",
+            Self::PersistFailed => "persist_failed",
+        }
+    }
+}
+
+/// The single redacted diagnostic emitter for classified provider failures.
+///
+/// `context` is a code-owned static label. Only typed codes, numeric HTTP
+/// status, the bounded retry delay and a type name are ever logged: never a
+/// key, token, cookie, query string, credential-bearing URL or provider body.
+pub(crate) fn log_provider_failure(context: &'static str, failure: ProviderFailure) {
+    match failure {
+        ProviderFailure::ProviderNotConfigured => tracing::warn!(
+            comicvine_failure = failure.code(),
+            context,
+            "comicvine provider credential not configured"
+        ),
+        ProviderFailure::ProviderUnavailable(category) => {
+            let status = match category {
+                ProviderUnavailableCategory::HttpStatus { status } => Some(status),
+                _ => None,
+            };
+            tracing::warn!(
+                comicvine_failure = failure.code(),
+                comicvine_category = category.code(),
+                comicvine_status = ?status,
+                context,
+                "comicvine provider unavailable"
+            );
+        }
+        ProviderFailure::RateLimited { retry_after_seconds } => tracing::warn!(
+            comicvine_failure = failure.code(),
+            retry_after_seconds,
+            context,
+            "comicvine provider rate limited"
+        ),
+        ProviderFailure::Timeout => tracing::warn!(
+            comicvine_failure = failure.code(),
+            context,
+            "comicvine provider timeout"
+        ),
+        ProviderFailure::InvalidResponse => tracing::warn!(
+            comicvine_failure = failure.code(),
+            context,
+            "comicvine provider invalid response"
+        ),
+        ProviderFailure::PersistFailed => tracing::warn!(
+            comicvine_failure = failure.code(),
+            context,
+            "comicvine provider metadata persist failed"
+        ),
+    }
+}
+
+/// Classify a decoded envelope that failed [`python_envelope_ok`]. A JSON
+/// object carrying a non-success `status_code` is an error envelope; anything
+/// else is a malformed payload. No field value is copied into the classification.
+pub(crate) fn envelope_failure(payload: &Value) -> ProviderFailure {
+    if payload.is_object() {
+        ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::ErrorEnvelope)
+    } else {
+        ProviderFailure::InvalidResponse
+    }
 }
 
 fn issue_id(external_id: &str) -> Option<u32> {
@@ -111,9 +225,9 @@ fn normalized_metadata(
     result: &Value,
     expected_id: u32,
 ) -> Result<(Value, bool, Option<String>, Option<String>), ProviderFailure> {
-    let obj = result.as_object().ok_or(ProviderFailure::InvalidPayload)?;
+    let obj = result.as_object().ok_or(ProviderFailure::InvalidResponse)?;
     if obj.get("id").and_then(Value::as_u64) != Some(u64::from(expected_id)) {
-        return Err(ProviderFailure::InvalidPayload);
+        return Err(ProviderFailure::InvalidResponse);
     }
     for field in [
         "name",
@@ -129,7 +243,7 @@ fn normalized_metadata(
         "date_last_updated",
     ] {
         if !obj.contains_key(field) {
-            return Err(ProviderFailure::InvalidPayload);
+            return Err(ProviderFailure::InvalidResponse);
         }
     }
     let image = obj.get("image").and_then(Value::as_object);
@@ -196,10 +310,14 @@ fn provider_timestamp(value: &Value) -> Option<String> {
 pub(crate) enum Exchange {
     /// A decoded JSON body from a 2xx response.
     Payload(Value),
-    /// HTTP 403, 420 or 429 with the raw `Retry-After` header, if any.
+    /// HTTP 420/429 throttle with the raw `Retry-After` header, if any. The
+    /// provider-supplied delay is preserved by the caller, never discarded.
     Throttled {
-        status: u16,
         retry_after: Option<String>,
+    },
+    /// Any other non-success HTTP status. The body is never read or logged.
+    HttpStatus {
+        status: u16,
     },
 }
 
