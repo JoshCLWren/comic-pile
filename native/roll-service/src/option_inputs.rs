@@ -1519,20 +1519,21 @@ mod tests {
                 );
             }
         }
-        // The issue with no mapping and no catalog link inherits only the
-        // thread's confirmed series identity (4050-1000), never a title guess.
+        // The confirmed issue mapping on 9203 yields exactly its metadata
+        // volume; the issue with neither mapping nor catalog link stays unknown.
         assert_eq!(
             a_after.get(&9203),
             Some(&BTreeSet::from([("comicvine".into(), "1000".into())])),
-            "unmapped issue must not invent evidence: {a_after:?}"
+            "confirmed evidence must not be invented: {a_after:?}"
         );
+        assert!(!a_after.contains_key(&9204), "unknown issue gained evidence");
 
         let a_inputs = assemble_snapshot(a_snapshot).expect("A snapshot");
         a_inputs.require_resolved().expect("A resolved");
         assert_eq!(
             a_inputs.excluded_issue_ids.iter().copied().collect::<Vec<_>>(),
-            vec![9201],
-            "A's own volume exclusion applies only to A's catalog-only issue"
+            vec![9201, 9203],
+            "A's volume exclusion covers its catalog-only and confirmed-volume issues only"
         );
         let a_validated = validated_contained(a_inputs).expect("A validated");
         let a_edges = a_validated.unsatisfied_edges().expect("A edges");
@@ -1546,7 +1547,7 @@ mod tests {
                 .iter()
                 .map(|f| (f.queue_position, f.issue_id, f.unsatisfied.len()))
                 .collect::<Vec<_>>(),
-            vec![(1, 9202, 0), (2, 9203, 0)],
+            vec![(1, 9202, 0)],
             "exact A frontier/blocker shape: {a_blockers:?}"
         );
         let a_frontiers = a_validated.eligible_frontiers().expect("A frontiers");
@@ -1597,8 +1598,8 @@ mod tests {
                 .iter()
                 .map(|f| (f.queue_position, f.issue_id, f.unsatisfied.len()))
                 .collect::<Vec<_>>(),
-            vec![(1, 9401, 0), (2, 9402, 2)],
-            "B's hold + authored prerequisite keep exact blocker shape: {b_blockers:?}"
+            vec![(1, 9401, 0)],
+            "B's frontier stays at its first unread issue: {b_blockers:?}"
         );
         let b_frontiers = b_validated.eligible_frontiers().expect("B frontiers");
         assert_eq!(
