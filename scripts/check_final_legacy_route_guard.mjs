@@ -40,9 +40,12 @@ export const routeKey = (method, pathname) => `${method} ${pathname}`;
 /** Extract registered METHOD/path pairs from an axum router's source text. */
 export function parseRegisteredRoutes(source) {
   // Unit tests contain fixture routes and intentional negative probes; they
-  // are not production registrations.
-  const testIndex = source.indexOf('#[cfg(test)]');
-  const production = testIndex === -1 ? source : source.slice(0, testIndex);
+  // are not production registrations. Match the test module declaration rather
+  // than a bare attribute: both routers have an early #[cfg(test)] task-local.
+  const testModule = /\n\s*#\[cfg\(test\)\]\s*\n\s*mod tests\b/.exec(source);
+  let production = testModule ? source.slice(0, testModule.index) : source;
+  const routerDecl = /\bfn (?:router|app)\s*\(/.exec(production);
+  if (routerDecl) production = production.slice(routerDecl.index);
   const routes = [];
   const routePattern = /\.route\(\s*"([^"]+)"\s*,/g;
   let match;
