@@ -270,6 +270,7 @@ export default function QueuePage() {
           createForm={modals.createForm}
           editForm={modals.editForm}
           createError={modals.createError}
+          editError={modals.editError}
           setCreateForm={modals.setCreateForm}
           setEditForm={modals.setEditForm}
           issuePreview={modals.issuePreview}

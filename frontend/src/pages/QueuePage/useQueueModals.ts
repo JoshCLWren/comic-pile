@@ -210,6 +210,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     editUndoAvailableRef.current = false
     setEditingThread(null)
     setIsIssuesLoading(false)
+    setEditError(null)
     setOpenModal(null)
     clearRestoreAction()
     clearQueueModalState()
@@ -441,6 +442,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     async (event: FormEvent) => {
       event.preventDefault()
       if (!editingThread) return
+      setEditError(null)
       try {
         const data: EditThreadData = {
           title: editForm.title,
@@ -467,8 +469,9 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
           closeEditModal()
         }
         await onUpdated()
-      } catch {
-        console.error('Failed to update thread')
+      } catch (error) {
+        console.error('Failed to update thread', error)
+        setEditError(`Failed to save series: ${getApiErrorDetail(error)}`)
       }
     },
     [editingThread, editForm, closeEditModal, onUpdated, submitEdit],
@@ -526,6 +529,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     createForm,
     createError,
     editForm,
+    editError,
     issuePreview,
     issueParseError,
     issueParseWarnings,
