@@ -89,7 +89,7 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
 /** Seed a pending Roll offer, excluding threads with cookie-owned snoozes. */
 async function offerPending(page: Page, excludedThreadIds: number[] = []): Promise<number> {
   // Initialize the durable reading session that roll/offer requires; the
-  // retired set-pending route used to do this implicitly.
+  // retired direct thread-selection route used to do this implicitly.
   await page.request.post('/api/v2/readingSessions', {
     headers: await authHeaders(page),
     data: {},

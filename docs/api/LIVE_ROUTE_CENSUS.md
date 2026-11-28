@@ -17,7 +17,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 - v1 routes with a named retirement owner: 64.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 921.
+- Scanned first-party call sites: 923.
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 174 (owner 174, baseline debt 0, nonconforming v2 98).
 
@@ -233,7 +233,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | PATCH | `/api/v2/readingOrderGroups/{group_id}` | `dependency_groups::update_group_v2` | v2 | frontend/src/services/api-dependency-groups.ts, frontend/src/unit/api-dependency-groups.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | DELETE | `/api/v2/readingOrderGroups/{group_id}` | `dependency_groups::delete_group_v2` | v2 | frontend/src/services/api-dependency-groups.ts, frontend/src/unit/api-dependency-groups.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions` | `session_list::list_reading_sessions` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
-| POST | `/api/v2/readingSessions` | `bootstrap::initialize_session` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
+| POST | `/api/v2/readingSessions` | `bootstrap::initialize_session` | v2 | frontend/src/services/rollBootstrapApi.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}` | `session_list::get_reading_session` | v2 | frontend/src/unit/api.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}/details` | `session_details::get_session_details` | v2 | frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}/snapshots` | `session_history::list_session_snapshots` | v2 | frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |

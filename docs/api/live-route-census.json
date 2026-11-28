@@ -24,7 +24,7 @@
     "v1_with_owner": 64,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 921,
+    "first_party_call_sites": 923,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -4741,6 +4741,8 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/rollBootstrapApi.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/test/p0-roll-selection.spec.ts",
         "frontend/src/test/reading-mode-acceptance.spec.ts",
@@ -4749,7 +4751,7 @@
         "frontend/src/unit/nativeV2Client.test.ts",
         "frontend/src/unit/rollBootstrapTimezone.test.ts"
       ],
-      "caller_count": 19,
+      "caller_count": 21,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
