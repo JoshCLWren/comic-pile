@@ -139,6 +139,72 @@ struct LastReadPayload {
     last_read: Option<LastReadRow>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct RollRecoveryBlocker {
+    pub rule_id: Option<i32>,
+    pub source_type: String,
+    pub source_id: i32,
+    pub source_label: String,
+    pub satisfaction_type: String,
+    pub satisfied: bool,
+    pub causing_issue_ids: Vec<i32>,
+    pub causing_member_issue_ids: Vec<i32>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct RollRecoveryPrerequisite {
+    pub node_type: String,
+    pub node_id: i32,
+    pub label: String,
+    pub is_readable: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct RollRecoveryChainNode {
+    pub node_type: String,
+    pub node_id: i32,
+    pub label: String,
+    pub is_readable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct RollRecoveryDiagnostic {
+    pub code: String,
+    pub node_type: String,
+    pub node_id: i32,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct RollRecovery {
+    pub original_thread_id: i32,
+    pub original_thread_title: String,
+    pub direct_blockers: Vec<RollRecoveryBlocker>,
+    pub readable_prerequisites: Vec<RollRecoveryPrerequisite>,
+    pub chains: Vec<Vec<RollRecoveryChainNode>>,
+    pub diagnostics: Vec<RollRecoveryDiagnostic>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RollRecoveryQuery {
+    pub issue_id: i32,
+    pub snoozed: Option<String>,
+}
+
+fn scoped_recovery(
+    recovery: crate::bootstrap::BootstrapRollRecovery,
+) -> Result<RollRecovery, ApiError> {
+    serde_json::from_value(serde_json::to_value(recovery).map_err(|error| {
+        tracing::error!(%error, "Could not serialize canonical Roll recovery");
+        invalid_projection()
+    })?)
+    .map_err(|error| {
+        tracing::error!(%error, "Invalid canonical Roll recovery shape");
+        invalid_projection()
+    })
+}
+
 /// Query parameters for `GET /api/v2/roll/eligible-issue-ids`.
 #[derive(Debug, Default, Deserialize)]
 pub struct EligibleIssueIdsQuery {
@@ -550,6 +616,48 @@ pub async fn last_read(
     })))
 }
 
+/// Canonical bounded recovery for one exact browser-owned pending issue.
+pub async fn recovery(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Query(query): Query<RollRecoveryQuery>,
+) -> Result<Json<Option<RollRecovery>>, ApiError> {
+    if query.issue_id <= 0 {
+        return Err(ApiError::Unprocessable("Invalid issue id".to_string()));
+    }
+    let snoozed = parse_snoozed(query.snoozed.as_deref())?;
+    let payload = load_eligible_payload(&state, &claims).await?;
+    let inputs = option_inputs::assemble_snapshot(payload.snapshot)?;
+    let validated = option_inputs::validated_contained(inputs)?;
+    if !validated
+        .inputs()
+        .core
+        .issues
+        .iter()
+        .any(|issue| issue.id == query.issue_id)
+    {
+        return Err(ApiError::not_found(format!("Issue {} not found", query.issue_id)));
+    }
+    let candidates = validated.eligible_frontiers().map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Invalid reading constraints".to_string())
+    })?;
+    // Browser pending is exact client state. Do not fold or advance the legacy
+    // server pending pointer when explaining it.
+    let die = dice_state::projected_die(payload.die_after);
+    let pool = offer_frontiers(&candidates, &snoozed, die);
+    let recovery = crate::bootstrap::pending_issue_recovery(
+        &validated,
+        query.issue_id,
+        &snoozed,
+        &pool,
+    )?;
+    Ok(Json(recovery.map(scoped_recovery).transpose()?))
+}
+
 /// Documentation-only operation for the mounted v2 Roll die-state read.
 #[utoipa::path(
     get,
@@ -582,6 +690,28 @@ pub fn die_state_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn last_read_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/roll/recovery",
+    tag = "roll",
+    description = "Bounded canonical Option E recovery for one exact browser-owned pending issue; no session or whole-library payload.",
+    params(
+        ("issue_id" = i32, Query, description = "Exact owned pending issue id"),
+        ("snoozed" = Option<String>, Query, description = "Comma-separated browser-owned temporary snoozed thread identifiers")
+    ),
+    responses(
+        (status = 200, description = "Canonical blocked-selection recovery, or null", body = Option<RollRecovery>),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Issue not found"),
+        (status = 422, description = "Invalid issue id or snooze identifiers"),
+        (status = 500, description = "Invalid native Roll projection"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn recovery_documentation() {}
 
 /// Documentation-only operation for the mounted v2 eligible-identifier read.
 #[utoipa::path(

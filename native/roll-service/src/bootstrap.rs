@@ -886,6 +886,28 @@ pub(crate) fn pending_roll_recovery(
     let Some(target) = pending_issues.first() else {
         return Ok(None);
     };
+    pending_issue_recovery(validated, target.id, excluded, candidates)
+}
+
+/// Bounded canonical recovery for one exact browser-owned issue selection.
+///
+/// The same unsatisfied Option E graph powers the legacy aggregate and the
+/// scoped resource, including strict/loose Reading Lists, transitive chains,
+/// cycles, and depth/node limits. No per-node database request is issued.
+pub(crate) fn pending_issue_recovery(
+    validated: &crate::reading_constraints::ValidatedReadingInputs,
+    issue_id: i32,
+    excluded: &HashSet<i32>,
+    candidates: &[crate::reading_constraints::EligibleFrontier],
+) -> Result<Option<BootstrapRollRecovery>, ApiError> {
+    let inputs = validated.inputs();
+    let Some(target) = inputs.core.issues.iter().find(|issue| {
+        issue.id == issue_id
+            && issue.status == "unread"
+            && !inputs.excluded_issue_ids.contains(&issue.id)
+    }) else {
+        return Ok(None);
+    };
     let edges = validated.unsatisfied_edges().map_err(|e| {
         tracing::debug!(
             error_kind = crate::error_kind(&e),
@@ -964,11 +986,11 @@ pub(crate) fn pending_roll_recovery(
         .core
         .threads
         .iter()
-        .find(|thread| thread.id == thread_id)
+        .find(|thread| thread.id == target.thread_id)
         .map(|thread| thread.title.as_str())
         .unwrap_or("Selected series");
     Ok(Some(BootstrapRollRecovery {
-        original_thread_id: thread_id,
+        original_thread_id: target.thread_id,
         original_thread_title: title.to_string(),
         direct_blockers: blockers,
         readable_prerequisites: recommended,
