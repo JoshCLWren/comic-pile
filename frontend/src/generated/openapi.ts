@@ -1915,6 +1915,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/cron/release-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the secret-gated scheduled cron moved to
+         *     canonical v2 by #5958. The handler and `CRON_SECRET` gate are unchanged.
+         */
+        get: operations["scheduled_release_sync_cron"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/demo-roll": {
         parameters: {
             query?: never;
@@ -14745,6 +14765,38 @@ export interface operations {
             };
             /** @description Series not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    scheduled_release_sync_cron: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Multi-owner release sync report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid CRON_SECRET bearer */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cron secret not configured or database unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

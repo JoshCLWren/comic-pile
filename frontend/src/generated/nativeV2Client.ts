@@ -1198,6 +1198,8 @@ export interface SaveOverlapDecisionRequest {
 
 export type SaveOverlapDecisionResponse = components['schemas']['OverlapDecisionSetResponse']
 
+export type ScheduledReleaseSyncCronResponse = void
+
 export interface SearchRequest {
   query: {
     q: string
@@ -1541,6 +1543,7 @@ export interface NativeV2Client {
   revertCorrection(args: RevertCorrectionRequest): Promise<RevertCorrectionResponse>
   role(args: RoleRequest): Promise<RoleResponse>
   saveOverlapDecision(args: SaveOverlapDecisionRequest): Promise<SaveOverlapDecisionResponse>
+  scheduledReleaseSyncCron(): Promise<ScheduledReleaseSyncCronResponse>
   search(args: SearchRequest): Promise<SearchResponse>
   searchCustomCblIssues(args?: SearchCustomCblIssuesRequest): Promise<SearchCustomCblIssuesResponse>
   searchSeries(args: SearchSeriesRequest): Promise<SearchSeriesResponse>
@@ -2394,6 +2397,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions`,
         args.body,
       )
+    },
+    scheduledReleaseSyncCron() {
+      return client.get<ScheduledReleaseSyncCronResponse>("/v2/cron/release-sync")
     },
     search(args: SearchRequest) {
       return client.get<SearchResponse>(

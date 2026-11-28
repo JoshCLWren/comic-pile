@@ -25371,6 +25371,31 @@
         ]
       }
     },
+    "/api/v2/cron/release-sync": {
+      "get": {
+        "operationId": "scheduled_release_sync_cron",
+        "responses": {
+          "200": {
+            "description": "Multi-owner release sync report"
+          },
+          "401": {
+            "description": "Missing or invalid CRON_SECRET bearer"
+          },
+          "503": {
+            "description": "Cron secret not configured or database unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the secret-gated scheduled cron moved to\ncanonical v2 by #5958. The handler and `CRON_SECRET` gate are unchanged.",
+        "tags": [
+          "reading-plan-sync"
+        ]
+      }
+    },
     "/api/v2/demo-roll": {
       "get": {
         "operationId": "read_demo_roll_documentation",
