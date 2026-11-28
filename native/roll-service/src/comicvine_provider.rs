@@ -1090,8 +1090,8 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
         // and recheck the still-confirmed mapping. A late result for identity A
         // cannot be written after a remap to B, and a concurrent metadata write
         // cannot be clobbered by the snapshot captured before the provider call.
-        let current_metadata = match tx
-            .query_opt(
+        let current_metadata = match classify_lookup(
+            tx.query_opt(
                 "SELECT e.metadata_json::text
                  FROM external_identities e
                  WHERE e.id = $1
