@@ -266,6 +266,7 @@ it('migration completion refreshes Roll state and keeps the offered rating targe
     next_unread_issue_number: '8',
   }
 
+  // SAFETY: this fixture supplies the Thread fields handleMigrationComplete reads (id, frontier numbers and progress counters); the cast avoids importing the full generated wire type into a hook test.
   await act(async () => { await result.current.handleMigrationComplete(migratedThread as never) })
 
   // Roll state is re-read from the server after the v2 migration writes.

@@ -24,7 +24,7 @@
     "v1_with_owner": 57,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 926,
+    "first_party_call_sites": 928,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -3150,7 +3150,7 @@
         "frontend/src/services/api-issues.ts",
         "frontend/src/unit/api-issues.test.ts"
       ],
-      "caller_count": 7,
+      "caller_count": 8,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -5291,7 +5291,7 @@
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts"
       ],
-      "caller_count": 15,
+      "caller_count": 16,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
