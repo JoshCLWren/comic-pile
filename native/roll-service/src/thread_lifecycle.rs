@@ -110,6 +110,27 @@ pub struct ThreadResponse {
     pub manual_creator_credits: Value,
 }
 
+/// Response body: the Python `RollResponse` projection for a manual pick.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct RollResponse {
+    pub thread_id: i32,
+    pub title: String,
+    pub format: String,
+    pub issues_remaining: i32,
+    pub queue_position: i32,
+    pub die_size: i32,
+    pub result: i32,
+    pub offset: i32,
+    pub snoozed_count: i32,
+    pub issue_id: Option<i32>,
+    pub issue_number: Option<String>,
+    pub next_issue_id: Option<i32>,
+    pub next_issue_number: Option<String>,
+    pub total_issues: Option<i32>,
+    pub reading_progress: Option<String>,
+    pub explanation: Option<String>,
+}
+
 /// Body of `POST /api/v1/threads/`.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct ThreadCreateRequest {

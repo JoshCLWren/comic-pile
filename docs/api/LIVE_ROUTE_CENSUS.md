@@ -17,7 +17,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 - v1 routes with a named retirement owner: 56.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 917.
+- Scanned first-party call sites: 919.
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 158 (owner 158, baseline debt 0, nonconforming v2 98).
 
