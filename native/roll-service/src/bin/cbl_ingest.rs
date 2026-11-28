@@ -167,21 +167,6 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
     Ok((command_succeeded(&failures), payload))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_failures_make_every_command_mode_fail() {
-        let failure = CBLParseFailure {
-            source_path: "DC/Broken.cbl".to_string(),
-            message: "malformed".to_string(),
-        };
-        assert!(!command_succeeded(&[failure]));
-        assert!(command_succeeded(&[]));
-    }
-}
-
 #[tokio::main]
 async fn main() -> ExitCode {
     match run().await {
@@ -197,5 +182,20 @@ async fn main() -> ExitCode {
             eprintln!("cbl_ingest failed: {message}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_failures_make_every_command_mode_fail() {
+        let failure = CBLParseFailure {
+            source_path: "DC/Broken.cbl".to_string(),
+            message: "malformed".to_string(),
+        };
+        assert!(!command_succeeded(&[failure]));
+        assert!(command_succeeded(&[]));
     }
 }
