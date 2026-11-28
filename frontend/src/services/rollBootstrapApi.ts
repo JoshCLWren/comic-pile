@@ -1,13 +1,11 @@
 import {
   createNativeV2Client,
-  type GetIssueDependenciesResponse,
   type IssueCardsResponse,
-  type ReadingGraphResponse,
 } from '../generated/nativeV2Client'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import { readRollSnoozes } from './api-roll'
 import { readPendingSelection } from './rollPendingSelection'
-import { buildRollRecovery } from './rollRecovery'
+import { parseRollRecovery } from './rollRecovery'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import type { RateResponsePayload } from '../types'
@@ -81,41 +79,23 @@ export function createRollBootstrapApi(client: HttpClient) {
       const blockedIssueId = pending != null && !issueIds.includes(pending.issue_id)
         ? pending.issue_id
         : null
-      let dependencies: GetIssueDependenciesResponse | null = null
-      let prerequisiteCards: IssueCardsResponse['items'] = []
+      let recovery = null
       if (blockedIssueId != null) {
-        dependencies = await nativeV2.getIssueDependencies({
-          path: { issue_id: blockedIssueId },
-        })
-        const sourceIds = [...new Set(dependencies.incoming.map((edge) => edge.source_issue_id))]
-        if (sourceIds.length > 0) {
-          prerequisiteCards = (await nativeV2.issueCards({
-            body: { issue_ids: sourceIds },
-          })).items
-        }
+        const query: { issue_id: number; snoozed?: string } = { issue_id: blockedIssueId }
+        if (snoozes.length > 0) query.snoozed = snoozes.join(',')
+        recovery = await nativeV2.recovery({ query })
       }
       const snoozedThreads: RollBootstrapThread[] = snoozes.length > 0
-        ? (await nativeV2.listThreads({ query: { page_size: 200 } })).threads.flatMap((thread) =>
+        ? (await nativeV2.listThreads({
+            query: { ids: snoozes.join(','), page_size: snoozes.length },
+          })).threads.flatMap((thread) =>
             snoozes.includes(thread.id) ? [{
               id: thread.id,
               title: thread.title,
               format: thread.format,
             }] : [])
         : []
-      const graph = queryClient.getQueryData<ReadingGraphResponse>(
-        queryKeys.readingGraph.status(),
-      ) ?? null
       const rate = queryClient.getQueryData<RateResponsePayload | null>(queryKeys.roll.lastRead())
-      const recovery = pending != null
-        ? buildRollRecovery({
-            pending,
-            eligibleIssueIds: issueIds,
-            dependencies,
-            prerequisiteCards,
-            graph,
-            originalTitle: cardByIssue.get(pending.issue_id)?.thread_title ?? null,
-          })
-        : null
 
       return {
         pending_thread_id: pending?.thread_id ?? null,
@@ -134,7 +114,7 @@ export function createRollBootstrapApi(client: HttpClient) {
           session_mode_correction_guidance: null,
         },
         active_thread: null,
-        roll_recovery: recovery,
+        roll_recovery: recovery != null ? parseRollRecovery(recovery) : null,
         roll_pool: rollPool,
         snoozed_threads: snoozedThreads,
         snoozed_count: snoozes.length,

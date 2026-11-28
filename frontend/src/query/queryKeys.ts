@@ -166,7 +166,8 @@ export const queryKeys = {
      */
     eligibleIssueIdsAll: () => ['roll', 'eligible-issue-ids'] as const,
     /** One bounded page of series summaries for the browser snooze shelf. */
-    snoozedSummaries: () => ['roll', 'snoozed-summaries'] as const,
+    snoozedSummaries: (threadIds: readonly number[] = []) =>
+      ['roll', 'snoozed-summaries', [...new Set(threadIds)].sort((a, b) => a - b)] as const,
     /** Representative series covers for the bounded Roll snooze shelf. */
     snoozedSeriesCovers: (threadIds: readonly number[]) =>
       ['roll', 'snoozed-series-covers', [...new Set(threadIds)].sort((a, b) => a - b)] as const,

@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { skipToken, useQuery } from '@tanstack/react-query'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
 import type { RateResponsePayload, SessionMode } from '../types'
-import type { ReadingGraphResponse } from '../generated/nativeV2Client'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { readRollSnoozes } from '../services/api-roll'
 import { threadsApi } from '../services/api-threads'
-import { dependenciesApi } from '../services/api-dependencies'
-import { buildRollRecovery } from '../services/rollRecovery'
+import { rollResourcesApi } from '../services/rollResourcesApi'
+import { parseRollRecovery } from '../services/rollRecovery'
 import {
   useRollDieState,
   useRollEligibleIssueIds,
@@ -97,26 +96,21 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   }, [storedPending, pendingCardReady, pendingCard, clearPending])
 
   // A pending issue missing from the eligible pool may be continuity-blocked.
-  // Only then is one bounded, owner-scoped issue-edge GET needed; a cold idle
+  // Only then does the canonical bounded recovery resource run; a cold idle
   // Roll load issues no extra request.
   const blockedIssueId = pending != null && !issueIds.includes(pending.issue_id)
     ? pending.issue_id
     : null
-  const dependencyQuery = useQuery({
-    queryKey: queryKeys.dependencies.issueEdges(blockedIssueId ?? -1),
-    queryFn: () => dependenciesApi.getIssueDependencies(blockedIssueId ?? 0),
+  const recoveryQuery = useQuery({
+    queryKey: queryKeys.roll.recovery(blockedIssueId ?? -1, snoozedIds),
+    queryFn: () => rollResourcesApi.recovery(blockedIssueId ?? 0, snoozedIds),
     enabled: blockedIssueId != null,
   })
-  const prerequisiteIds = useMemo(
-    () => [...new Set((dependencyQuery.data?.incoming ?? []).map((edge) => edge.source_issue_id))],
-    [dependencyQuery.data],
-  )
-  const prerequisiteCards = useRollIssueCards(prerequisiteIds)
 
   // The snooze shelf is the only consumer of these summaries. One bounded page
   // replaces the snoozed section of the retired aggregate; no per-series fetch.
   const snoozedSummaries = useQuery({
-    queryKey: queryKeys.roll.snoozedSummaries(),
+    queryKey: queryKeys.roll.snoozedSummaries(snoozedIds),
     queryFn: () => threadsApi.list({
       ids: snoozedIds.join(','),
       page_size: snoozedIds.length,
@@ -125,15 +119,10 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     staleTime: 60_000,
   })
 
-  // Both queries are cache-only: the rate mutation and ReadingGraphProblemCard
-  // already own the live fetches on this page.
+  // The rate cache supplements the scoped durable last-read record.
   const lastReadRecord = useRollLastReadRecord()
   const rateQuery = useQuery<RateResponsePayload | null>({
     queryKey: queryKeys.roll.lastRead(),
-    queryFn: skipToken,
-  })
-  const graphQuery = useQuery<ReadingGraphResponse | null>({
-    queryKey: queryKeys.readingGraph.status(),
     queryFn: skipToken,
   })
   const reconciled = useQuery<RollBootstrapResponse | null>({
@@ -187,15 +176,8 @@ export function useRollBootstrap(): UseRollBootstrapResult {
       }]
     })
 
-    const recovery = pending != null
-      ? buildRollRecovery({
-          pending,
-          eligibleIssueIds: issueIds,
-          dependencies: blockedIssueId != null ? dependencyQuery.data ?? null : null,
-          prerequisiteCards: prerequisiteCards.data?.items ?? [],
-          graph: graphQuery.data ?? null,
-          originalTitle: activeThread?.title || null,
-        })
+    const recovery = blockedIssueId != null && recoveryQuery.data != null
+      ? parseRollRecovery(recoveryQuery.data)
       : null
 
     return {
@@ -221,9 +203,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     issueIds,
     threadIds,
     blockedIssueId,
-    dependencyQuery.data,
-    prerequisiteCards.data,
-    graphQuery.data,
+    recoveryQuery.data,
     lastReadRecord.data,
     rateQuery.data,
     snoozedSummaries.data,
@@ -237,13 +217,10 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     || lastReadRecord.isPending
     || (issueIds.length > 0 && cards.isPending)
     || (pendingCardIds.length > 0 && pendingCards.isPending)
-  const recoveryIsPending = reconciled.data == null && blockedIssueId != null && (
-    dependencyQuery.isPending
-    || (prerequisiteIds.length > 0 && prerequisiteCards.isPending)
-  )
-  const recoveryError = blockedIssueId != null
-    ? dependencyQuery.error ?? prerequisiteCards.error ?? null
-    : null
+  const recoveryIsPending = reconciled.data == null
+    && blockedIssueId != null
+    && recoveryQuery.isPending
+  const recoveryError = blockedIssueId != null ? recoveryQuery.error ?? null : null
 
   const refetch = useCallback(async (): Promise<RollBootstrapResponse> => {
     // A reconciled mutation publishes its already-fetched scoped snapshot on
@@ -253,11 +230,11 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     await Promise.all([
       die.refetch(),
       eligible.refetch(),
+      lastReadRecord.refetch(),
       // `refetch` ignores `enabled`; the cards route rejects an empty batch.
       ...(issueIds.length > 0 ? [cards.refetch()] : []),
       ...(pendingCardIds.length > 0 ? [pendingCards.refetch()] : []),
-      ...(blockedIssueId != null ? [dependencyQuery.refetch()] : []),
-      ...(prerequisiteIds.length > 0 ? [prerequisiteCards.refetch()] : []),
+      ...(blockedIssueId != null ? [recoveryQuery.refetch()] : []),
       ...(snoozedIds.length > 0 ? [snoozedSummaries.refetch()] : []),
     ])
     return queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()) ?? composed
@@ -269,9 +246,8 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     pendingCardIds.length,
     pendingCards,
     blockedIssueId,
-    dependencyQuery,
-    prerequisiteIds.length,
-    prerequisiteCards,
+    recoveryQuery,
+    lastReadRecord,
     snoozedIds.length,
     snoozedSummaries,
     composed,
