@@ -77,7 +77,7 @@ test.describe('Issue #4350: browser-owned Roll pending', () => {
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
 
     const before = retiredRequestCounts(ledger)
-    await page.getByRole('button', { name: 'cancel rating' }).click()
+    await page.getByRole('button', { name: 'Cancel roll', exact: true }).click()
     await expect(page.getByTestId('roll-primary-action')).toBeVisible({ timeout: 20000 })
     expect(retiredRequestCounts(ledger)).toEqual(before)
 
