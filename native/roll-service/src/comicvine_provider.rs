@@ -1207,10 +1207,10 @@ mod tests {
                 "INSERT INTO users (id, username) VALUES \
                    (1, 'repair-owner'), (2, 'repair-other'); \
                  INSERT INTO threads \
-                   (id, title, format, issues_remaining, queue_position, status, user_id) \
+                   (id, title, issues_remaining, queue_position, status, user_id) \
                  VALUES \
-                   (11, 'Owned', 'Series', 1, 1, 'active', 1), \
-                   (12, 'Other', 'Series', 1, 1, 'active', 2); \
+                   (11, 'Owned', 1, 1, 'active', 1), \
+                   (12, 'Other', 1, 1, 'active', 2); \
                  INSERT INTO issues \
                    (id, thread_id, issue_number, status, position, created_at) \
                  VALUES \
@@ -1308,8 +1308,8 @@ mod tests {
                 "INSERT INTO users (id, username, is_admin, created_at) \
                  VALUES (1, 'confirm-owner', false, now()); \
                  INSERT INTO threads \
-                   (id, title, format, issues_remaining, queue_position, status, user_id) \
-                 VALUES (1, 'Owned', 'Series', 1, 1, 'active', 1); \
+                   (id, title, issues_remaining, queue_position, status, user_id) \
+                 VALUES (1, 'Owned', 1, 1, 'active', 1); \
                  INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) \
                  VALUES (1, 1, '3', 'unread', 1, now());",
             )
