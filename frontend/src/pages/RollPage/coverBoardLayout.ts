@@ -52,6 +52,7 @@ export function clamp(value: number, min: number, max: number): number {
  * unknown size falls back to d6, matching the scoped die-state fallback.
  */
 export function resolveProductionDie(value: number): ProductionDie {
+  // SAFETY: PRODUCTION_DICE_SIDES is the canonical supported-size list; the cast only widens it for Array.includes, and value is re-checked against that same list before being narrowed to ProductionDie.
   return (PRODUCTION_DICE_SIDES as readonly number[]).includes(value)
     ? (value as ProductionDie)
     : 6

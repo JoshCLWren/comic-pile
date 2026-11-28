@@ -102,6 +102,7 @@ export function MobileGallery({
   }
 
   const coverWidth = galleryCoverWidth(width)
+  // SAFETY: the custom property is consumed by the gallery CSS, not by React's CSSProperties type.
   const trackStyle = {
     height: `${Math.ceil(coverWidth * 1.5 + 19)}px`,
     '--gallery-cover-w': `${coverWidth}px`,
@@ -125,6 +126,7 @@ export function MobileGallery({
         <div className="roll-gallery-track" style={trackStyle}>
           {pool.map((thread, index) => {
             const offset = carouselOffset(index, active, pool.length)
+            // SAFETY: the style object is consumed as CSSProperties by RollCover.
             const style = {
               transform: carouselTransform(offset, coverWidth),
               opacity: Math.abs(offset) > 1 ? 0 : offset === 0 ? 1 : 0.55,

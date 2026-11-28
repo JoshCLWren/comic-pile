@@ -65,6 +65,7 @@ export function CoverBoard({
   }))
   const middleLeft = Math.ceil(middleCount / 2)
 
+  // SAFETY: the custom properties are consumed by the board CSS, not by React's CSSProperties type.
   const boardStyle = {
     '--roll-cover-w': `${layout.coverWidth}px`,
     '--roll-gap': `${layout.gap}px`,
