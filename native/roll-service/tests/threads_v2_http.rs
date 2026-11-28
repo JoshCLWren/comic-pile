@@ -456,3 +456,74 @@ async fn delete_v2_removes_thread_with_reading_list_membership_dependencies() {
     assert_eq!(counts.get::<_, i64>(3), 1, "reading list itself retained");
     drop(conn);
 }
+
+/// Read-only Queue revisits must return the same ids, order and totals, and
+/// every rendered row must be a member of the set the totals count (#3604).
+///
+/// Ties in `queue_position` are intentional here: the deterministic `id`
+/// tie-breaker is what keeps repeated reads stable. The second half seeds an
+/// invalid active row at position 0 to prove rows and totals cannot diverge.
+#[tokio::test]
+async fn repeated_queue_reads_are_stable_and_share_membership_with_totals() {
+    let ctx = setup("v2queue-stability").await;
+    let first = seed_thread(&ctx, ctx.user_id, "First").await;
+    let second = seed_thread(&ctx, ctx.user_id, "Second").await;
+    let uri = "/api/v2/threads?sort=position&page_size=50";
+
+    let mut baseline: Option<(Vec<i64>, i64, i64)> = None;
+    for _ in 0..3 {
+        let (status, body) = call(&ctx, "GET", uri, None).await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+        let ids = body["threads"]
+            .as_array()
+            .expect("threads array")
+            .iter()
+            .map(|row| row["id"].as_i64().expect("thread id"))
+            .collect::<Vec<_>>();
+        let snapshot = (
+            ids,
+            body["active_count"].as_i64().expect("active_count"),
+            body["filtered_count"].as_i64().expect("filtered_count"),
+        );
+        match &baseline {
+            None => baseline = Some(snapshot),
+            Some(expected) => assert_eq!(
+                &snapshot, expected,
+                "read-only revisit changed Queue membership, order or totals"
+            ),
+        }
+    }
+    let baseline = baseline.expect("at least one read");
+    assert_eq!(baseline.0, vec![first as i64, second as i64]);
+    assert_eq!(baseline.1, 2);
+    assert_eq!(baseline.2, 2);
+
+    // Leave the row active but outside the queue: the list and both totals
+    // must agree that it is not a member.
+    let conn = ctx.state.pool.get().await.unwrap();
+    let updated = conn
+        .execute(
+            "UPDATE threads SET queue_position = 0 WHERE id = $1",
+            &[&second],
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated, 1);
+    drop(conn);
+
+    let (status, body) = call(&ctx, "GET", uri, None).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let ids = body["threads"]
+        .as_array()
+        .expect("threads array")
+        .iter()
+        .map(|row| row["id"].as_i64().expect("thread id"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        ids,
+        vec![first as i64],
+        "non-queued active row must not render"
+    );
+    assert_eq!(body["active_count"].as_i64(), Some(1));
+    assert_eq!(body["filtered_count"].as_i64(), Some(1));
+}
