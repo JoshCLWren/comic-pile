@@ -62,4 +62,3 @@ export const DEFAULT_CREATE_STATE: QueueFormState = {
   lastIssueRead: 0,
   manualCreatorCredits: [],
 }
-
