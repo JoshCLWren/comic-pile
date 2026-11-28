@@ -852,6 +852,7 @@ export default function CblBrowserPage() {
   const confirmCommit = () => {
     if (!selectedSource || !preview || commitBlocked || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
+    setCommitMissingListId(false)
     setCommitSourceId(selectedSource.id)
     const key =
       idempotencyKeys.current[selectedSource.id]
