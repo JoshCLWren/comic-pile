@@ -100,9 +100,21 @@ test.describe('History search and filters (issue #3575)', () => {
     await page.getByLabel('From date').fill('2026-11-08')
     await page.getByLabel('To date').fill('2026-11-09')
 
+    // Text inputs settle through a short debounce; wait for the final request
+    // that carries every control, not the intermediate keystroke requests.
     await expect
-      .poll(() => requests.at(-1)?.searchParams.get('q'))
-      .toBe('Saga')
+      .poll(() => {
+        const params = requests.at(-1)?.searchParams
+        if (!params) return ''
+        return [
+          params.get('q'),
+          params.get('series'),
+          params.get('type'),
+          params.get('date_from'),
+          params.get('date_to'),
+        ].join('|')
+      })
+      .toBe('Saga|Paper Girls|roll|2026-11-08|2026-11-09')
     const latest = requests.at(-1)!
     expect(latest.searchParams.get('series')).toBe('Paper Girls')
     expect(latest.searchParams.get('type')).toBe('roll')
