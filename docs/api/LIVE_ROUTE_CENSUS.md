@@ -13,6 +13,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
+<<<<<<< HEAD
 - Live API routes: 236 (v1 56, v2 176, unversioned 4).
 - v1 routes with a named retirement owner: 56.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
@@ -20,6 +21,15 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 - Scanned first-party call sites: 917.
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 158 (owner 158, baseline debt 0, nonconforming v2 98).
+=======
+- Live API routes: 237 (v1 57, v2 176, unversioned 4).
+- v1 routes with a named retirement owner: 57.
+- v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
+- Routes with unresolved production ingress: 0.
+- Scanned first-party call sites: 918.
+- Stale AIP baseline entries (no live route): 4.
+- Allowlist entries: 159 (owner 159, baseline debt 0, nonconforming v2 98).
+>>>>>>> origin/main
 
 ## Ownership matrix
 
@@ -227,7 +237,11 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/roll/die-state` | `roll_resources::die_state` | v2 | frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/rollResourcesApi.test.ts | /api/native_roll.rs | #4595 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/dismiss-pending` | `dismiss_pending::dismiss_pending` | v2 | frontend/src/services/api-roll.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | GET | `/api/v2/roll/eligible-issue-ids` | `roll_resources::eligible_issue_ids` | v2 | frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/rollResourcesApi.test.ts | /api/native_roll.rs | #4595 | canonical-v2 | live-target |
+<<<<<<< HEAD
 | POST | `/api/v2/roll/offer` | `roll_offer::offer` | v2 | frontend/src/services/api-roll.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
+=======
+| POST | `/api/v2/roll/offer` | `roll_offer::offer` | v2 | frontend/src/services/api-roll.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
+>>>>>>> origin/main
 | POST | `/api/v2/roll/reset` | `roll_reset::reset` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/RollPage.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/switch-prerequisite` | `roll_switch_prerequisite::switch_prerequisite` | v2 | frontend/src/services/rollBootstrapApi.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/unsnooze` | `roll_offer::unsnooze` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
@@ -264,7 +278,11 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Owner issue cross-reference
 
+<<<<<<< HEAD
 Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5713, #5714, #5715, #5716, #5717, #5718.
+=======
+Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5713, #5714, #5715, #5716, #5717, #5718.
+>>>>>>> origin/main
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:
