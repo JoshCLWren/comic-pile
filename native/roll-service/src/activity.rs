@@ -317,6 +317,36 @@ WITH primaries AS (
             OR e.timestamp >= ((($8::text::date)::timestamp) AT TIME ZONE $10))
        AND ($9::text::date IS NULL
             OR e.timestamp < (((($9::text::date + 1)::timestamp)) AT TIME ZONE $10))
+       -- Type filtering must happen before LIMIT, otherwise a bounded fetch of
+       -- non-matching primaries would end the stream early. The predicates
+       -- mirror the companion joins below so the same logical actions qualify.
+       AND ($7::text IS NULL
+            OR e.type = $7
+            OR ($7 = 'rate'
+                AND e.type IN ('rate', 'issue_command', 'issue_unread')
+                AND e.issue_id IS NOT NULL
+                AND e.context->>'issue_command_key' IS NOT NULL
+                AND EXISTS (
+                      SELECT 1 FROM events d
+                       WHERE d.user_id = $1
+                         AND d.type = 'rate'
+                         AND d.issue_id = e.issue_id
+                         AND d.thread_id IS NOT NULL
+                         AND d.context->>'dice_command_key' LIKE 'roll-rating-%'
+                         AND 'roll-rating-' || d.thread_id || '-'
+                             || (e.context->>'issue_command_key')
+                             = d.context->>'dice_command_key'))
+            OR ($7 = 'roll'
+                AND e.type = 'snooze'
+                AND e.context->>'dice_command_key' LIKE '%-snooze'
+                AND EXISTS (
+                      SELECT 1 FROM events r
+                       WHERE r.user_id = $1
+                         AND r.timestamp <= e.timestamp
+                         AND r.type = 'roll'
+                         AND r.context->>'roll_offer_key' IS NOT NULL
+                         AND (r.context->>'roll_offer_key') || '-snooze'
+                             = e.context->>'dice_command_key')))
        AND NOT (
              e.type = 'roll'
          AND e.context->>'roll_offer_key' IS NOT NULL
@@ -539,10 +569,7 @@ pub async fn list_activity(
             ],
         )
         .await
-        .map_err(|error| {
-            eprintln!("ACTIVITY SQL ERROR: {error:?}");
-            db::query_error(error)
-        })?;
+        .map_err(db::query_error)?;
 
     let items: Vec<(StreamKey, ActivityItem)> = rows.iter().flat_map(logical_items).collect();
     let (items, next_page_token) = paginate(items, after, limit as usize);
