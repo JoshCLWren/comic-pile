@@ -4858,7 +4858,7 @@ async fn find_or_create_series_thread_sp(
             let qp = max_queue_position_tx(sp, user_id).await? + 1;
             let row = sp
                 .query_one(
-                    "INSERT INTO threads (user_id,title,format,issues_remaining,queue_position,status,total_issues,reading_progress,created_at) VALUES ($1,$2,'comic',0,$3,'active',0,'not_started',NOW()) RETURNING id",
+                    "INSERT INTO threads (user_id,title,issues_remaining,queue_position,status,total_issues,reading_progress,created_at) VALUES ($1,$2,0,$3,'active',0,'not_started',NOW()) RETURNING id",
                     &[&user_id, &title, &qp],
                 )
                 .await
@@ -4891,7 +4891,7 @@ async fn find_or_create_series_thread_sp(
     let qp = max_queue_position_tx(sp, user_id).await? + 1;
     let row = sp
         .query_one(
-            "INSERT INTO threads (user_id,title,format,issues_remaining,queue_position,status,total_issues,reading_progress,created_at) VALUES ($1,$2,'comic',0,$3,'active',0,'not_started',NOW()) RETURNING id",
+            "INSERT INTO threads (user_id,title,issues_remaining,queue_position,status,total_issues,reading_progress,created_at) VALUES ($1,$2,0,$3,'active',0,'not_started',NOW()) RETURNING id",
             &[&user_id, &title, &qp],
         )
         .await

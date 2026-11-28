@@ -1000,7 +1000,7 @@ mod tests {
         assert_fields(
             &document,
             "BootstrapThreadSummary",
-            &["id", "title", "format", "last_activity_at", "tags"],
+            &["id", "title", "last_activity_at", "tags"],
         );
         assert_fields(
             &document,
