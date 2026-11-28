@@ -452,13 +452,12 @@ async fn provider_exchange_with_timeout(
             });
         }
         if !status.is_success() {
-            // 403 stays a plain provider error (Python parity), now classified
-            // as a distinct HTTP status rather than a generic unavailable.
-            return Err(ProviderFailure::ProviderUnavailable(
-                ProviderUnavailableCategory::HttpStatus {
-                    status: status.as_u16(),
-                },
-            ));
+            // 403 stays a plain provider error (Python parity). Hand the status
+            // to the callers so both the repair and browser paths classify it
+            // as a distinct HTTP-status failure rather than a generic outage.
+            return Ok(Exchange::HttpStatus {
+                status: status.as_u16(),
+            });
         }
         if response
             .headers
