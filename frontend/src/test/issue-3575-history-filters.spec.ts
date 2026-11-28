@@ -127,10 +127,11 @@ test.describe('History search and filters (issue #3575)', () => {
     await expect(list.getByRole('listitem').first()).toContainText('Rolled · Saga #4')
 
     await page.getByRole('button', { name: 'Clear filters' }).click()
-    await expect
-      .poll(() => requests.at(-1)?.searchParams.has('q'))
-      .toBe(false)
     await expect(page.getByRole('combobox', { name: 'Activity type' })).toHaveValue('')
+    await expect(page.getByRole('searchbox', { name: 'Search activity' })).toHaveValue('')
+    await expect(page.getByRole('searchbox', { name: 'Series' })).toHaveValue('')
+    await expect(page.getByRole('button', { name: 'Clear filters' })).toBeDisabled()
+    await expect(list.getByRole('listitem')).toHaveCount(2)
   })
 
   test('a filtered empty result is distinct from an empty history', async ({ page, request }) => {
