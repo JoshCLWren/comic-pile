@@ -14,14 +14,6 @@ vi.mock('../components/PositionSlider', () => ({ default: () => null }))
 vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
 vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
 vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => null }))
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
-  FormatSelect: ({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="Comic">Comic</option>
-      <option value="Manga">Manga</option>
-    </select>
-  ),
-}))
 
 function Harness({ onCloseCreate }: { onCloseCreate: () => void }) {
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)

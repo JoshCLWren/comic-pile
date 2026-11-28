@@ -17,21 +17,6 @@ vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
 vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
 vi.mock('../components/AddSeriesFromComicVineDialog', () => ({ default: () => null }))
 vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => null }))
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
-  FormatSelect: ({
-    id,
-    value,
-    onChange,
-  }: {
-    id: string
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="Comic">Comic</option>
-    </select>
-  ),
-}))
 vi.mock('../services/api-threads', () => ({
   threadsApi: { checkPotentialDuplicates: vi.fn() },
 }))
