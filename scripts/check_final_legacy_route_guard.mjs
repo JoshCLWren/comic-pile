@@ -29,7 +29,6 @@ const VERBS = ['get', 'post', 'put', 'patch', 'delete'];
 
 /** True for v1 and bare-domain application paths; v2 and /api/metrics are not legacy. */
 export function isLegacyPath(pathname) {
-  if (typeof pathname !== 'string') return false;
   if (pathname === '/api/metrics') return false; // documented operational exemption
   return pathname.startsWith('/api/v1/')
     || /^\/api\/[^v/]/.test(pathname)
@@ -129,8 +128,10 @@ export function collectViolations(root = DEFAULT_ROOT) {
     if (!name.endsWith('.json') || name === 'vercel-rewrites.json') continue;
     const fragment = readJson(root, path.join(FRAGMENT_DIR, name));
     for (const operation of Array.isArray(fragment.operations) ? fragment.operations : []) {
-      if (!isLegacyPath(operation.path)) continue;
-      const key = routeKey(operation.method, operation.path);
+      // Decode fragment JSON at the I/O boundary; isLegacyPath sees a domain string.
+      const pathname = String(operation?.path ?? '');
+      if (!isLegacyPath(pathname)) continue;
+      const key = routeKey(String(operation?.method ?? '').toUpperCase(), pathname);
       if (!allowed.has(key)) {
         // A custom-method fragment path can be served by an explicitly
         // registered dispatcher pattern (e.g. #5707/#5709 thread actions).
@@ -144,8 +145,9 @@ export function collectViolations(root = DEFAULT_ROOT) {
     }
     const generation = fragment.vercel_generation || {};
     for (const cron of Array.isArray(generation.crons) ? generation.crons : []) {
-      if (isLegacyPath(cron.path)) {
-        violations.push(`${FRAGMENT_DIR}/${name}: legacy cron target ${cron.path}`);
+      const pathname = String(cron?.path ?? '');
+      if (isLegacyPath(pathname)) {
+        violations.push(`${FRAGMENT_DIR}/${name}: legacy cron target ${pathname}`);
       }
     }
     for (const src of Array.isArray(generation.retired_rewrite_srcs) ? generation.retired_rewrite_srcs : []) {
