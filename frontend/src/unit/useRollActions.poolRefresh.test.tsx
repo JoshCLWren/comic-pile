@@ -58,7 +58,7 @@ function bootstrapWith(overrides: Partial<RollBootstrapResponse> = {}): RollBoot
 }
 
 function pooledThread(id: number): RollBootstrapThread {
-  return { id, title: `Series ${id}`, format: 'Comic' }
+  return { id, title: `Series ${id}`,}
 }
 
 const bootstrapKey = queryKeys.roll.bootstrap()

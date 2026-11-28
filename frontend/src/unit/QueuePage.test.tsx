@@ -308,7 +308,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     mockReroll.mockReset().mockResolvedValue({
       thread_id: 2,
       title: 'Next comic',
-      format: 'Comic',
+
       issues_remaining: 4,
       queue_position: 2,
       die_size: 8,

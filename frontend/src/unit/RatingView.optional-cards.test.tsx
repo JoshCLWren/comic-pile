@@ -14,7 +14,7 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     activeRatingThread: {
       id: 1,
       title: 'Saga',
-      format: 'Comic',
+
       issues_remaining: 5,
       total_issues: 10,
       issue_number: '3',

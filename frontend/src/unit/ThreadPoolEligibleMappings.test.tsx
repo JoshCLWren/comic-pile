@@ -25,7 +25,7 @@ describe('ThreadPool eligible mappings', () => {
         <ThreadPool
           {...baseProps}
           pool={[]}
-          snoozedThreads={[{ id: 8, title: 'B.P.R.D.', format: 'Comic' }]}
+          snoozedThreads={[{ id: 8, title: 'B.P.R.D.',}]}
           snoozedCovers={{ 8: 'https://example.test/bprd.jpg' }}
           snoozedExpanded
           onUnsnooze={onUnsnooze}
@@ -47,7 +47,7 @@ describe('ThreadPool eligible mappings', () => {
           pool={[{
             id: 7,
             title: 'Amazing Adventures',
-            format: 'ongoing',
+
             issue_id: 42,
             issue_number: '12',
             route_labels: ['Secret War'],
@@ -77,8 +77,8 @@ describe('ThreadPool eligible mappings', () => {
         <ThreadPool
           {...baseProps}
           pool={[
-            { id: 1, title: 'First comic', format: 'Comic' },
-            { id: 2, title: 'Second comic', format: 'Comic' },
+            { id: 1, title: 'First comic',},
+            { id: 2, title: 'Second comic',},
           ]}
           eligibleThreadIds={[2, 1]}
         />
@@ -93,7 +93,7 @@ describe('ThreadPool eligible mappings', () => {
       <MemoryRouter>
         <ThreadPool
           {...baseProps}
-          pool={[{ id: 1, title: 'No longer eligible', format: 'Comic' }]}
+          pool={[{ id: 1, title: 'No longer eligible',}]}
           eligibleThreadIds={[]}
         />
       </MemoryRouter>,
@@ -108,7 +108,7 @@ describe('ThreadPool eligible mappings', () => {
       <MemoryRouter>
         <ThreadPool
           {...baseProps}
-          pool={[{ id: 1, title: 'Card comic', format: 'Comic', issue_id: 55 }]}
+          pool={[{ id: 1, title: 'Card comic',issue_id: 55 }]}
           issueCards={{
             items: [{
               issue_id: 55,
@@ -133,7 +133,7 @@ describe('ThreadPool eligible mappings', () => {
       <MemoryRouter>
         <ThreadPool
           {...baseProps}
-          pool={[{ id: 1, title: 'Stale title', format: 'Comic', issue_id: 55, issue_number: '6' }]}
+          pool={[{ id: 1, title: 'Stale title',issue_id: 55, issue_number: '6' }]}
           issueCards={{
             items: [{
               issue_id: 55,
@@ -162,7 +162,7 @@ describe('ThreadPool eligible mappings', () => {
       <MemoryRouter>
         <ThreadPool
           {...baseProps}
-          pool={[{ id: 1, title: 'Unmapped comic', format: 'Comic', issue_id: 55, issue_number: '3' }]}
+          pool={[{ id: 1, title: 'Unmapped comic',issue_id: 55, issue_number: '3' }]}
         />
       </MemoryRouter>,
     )
@@ -180,7 +180,7 @@ describe('ThreadPool eligible mappings', () => {
           pool={[{
             id: 1,
             title: 'Stale bootstrap title',
-            format: 'Comic',
+
             issue_id: 55,
             issue_number: '6',
           }]}
@@ -218,7 +218,7 @@ describe('ThreadPool eligible mappings', () => {
           pool={[{
             id: 7,
             title: 'Amazing Adventures',
-            format: 'ongoing',
+
             issue_number: '12',
             route_labels: ['Secret War', 'Civil War', 'Secret Invasion'],
             overflow_routes_count: 3,
@@ -238,7 +238,7 @@ describe('ThreadPool eligible mappings', () => {
         <ThreadPool
           {...baseProps}
           isRatingView
-          pool={[{ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' }]}
+          pool={[{ id: 7, title: 'Amazing Adventures',issue_number: '12' }]}
         />
       </MemoryRouter>,
     )
@@ -254,9 +254,9 @@ describe('ThreadPool eligible mappings', () => {
           {...baseProps}
           dieSize={6}
           pool={[
-            { id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' },
-            { id: 8, title: 'Ultimate Spider-Man', format: 'ongoing', issue_number: '3' },
-            { id: 9, title: 'Secret Six', format: 'ongoing', issue_number: '1' },
+            { id: 7, title: 'Amazing Adventures',issue_number: '12' },
+            { id: 8, title: 'Ultimate Spider-Man',issue_number: '3' },
+            { id: 9, title: 'Secret Six',issue_number: '1' },
           ]}
         />
       </MemoryRouter>,
@@ -280,7 +280,7 @@ describe('ThreadPool eligible mappings', () => {
           pool={[{
             id: 7,
             title: 'Amazing Adventures',
-            format: 'ongoing',
+
             issue_id: 42,
             issue_number: '12',
             route_labels: ['Secret War', 'Civil War'],
@@ -304,7 +304,7 @@ describe('ThreadPool eligible mappings', () => {
         <ThreadPool
           {...baseProps}
           onThreadClick={onThreadClick}
-          pool={[{ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' }]}
+          pool={[{ id: 7, title: 'Amazing Adventures',issue_number: '12' }]}
         />
       </MemoryRouter>,
     )
@@ -324,7 +324,7 @@ describe('ThreadPool eligible mappings', () => {
       <MemoryRouter>
         <ThreadPool
           {...baseProps}
-          pool={[{ id: 7, title: 'Amazing Adventures', format: 'ongoing' }]}
+          pool={[{ id: 7, title: 'Amazing Adventures',}]}
         />
       </MemoryRouter>,
     )
@@ -343,7 +343,7 @@ describe('ThreadPool eligible mappings', () => {
           pool={[{
             id: 7,
             title: 'Amazing Adventures',
-            format: 'ongoing',
+
             issue_number: '12',
             route_labels: ['Secret War', '', 'Civil War'],
           }]}
@@ -364,7 +364,7 @@ describe('ThreadPool eligible mappings', () => {
           pool={[{
             id: 7,
             title: 'Amazing Adventures',
-            format: 'ongoing',
+
             issue_number: '12',
             route_labels: [''],
           }]}
@@ -386,7 +386,7 @@ describe('exact owned issue entry on die faces (#5904)', () => {
         <ThreadPool
           {...baseProps}
           onThreadClick={onThreadClick}
-          pool={[{ id: 9, title: 'Saga', format: 'Comic', issue_id: 71, issue_number: '4' }]}
+          pool={[{ id: 9, title: 'Saga',issue_id: 71, issue_number: '4' }]}
         />
       </MemoryRouter>,
     )
@@ -404,7 +404,7 @@ describe('exact owned issue entry on die faces (#5904)', () => {
       <MemoryRouter>
         <ThreadPool
           {...baseProps}
-          pool={[{ id: 9, title: 'Legacy series', format: 'Comic', issue_number: '4' }]}
+          pool={[{ id: 9, title: 'Legacy series',issue_number: '4' }]}
         />
       </MemoryRouter>,
     )

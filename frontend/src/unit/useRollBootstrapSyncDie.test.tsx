@@ -224,7 +224,7 @@ describe('pending session hydration (#4352 wider source kept)', () => {
       active_thread: {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
+
         issues_remaining: 5,
         queue_position: 0,
         total_issues: 10,
@@ -258,7 +258,7 @@ describe('pending session hydration (#4352 wider source kept)', () => {
       active_thread: {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
+
         issues_remaining: 5,
         queue_position: 0,
         total_issues: 10,

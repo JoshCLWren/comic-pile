@@ -100,7 +100,7 @@ const rateResponse = {
 const cachedLastRead: RateResponsePayload = {
   id: 1,
   title: 'Saga',
-  format: 'Comic',
+
   issues_remaining: 3,
   total_issues: 10,
   queue_position: 1,

@@ -21,7 +21,7 @@ function mapping(overrides: Partial<ComicVineMappingHealth>): ComicVineMappingHe
 }
 
 function thread(overrides: Partial<ManualPickerThread> & { id: number }): ManualPickerThread {
-  return { title: 'Saga', format: 'Single Issues', ...overrides }
+  return { title: 'Saga',...overrides }
 }
 
 const labelsOf = (options: Array<{ id: number; label: string }>) =>

@@ -41,7 +41,7 @@ const CHECK = vi.mocked(threadsApi.checkPotentialDuplicates)
 const CONFIRMED_MATCH: PotentialDuplicateMatch = {
   thread_id: 42,
   title: 'Spider-Man (2018)',
-  format: 'Comic',
+
   status: 'active',
   issues_remaining: 2,
   total_issues: null,
@@ -53,7 +53,7 @@ const CONFIRMED_MATCH: PotentialDuplicateMatch = {
 const UNCERTAIN_MATCH: PotentialDuplicateMatch = {
   thread_id: 9,
   title: 'Saga',
-  format: 'Comic',
+
   status: 'active',
   issues_remaining: 0,
   total_issues: null,

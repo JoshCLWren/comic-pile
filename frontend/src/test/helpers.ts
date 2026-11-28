@@ -422,7 +422,7 @@ export async function createThread(
 
   const dataWithoutTotal: ThreadCreatePayload = {
     title: threadData.title,
-    format: threadData.format,
+
     issues_remaining: threadData.issues_remaining,
   };
   if (threadData.notes !== undefined) {

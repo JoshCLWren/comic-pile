@@ -31,7 +31,7 @@ const rollApi: RollApi = {
 const ACTIVE_THREAD: RatingThread = {
   id: 1,
   title: 'Saga',
-  format: 'Comic',
+
   issues_remaining: 5,
   total_issues: 10,
   queue_position: 0,

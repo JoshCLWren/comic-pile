@@ -10,7 +10,7 @@ function ratingThread(id: number): RatingThread {
   return {
     id,
     title: `Series ${id}`,
-    format: 'Comic',
+
     issues_remaining: 3,
     queue_position: 1,
     total_issues: 6,
@@ -27,7 +27,7 @@ function nextOffer(): RollResponse {
   return {
     thread_id: 9,
     title: 'Next Series',
-    format: 'Comic',
+
     issues_remaining: 2,
     queue_position: 2,
     die_size: 8,

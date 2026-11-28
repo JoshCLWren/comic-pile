@@ -107,7 +107,7 @@ const queueThreads = [1, 2].map((id) => ({
 const stubRollResponse: RollResponse = {
   thread_id: 1,
   title: 'Series 1',
-  format: 'Comic',
+
   issues_remaining: 3,
   queue_position: 1,
   die_size: 20,

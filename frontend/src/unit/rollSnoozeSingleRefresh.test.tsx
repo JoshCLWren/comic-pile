@@ -55,7 +55,7 @@ function ratingThread(id: number): RatingThread {
   return {
     id,
     title: `Series ${id}`,
-    format: 'Comic',
+
     issues_remaining: 3,
     queue_position: 1,
     total_issues: 6,
@@ -69,7 +69,7 @@ function ratingThread(id: number): RatingThread {
 }
 
 function pooledThread(id: number): RollBootstrapThread {
-  return { id, title: `Series ${id}`, format: 'Comic' }
+  return { id, title: `Series ${id}`,}
 }
 
 /** Resolve after a macrotask so the reconciliation suppression window expires. */

@@ -25,7 +25,7 @@ describe('threadsApi.update', () => {
     await api.update(5, {
       title: 'Renamed',
       notes: 'kept',
-      expected: { title: 'Old', format: 'Comic', notes: null, manual_creator_credits: [] },
+      expected: { title: 'Old',notes: null, manual_creator_credits: [] },
     })
 
     expect(client.patch).toHaveBeenCalledTimes(1)
@@ -114,7 +114,7 @@ describe('threadsApi.checkPotentialDuplicates', () => {
     client.post.mockResolvedValueOnce({ matches: [] })
 
     const api = createThreadsApi(client)
-    await api.checkPotentialDuplicates({ title: 'Saga', format: 'Comic' })
+    await api.checkPotentialDuplicates({ title: 'Saga',})
 
     expect(client.post).toHaveBeenCalledWith('/v2/threads:checkDuplicates', {
       title: 'Saga',

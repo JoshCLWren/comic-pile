@@ -16,7 +16,7 @@ function rateResponse(overrides: Partial<RateResponsePayload> = {}): RateRespons
   return {
     id: THREAD_ID,
     title: 'Saga',
-    format: 'Comic',
+
     issues_remaining: 3,
     total_issues: 12,
     queue_position: 1,

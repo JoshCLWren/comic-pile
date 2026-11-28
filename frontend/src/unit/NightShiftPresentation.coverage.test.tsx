@@ -22,10 +22,10 @@ const flight: CoverFlightState = {
 }
 
 const pool: RollBootstrapThread[] = [
-  { id: 1, title: 'Alpha', format: 'Comic' },
-  { id: 2, title: 'Beta', format: 'Comic' },
-  { id: 3, title: 'Gamma', format: 'Comic' },
-  { id: 4, title: 'Delta', format: 'Comic' },
+  { id: 1, title: 'Alpha',},
+  { id: 2, title: 'Beta',},
+  { id: 3, title: 'Gamma',},
+  { id: 4, title: 'Delta',},
 ]
 
 /** Fully typed card fixture: presentation guards only read status/title/number. */
@@ -405,7 +405,7 @@ describe('MobileGallery additional guard branches (#5981)', () => {
 
   it('renders a cover with an issue id, card and winning id', () => {
     const issuePool: RollBootstrapThread[] = [
-      { id: 1, title: 'Alpha', format: 'Comic', issue_id: 100 },
+      { id: 1, title: 'Alpha',issue_id: 100 },
     ]
     const cardMap = new Map([[100, { ...issueCardFixture, status: 'unread' }]])
     render(
@@ -423,7 +423,7 @@ describe('MobileGallery additional guard branches (#5981)', () => {
 
   it('renders a cover whose issue has no card', () => {
     const issuePool: RollBootstrapThread[] = [
-      { id: 2, title: 'Beta', format: 'Comic', issue_id: 200 },
+      { id: 2, title: 'Beta',issue_id: 200 },
     ]
     render(
       <MobileGallery
@@ -491,7 +491,7 @@ describe('RollCover guard branches (#5981)', () => {
     const onOpen = vi.fn()
     const { rerender } = render(
       <RollCover
-        thread={{ id: 1, title: 'Alpha', format: 'Comic' }}
+        thread={{ id: 1, title: 'Alpha',}}
         face={1}
         card={null}
         winner={false}
@@ -505,7 +505,7 @@ describe('RollCover guard branches (#5981)', () => {
 
     rerender(
       <RollCover
-        thread={{ id: 2, title: 'Beta', format: 'Comic', issue_id: 2 }}
+        thread={{ id: 2, title: 'Beta',issue_id: 2 }}
         face={2}
         card={{ ...issueCardFixture, status: 'read' }}
         winner={true}
@@ -516,7 +516,7 @@ describe('RollCover guard branches (#5981)', () => {
 
     rerender(
       <RollCover
-        thread={{ id: 3, title: 'Gamma', format: 'Comic', issue_id: 3 }}
+        thread={{ id: 3, title: 'Gamma',issue_id: 3 }}
         face={3}
         card={{ ...issueCardFixture, status: 'unread' }}
         winner={false}
@@ -554,7 +554,7 @@ describe('CoverBoard issue and selection branches (#5981)', () => {
     const widthSpy = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(640)
     try {
       const issuePool: RollBootstrapThread[] = [
-        { id: 1, title: 'Alpha', format: 'Comic', issue_id: 100 },
+        { id: 1, title: 'Alpha',issue_id: 100 },
       ]
       const cardMap = new Map([[100, { ...issueCardFixture, status: 'read' }]])
       render(

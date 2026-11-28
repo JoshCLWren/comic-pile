@@ -39,7 +39,7 @@ describe('useRollPendingSync', () => {
       useRollPendingSync({
         rollBootstrap: bootstrap({
           pending_thread_id: 99,
-          snoozed_threads: [{ id: 5, title: 'Saga', format: 'Comic' }],
+          snoozed_threads: [{ id: 5, title: 'Saga',}],
         }),
         refetchQueue: vi.fn(),
       }),

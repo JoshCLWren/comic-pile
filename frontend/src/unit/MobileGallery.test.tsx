@@ -5,9 +5,9 @@ import { MobileGallery } from '../pages/RollPage/components/MobileGallery'
 import type { RollBootstrapThread } from '../types/rollBootstrap'
 
 const pool: RollBootstrapThread[] = [
-  { id: 1, title: 'Alpha', format: 'Comic' },
-  { id: 2, title: 'Beta', format: 'Comic' },
-  { id: 3, title: 'Gamma', format: 'Comic' },
+  { id: 1, title: 'Alpha',},
+  { id: 2, title: 'Beta',},
+  { id: 3, title: 'Gamma',},
 ]
 
 function renderGallery(onThreadClick = vi.fn()) {

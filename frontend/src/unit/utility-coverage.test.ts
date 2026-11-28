@@ -144,7 +144,7 @@ describe('roll utilities', () => {
   it('maps metadata fallback branches and progress values', () => {
     const session = { ...thread(4), issue_id: 7, issue_number: '7', next_issue_id: 8, next_issue_number: '8', last_rolled_result: 5 }
     expect(mapSessionThreadToRatingThread(session).id).toBe(4)
-    expect(buildRatingThread(3, 6, { title: 'Meta', id: 9, format: 'Manga', result: 4 })?.id).toBe(9)
+    expect(buildRatingThread(3, 6, { title: 'Meta', id: 9,result: 4 })?.id).toBe(9)
     expect(buildRatingThread(null, null, null, session)?.title).toBe('Thread 4')
     expect(buildRatingThread(4, null, null, session)?.id).toBe(4)
     expect(buildRatingThread(9, null, null, session)).toBeNull()
