@@ -341,6 +341,25 @@ async fn card(
                       m.updated_at DESC, m.id DESC
              LIMIT 1
          ) mapping ON true
+         t.format,
+         COALESCE((
+             SELECT jsonb_agg(to_jsonb(tag) ORDER BY tag.scope, tag.normalized_name)
+             FROM tag_assignments assignment
+             JOIN tags tag ON tag.id = assignment.tag_id
+             WHERE assignment.target_type = 'Thread'
+               AND assignment.target_id = t.id
+               AND (tag.scope = 'global'
+                    OR (tag.scope = 'private' AND tag.owner_user_id = $2))
+         ), '[]'::jsonb)::text,
+         COALESCE((
+             SELECT array_agg(names.name ORDER BY names.name)
+             FROM (
+                 SELECT DISTINCT g.name
+                 FROM dependency_groups g
+                 JOIN dependency_group_memberships m ON m.group_id = g.id
+                 WHERE g.user_id = $2 AND (m.thread_id = t.id OR m.issue_id = i.id)
+             ) names
+         ), ARRAY[]::text[])
          WHERE i.id=$1 AND t.user_id=$2",
             &[&issue_id, &user.id()],
         )
@@ -422,6 +441,25 @@ pub(crate) async fn cards(
                       m.updated_at DESC, m.id DESC
              LIMIT 1
          ) mapping ON true
+         t.format,
+         COALESCE((
+             SELECT jsonb_agg(to_jsonb(tag) ORDER BY tag.scope, tag.normalized_name)
+             FROM tag_assignments assignment
+             JOIN tags tag ON tag.id = assignment.tag_id
+             WHERE assignment.target_type = 'Thread'
+               AND assignment.target_id = t.id
+               AND (tag.scope = 'global'
+                    OR (tag.scope = 'private' AND tag.owner_user_id = $1))
+         ), '[]'::jsonb)::text,
+         COALESCE((
+             SELECT array_agg(names.name ORDER BY names.name)
+             FROM (
+                 SELECT DISTINCT g.name
+                 FROM dependency_groups g
+                 JOIN dependency_group_memberships m ON m.group_id = g.id
+                 WHERE g.user_id = $1 AND (m.thread_id = t.id OR m.issue_id = i.id)
+             ) names
+         ), ARRAY[]::text[])
          WHERE t.user_id=$1 AND i.id=ANY($2::int[])",
             &[&user.id(), &requested],
         )
