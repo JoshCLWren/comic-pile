@@ -56,7 +56,6 @@ export interface IssueReadOperationUndoResponse {
 export interface SetCurrentIssueResponse {
   thread_id: number
   title: string
-  format: string
   issues_remaining: number
   queue_position: number
   issue_id: number | null

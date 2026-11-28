@@ -16,8 +16,6 @@ export const POTENTIAL_DUPLICATE_DEBOUNCE_MS = 350;
 interface PotentialDuplicatesParams {
   /** Candidate title as typed by the reader. */
   title: string;
-  /** Candidate format, used as disambiguating context by the server. */
-  format: string;
   /** Canonical ComicVine volume when the candidate already has one. */
   comicvineVolumeId?: number;
   /** Series being renamed, so a rename never warns about itself. */
@@ -44,7 +42,7 @@ export interface PotentialDuplicatesResult {
  * series.
  *
  * Args:
- *   params: Candidate title/format plus optional volume identity, the thread
+ *   params: Candidate title plus optional volume identity, the thread
  *     being renamed, and whether the owning dialog is open.
  *
  * Returns:
@@ -52,23 +50,16 @@ export interface PotentialDuplicatesResult {
  */
 export function usePotentialDuplicates({
   title,
-  format,
   comicvineVolumeId,
   excludeThreadId,
   enabled = true,
 }: PotentialDuplicatesParams): PotentialDuplicatesResult {
   const trimmedTitle = title.trim();
-  const trimmedFormat = format.trim();
   const debouncedTitle = useDebounce(trimmedTitle, POTENTIAL_DUPLICATE_DEBOUNCE_MS);
-  const canCheck =
-    enabled &&
-    trimmedTitle.length > 0 &&
-    debouncedTitle.length > 0 &&
-    trimmedFormat.length > 0;
+  const canCheck = enabled && trimmedTitle.length > 0 && debouncedTitle.length > 0;
 
   const request: CheckPotentialDuplicatesRequest = {
     title: debouncedTitle,
-    format: trimmedFormat,
   };
   if (comicvineVolumeId !== undefined) {
     request.comicvine_volume_id = comicvineVolumeId;
@@ -80,7 +71,6 @@ export function usePotentialDuplicates({
   const query = useQuery({
     queryKey: queryKeys.thread.potentialDuplicates({
       title: debouncedTitle,
-      format: trimmedFormat,
       comicvine_volume_id: comicvineVolumeId,
       exclude_thread_id: excludeThreadId,
     }),

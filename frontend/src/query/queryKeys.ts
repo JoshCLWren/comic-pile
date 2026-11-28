@@ -208,7 +208,6 @@ export const queryKeys = {
     /** One advisory lookup, keyed by the normalized candidate identity. */
     potentialDuplicates: (params: {
       title: string
-      format: string
       comicvine_volume_id?: number
       exclude_thread_id?: number
     }) =>
@@ -217,7 +216,6 @@ export const queryKeys = {
         'potential-duplicates',
         {
           title: params.title.trim(),
-          format: params.format.trim(),
           comicvine_volume_id: params.comicvine_volume_id ?? null,
           exclude_thread_id: params.exclude_thread_id ?? null,
         },
