@@ -21,14 +21,17 @@ operation is served by the native Rust ingress `api/native_roll.rs`
 (`vercel.json` routes `/api(?:/.*)?` to it). There is no Python-runtime
 exception, parity oracle, or "Python stays mounted" hold on this surface.
 
-There are 22 retained `/api/v1` operations, all served by native Rust, in three
-groups:
+There are 65 retained `/api/v1` operations, all served by native Rust. The
+generated inventory is authoritative for the exact `METHOD path` list; the
+groups below summarize it:
 
 | Group | Retained v1 operations | Target v2 resource |
 |-------|------------------------|--------------------|
-| Stateless previews | 3 (`POST /api/v1/catalog/series-mappings/preview`, `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview`, `POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview`) | stateless v2 preview operations (#5714, #5715, #5716) |
-| Reading-order groups | 7 (`GET/POST /api/v1/reading-order-groups/`, `GET/PATCH/DELETE /api/v1/reading-order-groups/{group_id}`, `GET /api/v1/reading-order-groups/{group_id}/detail`, `PUT /api/v1/reading-order-groups/{group_id}/order`) | `/api/v2/readingOrderGroups…` and memberships/ranges (#5710 retired collection CRUD, #5711 retains order) |
-| Threads | 12 (`/api/v1/threads…` create, check-duplicates, excluded, reactivate, stale, item PATCH/DELETE, exclude, restore, set-pending, test-backdate, issues/creators) | `GET/POST/PATCH/DELETE /api/v2/threads…` (#5701, #5703, #5704, #5705, #5706) |
+| Auth | 8 (`/api/v1/auth…` csrf, login, logout, me, refresh, register, forgot-password, reset-password) | `/api/v2/auth/*` (#4459) |
+| Identity, CBL and stateless previews | 12 (`/api/v1/catalog/series-mappings/preview`, `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview`, the `/api/v1/issue-identity…` CBL sources, adoption and reading-graph previews) | stateless v2 preview and identity resources (#5714, #5715, #5716) |
+| Other retained families | 18 (`bug-reports`, `comicvine`, `continuity-rules`, `creators`, `cron`, `issues`, `releases`, `roll`, `taste`, `users`) | the matching `/api/v2` resources and native compatibility aliases |
+| Reading-order groups | 1 (`PUT /api/v1/reading-order-groups/{group_id}/order`) | `/api/v2/readingOrderGroups…` memberships/ranges (#5711 retains order; collection CRUD retired in #5710) |
+| Threads | 26 (`/api/v1/threads…` plus `POST /api/v1/threads:getBlockingInfo`: create, check-duplicates, excluded, reactivate, stale, item CRUD, exclude, restore, set-pending, test-backdate, issues/creators, reading-orders) | `GET/POST/PATCH/DELETE /api/v2/threads…` (#5701, #5703, #5704, #5705, #5706) |
 
 `docs/api/v2-route-inventory.json` is authoritative for the exact
 `METHOD path` list and its caller lists. `scripts/check_v1_canonical_guidance.mjs`
@@ -67,18 +70,22 @@ handler, no supported route, and no compatibility alias:
   `/api/snooze`) — retired with the Rust roll cutover (#4338, #4349). Snooze is
   the native `POST /api/v2/roll/offer` reroll; unsnooze is client-only (the
   `comicpile_roll_snoozes` browser cookie) and has no server route.
-- The 16 unversioned `threads`, `sessions` and `undo` operations — retired after
-  a caller audit. No unversioned operations remain in the live inventory.
+- The legacy 16 unversioned `threads`, `sessions` and `undo` operations — retired
+  after a caller audit. The live inventory still records 12 retained bare `/api`
+  compatibility operations (the `/api/auth/*` family, `/api/bug-reports/`,
+  `/api/metrics`, `GET /api/roll/events/{event_id}/recommendation-explanation`
+  and `GET /api/threads/{thread_id}`); they are native Rust compatibility
+  aliases, never a contract for new callers.
 
 ## Intentional bare `/api` compatibility routes
 
 Two categories of bare `/api/<segment>` routes are retained deliberately:
 
-1. **Native compatibility aliases** — `GET /api/threads/{thread_id}`,
-   `GET /api/sessions/{session_id}`, `GET /api/sessions/{session_id}/snapshots`,
-   plus the Roll and auth compatibility aliases. They are served by native Rust
-   and are excluded from the versioned inventory count. They are retained for
-   existing callers only; new code uses the v2 resource.
+1. **Native compatibility aliases** — `GET /api/threads/{thread_id}` and the
+   Roll, auth and bug-report compatibility aliases. They are served by native
+   Rust and are recorded in the inventory's unversioned surface, not the v1
+   count. They are retained for existing callers only; new code uses the v2
+   resource.
 2. **Infrastructure surfaces** — bounded health, ping and metrics routes remain
    available. Retired admin, debug and bug-report aliases are not exceptions.
 
