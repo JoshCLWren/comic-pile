@@ -15,6 +15,7 @@ const spies = vi.hoisted(() => ({
   unsnooze: vi.fn().mockResolvedValue({}), unsnoozeNative: vi.fn().mockResolvedValue({}), moveFront: vi.fn().mockResolvedValue({}),
   moveBack: vi.fn().mockResolvedValue({}), shuffle: vi.fn().mockResolvedValue({}),
   rate: vi.fn().mockResolvedValue({}),
+  setPending: vi.fn().mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 }),
 }))
 
 interface HoistedMockValue {
@@ -98,7 +99,7 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
     useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
   }
 })
-vi.mock('../services/api-threads', () => ({ threadsApi: { list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) } }))
+vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) } }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: {} }))
 vi.mock('../services/api', () => ({ default: {} }))
 vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
@@ -210,6 +211,7 @@ describe('RollPage parent handlers', () => {
       rate: { thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 },
       bootstrap: { ...bootstrapData },
     }))
+    spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
   })
 
   it('executes pool actions, roll recovery, and modal callbacks', async () => {
@@ -218,6 +220,7 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByRole('heading', { name: 'Saga' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Read Now/ }))
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'close modal' }))
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
@@ -244,6 +247,7 @@ describe('RollPage parent handlers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'skip migration' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('returns to the direct issue card after successfully setting up tracking', async () => {
@@ -255,6 +259,7 @@ describe('RollPage parent handlers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'complete migration' }))
     await waitFor(() => expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('closes manual issue tracking without starting an automatic Roll rating', async () => {
@@ -265,6 +270,7 @@ describe('RollPage parent handlers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'close migration' }))
     await waitFor(() => expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('allows a visible snoozed manual pick when the whole-series list fails', async () => {
@@ -281,6 +287,7 @@ describe('RollPage parent handlers', () => {
     await user.click(await screen.findByRole('option', { name: /Snoozed Saga/ }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Snoozed Saga')
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('gates the whole-queue shuffle behind a cancelable confirmation (#3261)', async () => {
@@ -378,7 +385,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
-
+    expect(spies.setPending).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
@@ -464,6 +471,7 @@ describe('RollPage parent handlers', () => {
     spies.moveBack.mockRejectedValue(error)
     spies.snooze.mockRejectedValue(error)
     spies.rate.mockRejectedValue(error)
+    spies.setPending.mockRejectedValue(error)
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<RollPage />)
 
@@ -488,6 +496,7 @@ describe('RollPage parent handlers', () => {
     if (!snooze) throw new Error('Snooze action not found')
     await user.click(snooze)
 
+    spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'save rating' }))
@@ -520,7 +529,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
-
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('handles normal roll failures and unresolved pending conflicts', async () => {
@@ -678,6 +687,7 @@ describe('RollPage parent handlers', () => {
     render(<RollPage />)
     expect(screen.queryByRole('button', { name: 'read stale' })).not.toBeInTheDocument()
     expect(screen.queryByText(/series you haven't opened recently/i)).not.toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('renders safely while the thread list is unavailable', () => {
@@ -686,11 +696,12 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument()
   })
 
-  it('manual Read Now never enters automatic rating mode', async () => {
+  it('manual Read Now never calls legacy setPending or enters automatic rating mode', async () => {
     render(<RollPage />)
     fireEvent.click(screen.getByRole('button', { name: 'thread' }))
     fireEvent.click(screen.getByRole('button', { name: /Read Now/ }))
     expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
+    expect(spies.setPending).not.toHaveBeenCalled()
     expect(spies.rate).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
   })
@@ -770,8 +781,8 @@ describe('RollPage parent handlers', () => {
 
   it('completes simple migration of a pool thread without a page-level refetch', async () => {
     const user = userEvent.setup()
-    // The real pending Roll response marks a series without a known total
-    // and triggers simple migration.
+    // The real pending Roll response, not the retired setPending endpoint,
+    // marks a series without a known total and triggers simple migration.
     bootstrapData.active_thread = {
       id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2,
       queue_position: 1, total_issues: null, issue_id: 11,
@@ -945,12 +956,13 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
   })
 
-  it('uses the active pending Roll metadata', async () => {
+  it('uses the active pending Roll metadata without calling legacy setPending', async () => {
     bootstrapData.active_thread = { id: 1, title: 'Session fallback', format: 'Graphic Novel', issues_remaining: 2, queue_position: 1, total_issues: 5, issue_id: 11, issue_number: '2' }
     bootstrapData.roll_pool = [{ id: 1, title: 'Session fallback', format: 'Graphic Novel' }]
     render(<RollPage />)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByTestId('rating-thread-metadata')).toHaveTextContent('Session fallback:2'))
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('keeps the real Roll rating workspace available after an unsuccessful Save', async () => {
@@ -962,6 +974,7 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'save rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    expect(spies.setPending).not.toHaveBeenCalled()
     errorSpy.mockRestore()
   })
 
@@ -974,7 +987,7 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'skip migration' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'complete migration' })).not.toBeInTheDocument()
-
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('refreshes matching active metadata and reopens pending rolls', async () => {
@@ -988,6 +1001,22 @@ describe('RollPage parent handlers', () => {
 
   it('preserves complete issue metadata through the rating transition', async () => {
     const user = userEvent.setup()
+    const completeResponse = {
+      thread_id: 1,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 2,
+      queue_position: 1,
+      total_issues: 10,
+      reading_progress: 0.4,
+      issue_id: 8,
+      issue_number: '4',
+      next_issue_id: 9,
+      next_issue_number: '5',
+      result: 3,
+      last_rolled_result: 3,
+    }
+    spies.setPending.mockResolvedValueOnce(completeResponse)
     render(<RollPage />)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
@@ -1068,6 +1097,7 @@ describe('RollPage parent handlers', () => {
     )
 
     cleanup()
+    spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })
     spies.moveFront.mockRejectedValue(new Error('move failed'))
     render(<RollPage />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'thread' }))
@@ -1079,6 +1109,10 @@ describe('RollPage parent handlers', () => {
   it('handles sparse roll metadata and pending-thread fallback selection', async () => {
     sessionData.current_die = 0
     sessionData.last_rolled_result = null
+    spies.setPending.mockResolvedValueOnce({
+      thread_id: 1, title: 'Sparse', format: 'Comic', issues_remaining: 1,
+      queue_position: 1, total_issues: 2, result: undefined, last_rolled_result: 4,
+    })
     render(<RollPage />)
     expect(screen.getAllByRole('button', { name: 'd6' })[0]).toBeInTheDocument()
     enterPendingRollRating()

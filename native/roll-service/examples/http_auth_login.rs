@@ -20,7 +20,7 @@ async fn login(
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/auth/login")
+                .uri("/api/v2/auth/login")
                 .header("content-type", "application/json")
                 .header("x-forwarded-for", "198.51.100.51")
                 .body(Body::from(
@@ -48,7 +48,7 @@ async fn register(
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/auth/register")
+                .uri("/api/v2/auth/register")
                 .header("content-type", "application/json")
                 .header("x-forwarded-for", "198.51.100.52")
                 .body(Body::from(

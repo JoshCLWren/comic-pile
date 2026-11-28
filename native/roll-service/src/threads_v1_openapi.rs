@@ -43,6 +43,10 @@ use utoipa::OpenApi;
         crate::thread_lifecycle::PotentialDuplicateMatch,
         crate::thread_lifecycle::GroupsBatchRequest,
         crate::thread_lifecycle::DependencyGroupSummary,
+<<<<<<< HEAD
+=======
+        crate::thread_lifecycle::RollResponse,
+>>>>>>> origin/main
         crate::threads::ThreadListResponse,
         crate::threads::ThreadListItem,
         crate::threads::ThreadTag,
