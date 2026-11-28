@@ -37,7 +37,7 @@ export function useThreadIssueCreators(
       const pageSize = 100
       const first = await issuesApi.listCreators(threadId!, { page_size: pageSize })
       const collected = await collectAllPages({
-        fetchPage: (token) => token === null
+        fetchPage: async (token) => token === null
           ? first
           : issuesApi.listCreators(threadId!, { page_size: pageSize, page_token: token }),
         selectItems: (page) => page.issues,

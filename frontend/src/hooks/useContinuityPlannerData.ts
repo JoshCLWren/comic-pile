@@ -30,7 +30,7 @@ export function useAllThreads() {
         Math.ceil((total ?? 0) / 100),
       )
       const collected = await collectAllPages({
-        fetchPage: (token) => token === null
+        fetchPage: async (token) => token === null
           ? firstPage
           : threadsApi.list({ page_size: 100 }, token),
         selectItems: (page) => page.threads,
