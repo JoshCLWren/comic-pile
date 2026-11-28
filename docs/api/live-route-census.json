@@ -24,7 +24,7 @@
     "v1_with_owner": 57,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 926,
+    "first_party_call_sites": 924,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -4456,10 +4456,9 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/protectedRollMutationApi.test.ts"
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
-      "caller_count": 15,
+      "caller_count": 14,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -4484,10 +4483,9 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/protectedRollMutationApi.test.ts"
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
-      "caller_count": 16,
+      "caller_count": 15,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -4608,10 +4606,9 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/test/roll-back-to-queue.spec.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/protectedRollMutationApi.test.ts"
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
-      "caller_count": 25,
+      "caller_count": 24,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4299,
