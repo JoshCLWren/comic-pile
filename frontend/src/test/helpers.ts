@@ -650,18 +650,20 @@ export function extractThreadsFromResponse(response: unknown): Thread[] {
 }
 
 export async function navigateToRatePage(page: Page): Promise<void> {
-  // SAFETY: the api client reads this global token slot, which the test sets and clears directly
-  const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
-  const threadsResponse = await page.request.get('/api/v2/threads', {
-    headers: { Authorization: `Bearer ${token}` },
+  // Seed a pending offer through the supported Roll command. The direct
+  // thread-selection route is retired; the browser hydrates the rating view
+  // from the pending offer in bootstrap.
+  await page.request.post('/api/v2/readingSessions', {
+    headers: await authHeaders(page),
+    data: {},
   })
-  const threadsData = await threadsResponse.json()
-  const threads = threadsData.threads ?? threadsData
-  expect(threads.length).toBeGreaterThan(0)
-
-  await page.request.post(`/api/v1/threads/${threads[0].id}/set-pending`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const offer = await page.request.post('/api/v2/roll/offer', {
+    headers: await authHeaders(page),
+    data: {
+      idempotency_key: `seed-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+    },
   })
+  expect(offer.ok(), await offer.text()).toBeTruthy()
 
   await page.goto('/')
   await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible()

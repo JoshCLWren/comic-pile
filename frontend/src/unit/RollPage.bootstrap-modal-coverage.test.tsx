@@ -60,11 +60,10 @@ vi.mock('../services/api-taste', () => ({
     submitVerdict: vi.fn().mockResolvedValue({}),
   },
 }))
-vi.mock('../services/api-threads', () => ({ threadsApi: { list: spies.list, setPending: vi.fn() } }))
+vi.mock('../services/api-threads', () => ({ threadsApi: { list: spies.list } }))
 vi.mock('../services/api', () => ({
   threadsApi: {
     list: spies.list,
-    setPending: vi.fn(),
   },
   dependenciesApi: {
     getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),

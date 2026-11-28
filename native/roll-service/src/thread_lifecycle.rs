@@ -7,7 +7,7 @@
 //! * `PATCH` / `DELETE /api/v2/threads/{thread_id}` (#5703, canonical AIP-134/135
 //!   resource methods; the v1 pair remains mounted until live callers are
 //!   migrated and authenticated production proof exists)
-//! * `POST /api/v1/threads/{thread_id}/exclude`, `/restore`, `/set-pending`
+//! * `POST /api/v1/threads/{thread_id}/exclude`, `/restore`
 //! * `POST /api/v1/threads/reactivate`
 //! * `GET /api/v1/threads/stale`
 //! * `POST /api/v1/threads/check-duplicates`
@@ -25,11 +25,11 @@
 //! queue advisory lock and ownership scoping mirror them.
 //!
 //! Scope notes:
-//! * `stale` and `set-pending` resolve their candidate pool through the same
-//!   canonical Reading List evaluator as automatic Roll, unconditionally: no
-//!   `OPTION_E_ENABLED` mode switch, approval gate or stored `is_blocked`
-//!   fallback (issue #5525 A7/A16/A17). The dense Queue ordinal in lifecycle
-//!   responses keeps the preview's presentation contract for wire parity.
+//! * `stale` resolves its candidate pool through the same canonical Reading
+//!   List evaluator as automatic Roll, unconditionally: no `OPTION_E_ENABLED`
+//!   mode switch, approval gate or stored `is_blocked` fallback (issue #5525
+//!   A7/A16/A17). The dense Queue ordinal in lifecycle responses keeps the
+//!   preview's presentation contract for wire parity.
 //! * `test-backdate` is only available when `TEST_ENVIRONMENT` is set, matching
 //!   the Python test helper's guard.
 //! * Python's in-process `slowapi` limits (30-120 requests per minute) are
@@ -42,8 +42,7 @@ use crate::{
     dice_api::Pending,
     option_inputs, queue,
     reading_constraints::ValidatedReadingInputs,
-    reading_session::{self, SessionPolicy},
-    roll_exclusions,
+    reading_session, roll_exclusions,
     thread_validation::{
         coerce_bool, int_field, parse_body, path_int, query_pairs, query_value, require_object,
         str_field, Bounds, Check, IntOutcome, LifecycleError, StrRules,
@@ -213,12 +212,6 @@ pub struct ThreadPatchPrecondition {
 pub struct ReactivateRequest {
     pub thread_id: i32,
     pub issues_to_add: i32,
-}
-
-/// Optional body of `POST /api/v1/threads/{thread_id}/set-pending`.
-#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
-pub struct SetPendingRequest {
-    pub expected_issue_id: Option<i32>,
 }
 
 /// Body of `POST /api/v1/threads/check-duplicates`.
@@ -393,61 +386,6 @@ async fn canonical_eligibility_inputs(
     user: AuthenticatedUser,
 ) -> Result<ValidatedReadingInputs, ApiError> {
     option_inputs::load_option_inputs_contained(state, user).await
-}
-
-/// Reader-facing reason for a thread the canonical evaluator rejects.
-///
-/// Renders the authentic blocker from the same validated snapshot: the waiting
-/// issue's owning series title and issue number, matching the dependency
-/// detail the legacy path produced. Derived blockers (holds, strict order,
-/// exclusions) render their kind when no specific waiting issue exists.
-fn canonical_block_reason(validated: &ValidatedReadingInputs, thread_id: i32) -> String {
-    let Ok(evaluated) = crate::reading_eligibility::evaluate(validated) else {
-        return String::new();
-    };
-    let Some(eligibility) = evaluated.get(&thread_id) else {
-        return String::new();
-    };
-    let inputs = validated.inputs();
-    let titles: HashMap<i32, &str> = inputs
-        .core
-        .threads
-        .iter()
-        .map(|thread| (thread.id, thread.title.as_str()))
-        .collect();
-    let numbers: HashMap<i32, &str> = inputs
-        .core
-        .issues
-        .iter()
-        .map(|issue| (issue.id, issue.issue_number.as_str()))
-        .collect();
-    let issue_threads: HashMap<i32, i32> = inputs
-        .core
-        .issues
-        .iter()
-        .map(|issue| (issue.id, issue.thread_id))
-        .collect();
-    let mut reasons = Vec::new();
-    for blocker in &eligibility.blockers {
-        for issue_id in &blocker.waiting_on_issue_ids {
-            let title = issue_threads
-                .get(issue_id)
-                .and_then(|thread_id| titles.get(thread_id))
-                .copied()
-                .unwrap_or("an earlier issue");
-            let number = numbers.get(issue_id).copied().unwrap_or("?");
-            reasons.push(format!("Blocked by {title}: #{number}"));
-        }
-        if blocker.waiting_on_issue_ids.is_empty() {
-            reasons.push(format!("Blocked by {}", blocker.kind.replace('_', " ")));
-        }
-    }
-    reasons.sort_unstable();
-    reasons.dedup();
-    reasons
-        .first()
-        .map(|reason| format!(": {reason}"))
-        .unwrap_or_default()
 }
 
 /// Threads the canonical evaluator does not hold behind an authentic blocker.
@@ -640,7 +578,6 @@ struct OwnedThread {
     format: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
-    reading_progress: Option<String>,
     status: String,
     queue_position: i32,
     /// Read by the v2 patch precondition; unused by the v1 writers.
@@ -656,7 +593,7 @@ async fn find_owned(
 ) -> Result<OwnedThread, ApiError> {
     let id = i32::try_from(thread_id).map_err(|_| not_found(thread_id))?;
     let sql = format!(
-        "SELECT id, title, format, issues_remaining, total_issues, reading_progress,
+        "SELECT id, title, format, issues_remaining, total_issues,
                 status, queue_position, notes, manual_creator_credits
          FROM threads WHERE id = $1 AND user_id = $2{}",
         if for_update { " FOR UPDATE" } else { "" }
@@ -672,11 +609,10 @@ async fn find_owned(
         format: row.get(2),
         issues_remaining: row.get(3),
         total_issues: row.get(4),
-        reading_progress: row.get(5),
-        status: row.get(6),
-        queue_position: row.get(7),
-        notes: row.get(8),
-        manual_creator_credits: row.get(9),
+        status: row.get(5),
+        queue_position: row.get(6),
+        notes: row.get(7),
+        manual_creator_credits: row.get(8),
     })
 }
 
@@ -2014,299 +1950,6 @@ pub async fn reactivate_thread(
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/v1/threads/{thread_id}/set-pending
-// ---------------------------------------------------------------------------
-
-fn parse_set_pending(body: Option<Value>) -> Result<Option<i32>, LifecycleError> {
-    let Some(body) = body else {
-        return Ok(None);
-    };
-    if body.is_null() {
-        return Ok(None);
-    }
-    let Value::Object(map) = &body else {
-        return Err(LifecycleError::Validation {
-            errors: vec![json!({
-                "field": "body",
-                "message": "Input should be a valid dictionary or object to extract fields from",
-                "type": "model_attributes_type",
-            })],
-            body,
-        });
-    };
-    let mut check = Check::default();
-    let value = int_field(
-        &mut check,
-        &["body", "expected_issue_id"],
-        map.get("expected_issue_id"),
-        Bounds {
-            gt: Some(0),
-            ..Bounds::default()
-        },
-        true,
-        false,
-    );
-    let value = to_i32(&mut check, &["body", "expected_issue_id"], value);
-    check.finish(body.clone())?;
-    Ok(value)
-}
-
-struct SetPendingSelection {
-    thread_id: i32,
-    title: String,
-    format: String,
-    issues_remaining: i32,
-    total_issues: Option<i32>,
-    reading_progress: Option<String>,
-    queue_position: i32,
-    issue_id: Option<i32>,
-    issue_number: Option<String>,
-}
-
-async fn validate_set_pending_selection(
-    tx: &Transaction<'_>,
-    user_id: i32,
-    thread_id: i64,
-    expected_issue_id: Option<i32>,
-    canonical: &ValidatedReadingInputs,
-) -> Result<SetPendingSelection, LifecycleError> {
-    let thread = find_owned(tx, user_id, thread_id, true).await?;
-    if thread.status != "active" {
-        return Err(ApiError::BadRequest(format!("Thread {thread_id} is not active")).into());
-    }
-    // The evaluated graph is the sole authority. `is_blocked` and the stored
-    // queue position never grant or veto permission (#5525 A16/A17).
-    let evaluated = crate::reading_eligibility::evaluate(canonical)?;
-    let reason = canonical_block_reason(canonical, thread.id);
-    if !reason.is_empty() {
-        return Err(ApiError::BadRequest(format!(
-            "Thread {thread_id} is blocked by a dependency{reason}"
-        ))
-        .into());
-    }
-    let eligible_ids: Vec<i32> = evaluated
-        .iter()
-        .filter(|(_, state)| state.eligible)
-        .map(|(id, _)| *id)
-        .collect();
-    let position_row = tx
-        .query_opt(
-            "SELECT pos FROM (
-                 SELECT id, row_number() OVER (
-                     ORDER BY CASE WHEN id = ANY($3::int[]) THEN 0 ELSE 1 END,
-                              queue_position, id)::int AS pos
-                 FROM threads
-                 WHERE user_id = $1 AND status = 'active' AND queue_position >= 1) ranked
-             WHERE id = $2",
-            &[&user_id, &thread.id, &eligible_ids],
-        )
-        .await
-        .map_err(db::tx_error)?;
-    let queue_position: i32 = position_row.map(|row| row.get(0)).unwrap_or(0);
-    let canonical_frontier = evaluated
-        .get(&thread.id)
-        .and_then(|state| state.next_issue_id);
-
-    let mut issue_id: Option<i32> = None;
-    let mut issue_number: Option<String> = None;
-    if thread.total_issues.is_some() {
-        if let Some(next_id) = canonical_frontier {
-            if let Some(row) = tx
-                .query_opt(
-                    "SELECT id, issue_number FROM issues WHERE id = $1",
-                    &[&next_id],
-                )
-                .await
-                .map_err(db::tx_error)?
-            {
-                issue_id = Some(row.get(0));
-                issue_number = Some(row.get(1));
-            }
-        }
-    }
-    if thread.issues_remaining <= 0 {
-        return Err(
-            ApiError::BadRequest(format!("Thread {thread_id} has no issues remaining")).into(),
-        );
-    }
-    // A Reading Plan offers one exact Issue; never select its successor.
-    if expected_issue_id.is_some() && issue_id != expected_issue_id {
-        return Err(ApiError::Conflict(
-            "This issue is no longer next and available. Refresh the reading plan and try again."
-                .to_string(),
-        )
-        .into());
-    }
-    Ok(SetPendingSelection {
-        thread_id: thread.id,
-        title: thread.title.clone(),
-        format: normalize_format_value(&thread.format),
-        issues_remaining: thread.issues_remaining,
-        total_issues: thread.total_issues,
-        reading_progress: thread.reading_progress.clone(),
-        queue_position,
-        issue_id,
-        issue_number,
-    })
-}
-
-async fn set_pending_once(
-    state: &AppState,
-    user: AuthenticatedUser,
-    thread_id: i64,
-    expected_issue_id: Option<i32>,
-    canonical: &ValidatedReadingInputs,
-) -> Result<RollResponse, LifecycleError> {
-    let user_id = user.id();
-
-    // Validate the offered selection before initializing the reading session so a
-    // rejected request (notably a stale expected_issue_id 409) does not commit a
-    // session-start undo checkpoint like Python's pre-get_or_create checks.
-    with_tx!(state, tx, db::tx_error, {
-        // Every queue writer takes the per-reader queue lock before the thread
-        // row lock. Validation also locks the row, so it must follow the same
-        // order as the commit transaction below (#5398/#5419).
-        acquire_queue_lock(&tx, user_id).await?;
-        validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id, canonical)
-            .await?;
-        Ok::<_, LifecycleError>(())
-    })?;
-
-    let active = reading_session::initialize(state, user, None, SessionPolicy::default()).await?;
-
-    with_tx!(state, tx, db::tx_error, {
-        acquire_queue_lock(&tx, user_id).await?;
-        let selection =
-            validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id, canonical)
-                .await?;
-
-        let session = tx
-            .query_opt(
-                "SELECT snoozed_thread_ids::text FROM sessions
-             WHERE id = $1 AND user_id = $2 FOR UPDATE",
-                &[&active.session.id, &user_id],
-            )
-            .await
-            .map_err(db::tx_error)?
-            .ok_or_else(|| ApiError::Conflict("Reading session changed; try again".to_string()))?;
-        let snoozed_raw: Option<String> = session.get(0);
-        let mut snoozed_ids = reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
-        if snoozed_ids.contains(&selection.thread_id) {
-            // Manual selection clears a current-session snooze; record the
-            // unsnooze so historical replay sees the boundary (#4209).
-            tx.execute(
-                "INSERT INTO events (type, timestamp, user_id, session_id, thread_id)
-             VALUES ('unsnooze', NOW(), $1, $2, $3)",
-                &[&user_id, &active.session.id, &selection.thread_id],
-            )
-            .await
-            .map_err(db::tx_error)?;
-        }
-        let mut offset = snoozed_ids.len() as i32;
-        let mut snoozed_count = offset;
-        tx.execute(
-            "INSERT INTO events (type, timestamp, user_id, session_id, selected_thread_id, die,
-                             result, selection_method, issue_id, issue_number)
-         VALUES ('roll', NOW(), $1, $2, $3, $4, 0, 'manual', $5, $6)",
-            &[
-                &user_id,
-                &active.session.id,
-                &selection.thread_id,
-                &active.current_die,
-                &selection.issue_id,
-                &selection.issue_number,
-            ],
-        )
-        .await
-        .map_err(db::tx_error)?;
-        // A manual selection retargets the pending pair: an issue pinned to a
-        // different thread is superseded, never carried over (#3225).
-        tx.execute(
-            "UPDATE sessions SET pending_thread_id = $1, pending_thread_updated_at = NOW(),
-                pending_issue_id = CASE
-                    WHEN pending_issue_id IS NULL THEN NULL
-                    WHEN EXISTS (SELECT 1 FROM issues i
-                                 WHERE i.id = sessions.pending_issue_id AND i.thread_id = $1)
-                        THEN pending_issue_id
-                    ELSE NULL END
-         WHERE id = $2 AND user_id = $3",
-            &[&selection.thread_id, &active.session.id, &user_id],
-        )
-        .await
-        .map_err(db::tx_error)?;
-        if let Some(index) = snoozed_ids.iter().position(|id| *id == selection.thread_id) {
-            snoozed_ids.remove(index);
-            let encoded = serde_json::to_string(&snoozed_ids)
-                .map_err(|_| ApiError::Internal("Internal Server Error".to_string()))?;
-            tx.execute(
-            "UPDATE sessions SET snoozed_thread_ids = $1::text::json WHERE id = $2 AND user_id = $3",
-            &[&encoded, &active.session.id, &user_id],
-        )
-        .await
-        .map_err(db::tx_error)?;
-            offset = snoozed_ids.len() as i32;
-            snoozed_count = offset;
-        }
-        Ok(RollResponse {
-            thread_id: selection.thread_id,
-            title: selection.title,
-            format: selection.format,
-            issues_remaining: selection.issues_remaining,
-            queue_position: selection.queue_position,
-            die_size: active.current_die,
-            result: 0,
-            offset,
-            snoozed_count,
-            issue_id: selection.issue_id,
-            issue_number: selection.issue_number.clone(),
-            next_issue_id: selection.issue_id,
-            next_issue_number: selection.issue_number,
-            total_issues: selection.total_issues,
-            reading_progress: selection.reading_progress,
-            explanation: None,
-        })
-    })
-}
-
-/// `POST /api/v1/threads/{thread_id}/set-pending`
-pub async fn set_pending_thread(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Path(raw_id): Path<String>,
-    body: Bytes,
-) -> HandlerResult {
-    let mut check = Check::default();
-    let thread_id = path_int(&mut check, "thread_id", &raw_id);
-    let parsed = parse_body(&body)?;
-    let expected = match parse_set_pending(parsed) {
-        Ok(value) => value,
-        Err(LifecycleError::Validation { errors, body }) => {
-            let mut combined = check_errors(&check);
-            combined.extend(errors);
-            return Err(LifecycleError::Validation {
-                errors: combined,
-                body,
-            });
-        }
-        Err(other) => return Err(other),
-    };
-    check.finish(Value::Null)?;
-    // Resolve the canonical snapshot before `set_pending_once` takes a write
-    // connection: the loader owns its own pooled checkout, so nesting the two
-    // would risk a second-connection deadlock under a saturated pool.
-    let canonical = canonical_eligibility_inputs(&state, user).await?;
-    let response = set_pending_once(
-        &state,
-        user,
-        thread_id.unwrap_or_default(),
-        expected,
-        &canonical,
-    )
-    .await?;
-    Ok(json_response(StatusCode::OK, response))
-}
-
-// ---------------------------------------------------------------------------
 // PUT /api/v1/threads/{thread_id}/test-backdate
 // ---------------------------------------------------------------------------
 
@@ -3198,26 +2841,6 @@ pub fn restore_thread_documentation() {}
 pub fn reactivate_thread_documentation() {}
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/threads/{thread_id}/set-pending",
-    tag = "threads",
-    description = "Manually select a thread as the pending roll.",
-    params(("thread_id" = i32, Path, description = "Owned thread identifier")),
-    request_body(content = Option<SetPendingRequest>, description = "Optional exact-issue guard"),
-    responses(
-        (status = 200, description = "Selected thread", body = RollResponse),
-        (status = 400, description = "Thread is inactive, blocked or out of issues"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Thread not found"),
-        (status = 409, description = "The offered issue is no longer next"),
-        (status = 422, description = "Validation failed")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn set_pending_thread_documentation() {}
-
-#[utoipa::path(
     get,
     path = "/api/v1/threads/stale",
     tag = "threads",
@@ -3435,7 +3058,6 @@ mod tests {
             format: "Comic".to_owned(),
             issues_remaining: 3,
             total_issues: None,
-            reading_progress: None,
             status: "active".to_owned(),
             queue_position: 1,
             notes: Some("committed notes".to_owned()),

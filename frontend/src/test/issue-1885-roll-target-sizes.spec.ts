@@ -86,17 +86,25 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
   }
 }
 
-async function setPending(page: Page, threadId: number): Promise<void> {
-  const pending = await page.request.post(`/api/v1/threads/${threadId}/set-pending`, {
-    headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
+/** Seed a pending Roll offer, excluding threads with cookie-owned snoozes. */
+async function offerPending(page: Page, excludedThreadIds: number[] = []): Promise<number> {
+  // Initialize the durable reading session that roll/offer requires; the
+  // retired direct thread-selection route used to do this implicitly.
+  await page.request.post('/api/v2/readingSessions', {
+    headers: await authHeaders(page),
+    data: {},
   })
-  expect(pending.ok(), `set-pending failed: ${pending.status()}`).toBeTruthy()
-}
-
-async function openRatingView(page: Page, threadId: number): Promise<void> {
-  await setPending(page, threadId)
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('#rating-input')).toBeVisible()
+  const response = await page.request.post('/api/v2/roll/offer', {
+    headers: await authHeaders(page),
+    data: {
+      idempotency_key: `seed-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+      snoozed_thread_ids: excludedThreadIds,
+    },
+  })
+  expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the test reads only the offered thread id from the response
+  const body = (await response.json()) as { thread_id: number }
+  return body.thread_id
 }
 
 test.describe('Roll pointer target sizes (#1885)', () => {
@@ -186,10 +194,12 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     const blocking = await createThread(page, { title: 'Blocking Alpha', format: 'Issue', issues_remaining: 2, total_issues: 2 })
     const blocked = await createThread(page, { title: 'Blocked Beta', format: 'Issue', issues_remaining: 2, total_issues: 2 })
 
-    // The canonical dependency evaluator rejects set-pending on a thread that
-    // is already blocked. Put the thread in the pending state first, then seed
-    // the dependency so the edge endpoints render in the rating view.
-    await setPending(page, blocked.id)
+    // Put the target thread in the pending Roll state through the supported
+    // offer command (excluding its sibling makes the offer deterministic)
+    // before seeding the dependency so the edge endpoints render in the
+    // rating view.
+    const offeredThreadId = await offerPending(page, [blocking.id])
+    expect(offeredThreadId).toBe(blocked.id)
 
     // Reader-context edges are built from issue-level dependencies.
     const firstIssueId = async (threadId: number): Promise<number> => {

@@ -74,7 +74,6 @@ vi.mock('../services/api-reading-orders', () => ({
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
     list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
-    setPending: vi.fn(),
   },
 }))
 vi.mock('../services/api', async (importOriginal) => {
@@ -83,7 +82,6 @@ vi.mock('../services/api', async (importOriginal) => {
     ...actual,
     threadsApi: {
       list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
-      setPending: vi.fn(),
     },
     dependenciesApi: {
       getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
@@ -523,7 +521,6 @@ function expectRealResetEffects(
   expect(harness.rollMutate).not.toHaveBeenCalled()
   expect(harness.rateMutate).not.toHaveBeenCalled()
   expect(harness.bootstrapRefetch).not.toHaveBeenCalled()
-  expect(threadsApi.setPending).not.toHaveBeenCalled()
 }
 
 it('recovers the real reset flow from browser-only snoozes at zero choice without reading, rating or rewriting history', async () => {

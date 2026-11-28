@@ -21,14 +21,6 @@
       "notes": "Event-derived v2 state supersedes the legacy current-session resource."
     },
     {
-      "issue": 5525,
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
-      "status": "live-p0-evidence",
-      "disposition": "retire-without-replacement",
-      "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
-    },
-    {
       "issue": 5707,
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
@@ -182,13 +174,6 @@
     }
   ],
   "families": [
-    {
-      "prefix": "/api/v1/threads/{thread_id}/set-pending",
-      "owner_issue": 4344,
-      "replacement": "retire-without-replacement",
-      "rollout_status": "owner-issue-open",
-      "notes": "Binding sunset contract #4344; P0 #5525 proved the live 503. Replacement is the existing direct Rust v2 issue read/rate workflow (#4443/#4444, #4405), never a same-path v1 port."
-    },
     {
       "prefix": "/api/v1/threads/{thread_id}/exclude",
       "owner_issue": 5704,
@@ -455,12 +440,6 @@
       "owner_issue": 5707,
       "replacement": "PATCH /api/v2/issues/{issue_id}",
       "rollout_status": "slice-blocked-on-p0"
-    },
-    "POST /api/v1/threads/{thread_id}/set-pending": {
-      "owner_issue": 4344,
-      "replacement": "retire-without-replacement",
-      "rollout_status": "owner-issue-open",
-      "notes": "Census regression: Rust implementation does not make this v1 surface complete or retired. Direct v2 issue actions supersede it (#5525)."
     },
     "POST /api/v1/issue-identity/cbl-sources/compare": {
       "owner_issue": 5713,

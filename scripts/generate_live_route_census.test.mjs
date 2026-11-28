@@ -15,7 +15,6 @@ import {
   parseRouterRoutes,
   pathsMatch,
   scanCallers,
-  SET_PENDING_OWNER,
 } from './generate_live_route_census.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -46,12 +45,12 @@ test('router parser records live registrations and ignores test-module strings',
   const source = readFileSync(path.join(inputsRoot, 'native/roll-service/src/lib.rs'), 'utf8');
   const routes = parseRouterRoutes(source);
   assert.equal(routes.length, 6);
-  const setPending = routes.find(route => route.path.endsWith('/set-pending'));
+  const restore = routes.find(route => route.path.endsWith('/restore'));
   assert.deepEqual(
-    {method: setPending.method, handler: setPending.handler, line: setPending.line},
-    {method: 'POST', handler: 'thread_lifecycle::set_pending_thread', line: 7},
+    {method: restore.method, handler: restore.handler, line: restore.line},
+    {method: 'POST', handler: 'thread_lifecycle::restore_thread', line: 7},
   );
-  assert.ok(!routes.some(route => route.path === '/api/v1/threads/7/set-pending'));
+  assert.ok(!routes.some(route => route.path === '/api/v1/threads/7/restore'));
   const inline = routes.find(route => route.path === '/health');
   assert.equal(inline.handler, '<inline>');
   const {census} = generate(inputsRoot);
@@ -59,15 +58,15 @@ test('router parser records live registrations and ignores test-module strings',
 });
 
 test('path and HTTP-method matching are independent and deterministic', () => {
-  assert.equal(normalizeCallerPath('/v1/threads/${id}/set-pending'), '/api/v1/threads/{param}/set-pending');
+  assert.equal(normalizeCallerPath('/v1/threads/${id}/restore'), '/api/v1/threads/{param}/restore');
   assert.equal(normalizeCallerPath('/api/v1/threads/stale?page=2'), '/api/v1/threads/stale');
-  assert.ok(pathsMatch('/api/v1/threads/{param}/set-pending', '/api/v1/threads/{thread_id}/set-pending'));
-  assert.ok(!pathsMatch('/api/v1/threads/stale', '/api/v1/threads/{thread_id}/set-pending'));
+  assert.ok(pathsMatch('/api/v1/threads/{param}/restore', '/api/v1/threads/{thread_id}/restore'));
+  assert.ok(!pathsMatch('/api/v1/threads/stale', '/api/v1/threads/{thread_id}/restore'));
   assert.ok(!pathsMatch('/api/v1/threads/stale/extra', '/api/v1/threads/stale'));
-  const route = {method: 'POST', path: '/api/v1/threads/{thread_id}/set-pending'};
-  assert.ok(callerMatchesRoute({method: 'POST', path: '/api/v1/threads/{param}/set-pending'}, route));
-  assert.ok(!callerMatchesRoute({method: 'GET', path: '/api/v1/threads/{param}/set-pending'}, route));
-  assert.ok(callerMatchesRoute({method: '', path: '/api/v1/threads/7/set-pending'}, route));
+  const route = {method: 'POST', path: '/api/v1/threads/{thread_id}/restore'};
+  assert.ok(callerMatchesRoute({method: 'POST', path: '/api/v1/threads/{param}/restore'}, route));
+  assert.ok(!callerMatchesRoute({method: 'GET', path: '/api/v1/threads/{param}/restore'}, route));
+  assert.ok(callerMatchesRoute({method: '', path: '/api/v1/threads/7/restore'}, route));
 });
 
 test('caller scan excludes generated, type and fixture references', () => {
@@ -80,7 +79,7 @@ test('caller scan excludes generated, type and fixture references', () => {
   assert.ok(callers.some(caller => caller.file === 'frontend/src/test/api.spec.ts'));
   assert.equal(
     callers.filter(caller => caller.drift_checked).length,
-    4,
+    3,
     'generated/fixture references and synthetic spec data are not drift sources',
   );
 });
@@ -109,18 +108,12 @@ test('generator matches golden fixtures and --check detects drift', t => {
   assert.throws(() => run(tmp, '--check'), error => error.status === 1);
 });
 
-test('set-pending stays in the census because Rust implementation is not v1 retirement', () => {
+test('the retired direct thread-selection route is absent from the live census', () => {
   const fixture = JSON.parse(readFileSync(path.join(goldenRoot, 'live-route-census.json'), 'utf8'));
   const checkedIn = JSON.parse(readFileSync(path.join(repoRoot, 'docs/api/live-route-census.json'), 'utf8'));
   for (const census of [fixture, checkedIn]) {
-    const route = census.routes.find(item =>
-      item.method === 'POST' && item.path === '/api/v1/threads/{thread_id}/set-pending');
-    assert.ok(route, 'Rust-served v1 set-pending must be counted, not omitted');
-    assert.equal(route.version, 'v1');
-    assert.equal(route.runtime, 'native-rust');
-    assert.equal(route.owner_issue, SET_PENDING_OWNER);
-    assert.equal(route.disposition, 'retire-without-replacement');
-    assert.match(route.handler, /set_pending_thread/);
+    assert.ok(!census.routes.some(item => item.path.endsWith('/pending')));
+    assert.ok(!census.routes.some(item => item.handler?.includes('set_pending')));
   }
 });
 
@@ -154,7 +147,7 @@ test('published report cross-references every mandated owner issue', () => {
   const report = readFileSync(path.join(repoRoot, 'docs/api/LIVE_ROUTE_CENSUS.md'), 'utf8');
   const mandated = [
     ...Array.from({length: 18}, (_, index) => 5701 + index),
-    4344, 4341, 4343, 4549, 4299, 5525,
+    4341, 4343, 4549, 4299,
   ];
   for (const issue of mandated) {
     assert.match(report, new RegExp(`#${issue}\\b`), `report must cross-reference #${issue}`);

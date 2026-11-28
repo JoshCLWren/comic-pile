@@ -338,24 +338,6 @@
         ],
         "type": "object"
       },
-      "Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post": {
-        "properties": {
-          "expected_issue_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Issue Id"
-          }
-        },
-        "title": "Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post",
-        "type": "object"
-      },
       "BootstrapActiveThread": {
         "description": "Currently pending thread shown by the Roll surface.",
         "properties": {
@@ -22718,64 +22700,6 @@
           }
         ],
         "summary": "Restore Thread",
-        "tags": [
-          "threads",
-          "threads"
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}/set-pending": {
-      "post": {
-        "description": "Set a thread as pending for rating (manual selection).\n\nRaises:\n    HTTPException: 404 when not found; 400 when inactive, blocked, or out of issues.",
-        "operationId": "set_pending_thread_api_v1_threads__thread_id__set_pending_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "title": "Thread Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RollResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Set Pending Thread",
         "tags": [
           "threads",
           "threads"

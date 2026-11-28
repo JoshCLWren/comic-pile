@@ -8,7 +8,6 @@ import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useS
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useCompletedThreads } from '../hooks/useCompletedThreads'
 import { useSnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { rollApi } from '../services/api-roll'
@@ -26,7 +25,7 @@ vi.mock('../hooks/useQueue', () => ({ useExcludedThreads: vi.fn(() => ({ threads
   useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
-vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: vi.fn() } }))
+vi.mock('../services/api-threads', () => ({ threadsApi: {} }))
 vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
 vi.mock('../hooks/useReadingBoundaries', () => ({ useReadingBoundaries: () => ({ data: { threads: {} }, isPending: false, isError: false, refetch: vi.fn() }) }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
@@ -98,7 +97,6 @@ beforeEach(() => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useSnooze).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(threadsApi.setPending).mockResolvedValue({ thread_id: 1 } as never)
   vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([])
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type

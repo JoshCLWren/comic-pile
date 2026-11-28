@@ -946,10 +946,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(thread_lifecycle::restore_thread),
         )
         .route(
-            "/api/v1/threads/{thread_id}/set-pending",
-            post(thread_lifecycle::set_pending_thread),
-        )
-        .route(
             "/api/v1/threads/{thread_id}/test-backdate",
             put(thread_lifecycle::backdate_thread_for_testing),
         )

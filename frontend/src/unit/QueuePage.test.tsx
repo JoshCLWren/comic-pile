@@ -23,7 +23,6 @@ import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { useSnooze } from '../hooks/useSnooze'
 import { useToast } from '../contexts/useToast'
-import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { rollApi } from '../services/api-roll'
@@ -79,7 +78,6 @@ vi.mock('../hooks/useReadingBoundaries', () => ({
 
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
-    setPending: vi.fn(),
   },
 }))
 
@@ -148,8 +146,6 @@ const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedThreadsApi = vi.mocked(threadsApi) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedIssuesApi = vi.mocked(issuesApi) as any
@@ -199,24 +195,6 @@ beforeEach(() => {
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
   })
-  // SAFETY: full response shape satisfies RollResponse; never cast bypasses strict mock typing
-  mockedThreadsApi.setPending.mockResolvedValue({
-    thread_id: 1,
-    title: 'Saga',
-    format: 'Comic',
-    issues_remaining: 5,
-    queue_position: 1,
-    die_size: 6,
-    result: 1,
-    offset: 0,
-    snoozed_count: 0,
-    issue_id: null,
-    issue_number: null,
-    next_issue_id: null,
-    next_issue_number: null,
-    total_issues: null,
-    reading_progress: null,
-  } as never)
 })
 
   it('renders queue items and opens create modal', async () => {
@@ -582,7 +560,6 @@ describe('Keyboard Accessibility', () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 44 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedThreadsApi.setPending.mockResolvedValue({})
   mockedUseQueueThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -804,7 +781,6 @@ it('shows one shared boundary failure notice and retries the batch', async () =>
   const readButton = screen.getByLabelText('Read & Rate')
   expect(readButton).toBeEnabled()
   expect(readButton).toHaveAttribute('aria-label', 'Read & Rate')
-  expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))

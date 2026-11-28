@@ -98,7 +98,6 @@ vi.mock('../services/api-reading-orders', () => ({
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
     list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
-    setPending: vi.fn(),
   },
 }))
 vi.mock('../services/api', async (importOriginal) => {
@@ -107,7 +106,6 @@ vi.mock('../services/api', async (importOriginal) => {
     ...actual,
     threadsApi: {
       list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
-      setPending: vi.fn(),
     },
     dependenciesApi: {
       getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),

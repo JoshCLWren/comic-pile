@@ -315,7 +315,7 @@ test.describe('CBL replacement review', () => {
     await expect(ordered).toContainText(manualTitle)
     await expect(ordered).not.toContainText(removedTitle)
 
-    await builder.getByRole('button', { name: 'Undo last replacement' }).click()
+    await builder.getByRole('button', { name: 'Undo last save' }).click()
     await expect(ordered).toContainText(removedTitle)
     await expect(builder.getByRole('status')).toContainText('Read history and ratings were not changed')
   })
@@ -581,8 +581,6 @@ test.describe('CBL replacement review', () => {
     const manualIssueId = await getFirstIssueId(page, manual.id)
     const headers = await authHeaders(page)
 
-    const pending = await page.request.post(`/api/v1/threads/${rated.id}/set-pending`, { headers })
-    expect(pending.ok(), await pending.text()).toBeTruthy()
     const rating = await page.request.patch(`/api/v2/issues/${ratedIssueId}`, {
       headers,
       data: { status: 'read', rating: 4.5, idempotency_key: `test-cbl-${ratedIssueId}-${Date.now()}`, source: 'direct' },
@@ -650,7 +648,7 @@ test.describe('CBL replacement review', () => {
       builder.getByRole('list', { name: 'Custom CBL ordered issues' }),
     ).not.toContainText(manualTitle)
 
-    await builder.getByRole('button', { name: 'Undo last replacement' }).click()
+    await builder.getByRole('button', { name: 'Undo last save' }).click()
     await expect(builder.getByRole('status')).toContainText('Read history and ratings were not changed')
     await expect(
       builder.getByRole('list', { name: 'Custom CBL ordered issues' }),
@@ -756,7 +754,7 @@ test.describe('CBL replacement review', () => {
     // The two explicit confirmation dialogs intentionally originate from 409 responses.
     allowExpectedBrowserFailures.allow(
       { category: 'console', message: 'status of 409 (Conflict)' },
-      { category: 'console', message: 'API Error: AxiosError: Request failed with status code 409' },
+      { category: 'console', message: 'AxiosError: Request failed with status code 409' },
     )
     await page.getByTestId('confirm-replace').click()
 
@@ -777,7 +775,7 @@ test.describe('CBL replacement review', () => {
 
     // Undoing a confirmed strict reorder re-changes the same stored waits, so
     // it must ask for the same explicit confirmation instead of failing.
-    await builder.getByRole('button', { name: 'Undo last replacement' }).click()
+    await builder.getByRole('button', { name: 'Undo last save' }).click()
     const undoDialog = page.getByRole('dialog', { name: 'Confirm undo waiting changes' })
     await expect(undoDialog).toBeVisible()
     await undoDialog.getByRole('button', { name: 'Confirm and restore' }).click()

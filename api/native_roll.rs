@@ -422,10 +422,6 @@ fn app() -> Router {
         .route("/api/v1/threads/{thread_id}/exclude", post(native_dispatch))
         .route("/api/v1/threads/{thread_id}/restore", post(native_dispatch))
         .route(
-            "/api/v1/threads/{thread_id}/set-pending",
-            post(native_dispatch),
-        )
-        .route(
             "/api/v1/threads/{thread_id}/test-backdate",
             put(native_dispatch),
         )

@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanDetailPage, { availabilityLabel } from '../pages/ReadingPlanDetailPage'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
 import { tagsApi } from '../services/api-tags'
-import { threadsApi } from '../services/api-threads'
 import { queueApi } from '../services/api-queue'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { cast } from '../utils/cast'
@@ -26,7 +25,7 @@ vi.mock('../services/api-continuity-plans', async () => {
 
 vi.mock('../services/api-threads', async () => {
   const actual = await vi.importActual<typeof import('../services/api-threads')>('../services/api-threads')
-  return { ...actual, threadsApi: { ...actual.threadsApi, setPending: vi.fn() } }
+  return { ...actual, threadsApi: { ...actual.threadsApi } }
 })
 
 vi.mock('../services/api-queue', async () => {
@@ -52,7 +51,6 @@ vi.mock('../components/Tags/TagSection', () => ({
 
 const mockGetReader = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.getReader)
 const mockPlanTags = vi.mocked(tagsApi.effectiveForPlan)
-const mockSetPending = vi.mocked(threadsApi.setPending)
 const mockMoveToFront = vi.mocked(queueApi.moveToFront)
 
 function createWrapper() {
@@ -219,7 +217,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
   mockGetReader.mockResolvedValue(readerView)
-  mockSetPending.mockResolvedValue(cast<Awaited<ReturnType<typeof threadsApi.setPending>>>({ thread_id: 4, issue_id: 95 }))
   mockMoveToFront.mockResolvedValue(cast<Awaited<ReturnType<typeof queueApi.moveToFront>>>(undefined))
   mockPlanTags.mockResolvedValue({
     target_type: 'ContinuityPlan',
@@ -241,7 +238,6 @@ describe('ReadingPlanDetailPage', () => {
     expect(within(featured).getByRole('slider')).toHaveValue('3.5')
     fireEvent.click(within(featured).getByRole('button', { name: 'Cancel' }))
     expect(patchIssue).not.toHaveBeenCalled()
-    expect(mockSetPending).not.toHaveBeenCalled()
     expect(mockMoveToFront).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
@@ -252,7 +248,6 @@ describe('ReadingPlanDetailPage', () => {
     fireEvent.click(within(available).getByRole('button', { name: 'Move to front' }))
     await waitFor(() => expect(mockMoveToFront).toHaveBeenCalledWith(4))
     expect(await within(available).findByRole('button', { name: 'Moved to front' })).toBeInTheDocument()
-    expect(mockSetPending).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
 
@@ -277,7 +272,6 @@ describe('ReadingPlanDetailPage', () => {
     expect(featured).toBeDefined()
     expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95])
     expect(patchIssue).not.toHaveBeenCalled()
-    expect(mockSetPending).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
 
@@ -360,7 +354,6 @@ describe('ReadingPlanDetailPage', () => {
     const card = within(blocked).getByRole('article', { name: 'Issue X-Men #95' })
     expect(within(card).getByRole('button', { name: 'Read now' })).toBeEnabled()
     expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95])
-    expect(mockSetPending).not.toHaveBeenCalled()
   })
 
   it('shows progress, available now, and the actual blocker', async () => {

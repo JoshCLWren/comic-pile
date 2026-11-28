@@ -1752,9 +1752,8 @@ pub(crate) async fn set_current_issue(
 }
 
 /// Option E tail of `set_current_issue`: verify the corrected frontier is the
-/// thread's derived next issue, then perform the manual selection
-/// (`thread_service.set_pending_thread`): unsnooze, manual roll event and the
-/// session pending pair.
+/// thread's derived next issue, then perform the manual selection: unsnooze,
+/// manual roll event and the session pending pair.
 async fn select_manual_pick(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,

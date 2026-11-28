@@ -49,7 +49,6 @@ vi.mock('../services/api', () => ({
   default: {},
   threadsApi: {
     list: spies.list,
-    setPending: vi.fn(),
   },
   dependenciesApi: {
     getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
