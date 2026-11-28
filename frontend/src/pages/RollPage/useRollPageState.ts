@@ -38,7 +38,6 @@ export interface RollPageStateSetters {
   setOverrideErrorMessage: (value: string) => void
   setSnoozedExpanded: (value: boolean) => void
   setIsDieModalOpen: (value: boolean) => void
-  setIsSetCurrentIssueOpen: (value: boolean) => void
   setSelectedThread: (value: RollBootstrapThread | null) => void
   setIsActionSheetOpen: (value: boolean) => void
   setIsDirectReadOpen: (value: boolean) => void
@@ -62,7 +61,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [overrideErrorMessage, setOverrideErrorMessage] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
-  const [isSetCurrentIssueOpen, setIsSetCurrentIssueOpen] = useState(false)
   const [selectedThread, setSelectedThread] = useState<RollBootstrapThread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [isDirectReadOpen, setIsDirectReadOpen] = useState(false)
@@ -97,8 +95,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setSnoozedExpanded,
     isDieModalOpen,
     setIsDieModalOpen,
-    isSetCurrentIssueOpen,
-    setIsSetCurrentIssueOpen,
     selectedThread,
     setSelectedThread,
     isActionSheetOpen,

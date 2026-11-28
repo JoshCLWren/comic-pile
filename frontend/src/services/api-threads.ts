@@ -7,7 +7,6 @@ import type {
   CheckPotentialDuplicatesResponse,
   ReactivateThreadPayload,
   RollResponse,
-  SetCurrentIssueResponse,
   Thread,
   ThreadCreatePayload,
   ThreadListResponse,
@@ -122,8 +121,6 @@ export function createThreadsApi(client: HttpClient) {
         `/v1/threads/${id}/set-pending`,
         expectedIssueId === undefined ? undefined : { expected_issue_id: expectedIssueId },
       ),
-    setCurrentIssue: (id: number, issueNumber: string) =>
-      client.post<SetCurrentIssueResponse, { issue_number: string }>(`/v1/threads/${id}:setCurrentIssue`, { issue_number: issueNumber }),
     /**
      * Advisory existing-volume lookup for an Add Series or Edit/Rename
      * candidate (#3612, #5705). Read-only: it never creates, merges, or
