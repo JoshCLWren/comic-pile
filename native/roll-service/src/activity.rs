@@ -119,6 +119,19 @@ struct ActivityFilters {
     timezone: String,
 }
 
+impl Default for ActivityFilters {
+    fn default() -> Self {
+        Self {
+            search: None,
+            series: None,
+            event_type: None,
+            date_from: None,
+            date_to: None,
+            timezone: "UTC".to_string(),
+        }
+    }
+}
+
 impl ActivityFilters {
     fn parse(query: &ActivityQuery) -> Result<Self, ApiError> {
         let search = trimmed_filter(query.q.as_deref(), "q")?;
@@ -341,7 +354,7 @@ SELECT p.id, p.type,
   FROM primaries p
   LEFT JOIN threads pt ON pt.id = p.thread_id
   LEFT JOIN LATERAL (
-        SELECT d.die, d.die_after, d.rating
+        SELECT d.id, d.die, d.die_after, d.rating
           FROM events d
          WHERE p.type IN ('rate', 'issue_command', 'issue_unread')
            AND p.issue_id IS NOT NULL
@@ -413,35 +426,45 @@ fn logical_items(row: &tokio_postgres::Row) -> Vec<(StreamKey, ActivityItem)> {
         thread_title: row.get(10),
         session_id: row.get(24),
     };
-    let mut items = vec![(
-        StreamKey {
-            micros,
-            id,
-            sub: SUB_PRIMARY,
-        },
-        primary,
-    )];
-    if let Some(roll_id) = row.get::<_, Option<i32>>(14) {
+    // Type filtering decides on the reader-visible action, not on the raw row.
+    // A snooze whose roll is selected emits only its companion; a coalesced
+    // rating still emits its (possibly `issue_command`) primary as `rate`.
+    let include_primary: bool = row.get(26);
+    let include_companion: bool = row.get(27);
+    let mut items = Vec::with_capacity(2);
+    if include_primary {
         items.push((
             StreamKey {
                 micros,
                 id,
-                sub: SUB_LINKED_ROLL,
+                sub: SUB_PRIMARY,
             },
-            ActivityItem {
-                event_id: roll_id,
-                event_type: row.get(15),
-                timestamp: row.get(16),
-                die_before: row.get(17),
-                die_after: row.get(18),
-                rating: row.get(19),
-                issue_id: row.get(20),
-                issue_number: row.get(21),
-                thread_id: row.get(22),
-                thread_title: row.get(23),
-                session_id: row.get(25),
-            },
+            primary,
         ));
+    }
+    if include_companion {
+        if let Some(roll_id) = row.get::<_, Option<i32>>(14) {
+            items.push((
+                StreamKey {
+                    micros,
+                    id,
+                    sub: SUB_LINKED_ROLL,
+                },
+                ActivityItem {
+                    event_id: roll_id,
+                    event_type: row.get(15),
+                    timestamp: row.get(16),
+                    die_before: row.get(17),
+                    die_after: row.get(18),
+                    rating: row.get(19),
+                    issue_id: row.get(20),
+                    issue_number: row.get(21),
+                    thread_id: row.get(22),
+                    thread_title: row.get(23),
+                    session_id: row.get(25),
+                },
+            ));
+        }
     }
     items
 }
@@ -489,12 +512,33 @@ pub async fn list_activity(
         .map(|key| DateTime::<Utc>::from_timestamp_micros(key.micros).ok_or_else(bad_cursor))
         .transpose()?;
     let after_id: Option<i32> = after.map(|key| key.id);
+    let filters = ActivityFilters::parse(&query)?;
 
     let connection = db::checkout(&state).await?;
+    // PostgreSQL is the authority on IANA zone names and DST rules. Validate
+    // the reader's zone before the main query so an unknown name is a 400, not
+    // an opaque database error. Only date-filtered requests pay this round trip.
+    if filters.date_from.is_some() || filters.date_to.is_some() {
+        connection
+            .query_one("SELECT now() AT TIME ZONE $1", &[&filters.timezone])
+            .await
+            .map_err(|_| ApiError::BadRequest("Invalid activity timezone".to_string()))?;
+    }
     let rows = connection
         .query(
             ACTIVITY_PAGE_SQL,
-            &[&user.id(), &after_timestamp, &after_id, &primary_limit],
+            &[
+                &user.id(),
+                &after_timestamp,
+                &after_id,
+                &primary_limit,
+                &filters.search,
+                &filters.series,
+                &filters.event_type,
+                &filters.date_from,
+                &filters.date_to,
+                &filters.timezone,
+            ],
         )
         .await
         .map_err(db::query_error)?;
@@ -519,11 +563,17 @@ pub async fn list_activity(
     tag = "activity",
     params(
         ("limit" = Option<i64>, Query, description = "Maximum number of activity rows"),
-        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor")
+        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor"),
+        ("q" = Option<String>, Query, description = "Case-insensitive literal text search over series, issue number and action type"),
+        ("series" = Option<String>, Query, description = "Case-insensitive literal series-title filter"),
+        ("type" = Option<String>, Query, description = "Reader-visible activity type filter"),
+        ("date_from" = Option<String>, Query, description = "Inclusive reader-local start date (YYYY-MM-DD)"),
+        ("date_to" = Option<String>, Query, description = "Inclusive reader-local end date (YYYY-MM-DD)"),
+        ("timezone" = Option<String>, Query, description = "IANA time zone used to resolve reader-local date bounds")
     ),
     responses(
         (status = 200, description = "Owner-scoped activity history", body = ActivityResponse),
-        (status = 400, description = "Malformed or unrecognized page token"),
+        (status = 400, description = "Malformed page token or invalid activity filter"),
         (status = 401, description = "Not authenticated")
     ),
     security(("HTTPBearer" = []))
@@ -725,30 +775,65 @@ mod tests {
         (state, guard)
     }
 
+    fn query_with_filters(
+        limit: i64,
+        page_token: Option<String>,
+        filters: &ActivityFilters,
+    ) -> ActivityQuery {
+        ActivityQuery {
+            limit: Some(limit),
+            page_token,
+            cursor: None,
+            q: filters.search.clone(),
+            series: filters.series.clone(),
+            event_type: filters.event_type.clone(),
+            date_from: filters.date_from.clone(),
+            date_to: filters.date_to.clone(),
+            timezone: Some(filters.timezone.clone()),
+        }
+    }
+
     async fn page(
         state: &Arc<AppState>,
         user_id: i32,
         limit: i64,
         page_token: Option<String>,
     ) -> Result<ActivityResponse, ApiError> {
+        page_with_filters(state, user_id, limit, page_token, ActivityFilters::default()).await
+    }
+
+    async fn page_with_filters(
+        state: &Arc<AppState>,
+        user_id: i32,
+        limit: i64,
+        page_token: Option<String>,
+        filters: ActivityFilters,
+    ) -> Result<ActivityResponse, ApiError> {
         list_activity(
             State(state.clone()),
             AuthenticatedUser::for_test(user_id),
-            Query(ActivityQuery {
-                limit: Some(limit),
-                page_token,
-                cursor: None,
-            }),
+            Query(query_with_filters(limit, page_token, &filters)),
         )
         .await
         .map(|Json(response)| response)
     }
 
     async fn all_pages(state: &Arc<AppState>, user_id: i32, limit: i64) -> Vec<ActivityItem> {
+        all_pages_with_filters(state, user_id, limit, ActivityFilters::default()).await
+    }
+
+    async fn all_pages_with_filters(
+        state: &Arc<AppState>,
+        user_id: i32,
+        limit: i64,
+        filters: ActivityFilters,
+    ) -> Vec<ActivityItem> {
         let mut items = Vec::new();
         let mut token = None;
         for _ in 0..50 {
-            let response = page(state, user_id, limit, token).await.expect("page");
+            let response = page_with_filters(state, user_id, limit, token, filters.clone())
+                .await
+                .expect("page");
             assert!(response.items.len() <= limit as usize);
             assert_eq!(response.next_page_token, response.next_cursor);
             items.extend(response.items);
