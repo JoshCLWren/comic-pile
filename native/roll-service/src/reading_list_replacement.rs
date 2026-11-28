@@ -137,7 +137,7 @@ fn default_gate() -> String {
     "none".to_string()
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReplacementCommitResponse {
     pub target_list_id: i32,
     /// Snapshot ID to pass to Undo (the latest un-undone snapshot is used when
@@ -562,7 +562,7 @@ fn project_after(
         .enumerate()
         .map(|(index, issue_id)| {
             let old_entry = old_by_id.get(&issue_id).copied();
-            let intent = requested_intents.and_then(|intents| intents.get(&issue_id));
+            let intent = requested_intents.as_ref().and_then(|intents| intents.get(&issue_id));
             let (series_name, issue_number) = series_names
                 .get(&issue_id)
                 .cloned()
