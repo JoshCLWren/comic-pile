@@ -29,6 +29,9 @@ export interface UseRollBootstrapResult {
   error: unknown
   failureCount: number
   isRetrying: boolean
+  /** Optional blocked-selection diagnostics load independently of the Roll pool. */
+  recoveryIsPending: boolean
+  recoveryError: unknown
   refetch: () => Promise<RollBootstrapResponse>
 }
 
@@ -188,8 +191,14 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   const data: RollBootstrapResponse | null = composed
   const isPending = die.isPending
     || eligible.isPending
-    || (composed.roll_pool.length > 0 && cards.isPending)
-    || (blockedIssueId != null && dependencyQuery.isPending)
+    || (issueIds.length > 0 && cards.isPending)
+  const recoveryIsPending = blockedIssueId != null && (
+    dependencyQuery.isPending
+    || (prerequisiteIds.length > 0 && prerequisiteCards.isPending)
+  )
+  const recoveryError = blockedIssueId != null
+    ? dependencyQuery.error ?? prerequisiteCards.error ?? null
+    : null
 
   const refetch = useCallback(async (): Promise<RollBootstrapResponse> => {
     // A reconciled mutation publishes its already-fetched scoped snapshot on
@@ -199,18 +208,36 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     await Promise.all([
       die.refetch(),
       eligible.refetch(),
-      cards.refetch(),
+      // `refetch` ignores `enabled`; the cards route rejects an empty batch.
+      ...(issueIds.length > 0 ? [cards.refetch()] : []),
+      ...(blockedIssueId != null ? [dependencyQuery.refetch()] : []),
+      ...(prerequisiteIds.length > 0 ? [prerequisiteCards.refetch()] : []),
+      ...(snoozedIds.length > 0 ? [snoozedSummaries.refetch()] : []),
     ])
     return queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()) ?? composed
-  }, [die, eligible, cards, composed])
+  }, [
+    die,
+    eligible,
+    cards,
+    issueIds.length,
+    blockedIssueId,
+    dependencyQuery,
+    prerequisiteIds.length,
+    prerequisiteCards,
+    snoozedIds.length,
+    snoozedSummaries,
+    composed,
+  ])
 
   return {
     data,
     isPending,
-    isError: die.isError || eligible.isError || cards.isError || dependencyQuery.isError,
-    error: die.error ?? eligible.error ?? cards.error ?? dependencyQuery.error ?? null,
+    isError: die.isError || eligible.isError || cards.isError,
+    error: die.error ?? eligible.error ?? cards.error ?? null,
     failureCount: 0,
     isRetrying: false,
+    recoveryIsPending,
+    recoveryError,
     refetch,
   }
 }

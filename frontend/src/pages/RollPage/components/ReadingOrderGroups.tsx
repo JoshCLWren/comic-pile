@@ -16,9 +16,8 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
   const { groups, isLoading, error } = useDependencyGroups(threadId)
   const {
     data: bootstrap,
-    isPending: isBootstrapLoading,
-    isError: isBootstrapError,
-    error: bootstrapError,
+    recoveryIsPending,
+    recoveryError,
   } = useRollBootstrap()
   const {
     isPending: isSwitching,
@@ -39,8 +38,8 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
       recovery={recovery}
       onReadNow={handleReadNow}
       isPending={isSwitching}
-      isLoading={isBootstrapLoading}
-      errorMessage={switchError ?? (isBootstrapError ? getApiErrorDetail(bootstrapError) : null)}
+      isLoading={recoveryIsPending}
+      errorMessage={switchError ?? (recoveryError != null ? getApiErrorDetail(recoveryError) : null)}
     />
   ) : null
 

@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import type { RollRecoveryInfo, RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
 import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
+import { indexIssueCards } from '../../../hooks/useIssueCards'
+import { useRollIssueCards } from '../../../hooks/useRollResources'
 
 interface RollRecoveryCardProps {
   recovery?: RollRecoveryInfo | null
@@ -51,8 +52,11 @@ export function RollRecoveryCard({
       .filter((id): id is number => id != null),
     [recovery],
   )
-  const cardsQuery = useIssueCards(issuePrerequisiteIds)
-  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
+  const cardsQuery = useRollIssueCards(issuePrerequisiteIds)
+  const cardsByIssue = useMemo(
+    () => indexIssueCards(cardsQuery.data?.items ?? []),
+    [cardsQuery.data],
+  )
 
   if (isLoading) {
     return (
