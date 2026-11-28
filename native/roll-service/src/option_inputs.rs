@@ -1231,4 +1231,429 @@ mod tests {
         assert_eq!(b_frontiers.len(), 1, "{b_frontiers:?}");
         assert_eq!(b_frontiers[0].issue_id, 9401);
     }
+
+    /// #3231 rehearsal fixture. Two readers confirm the same external series and
+    /// even share a catalog-only issue link, but every reader-private column is
+    /// distinct: issue/thread IDs, read progress, rating events, notes, queue
+    /// positions, Reading Lists and their strict/loose gates, exclusions and
+    /// authored prerequisites. Reader A also owns a catalog-only issue and an
+    /// issue with no identity evidence at all; reader B owns a distinct edition.
+    async fn rehearsal_fixture() -> (
+        std::sync::Arc<crate::AppState>,
+        tokio::sync::MutexGuard<'static, ()>,
+    ) {
+        let state = crate::test_support::test_state(4)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let guard = crate::test_support::reset_for_test(&state).await;
+        let conn = db::checkout(&state).await.expect("rehearsal connection");
+        conn.batch_execute(
+            r#"
+            INSERT INTO users (id, username, created_at) VALUES
+                (9101, 'rehearsal-a', NOW()), (9102, 'rehearsal-b', NOW());
+
+            -- Shared confirmed external identities plus two distinct editions.
+            INSERT INTO external_identities
+                (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+            VALUES
+                (8001, 'comicvine', 'series', '4050-1000', '{}'::json, NOW(), NOW()),
+                (8002, 'comicvine', 'series', '4050-2000', '{}'::json, NOW(), NOW()),
+                (8101, 'comicvine', 'issue', '4050-0001', '{}'::json, NOW(), NOW()),
+                (8102, 'comicvine', 'issue', '4050-0002', '{}'::json, NOW(), NOW()),
+                (8103, 'comicvine', 'issue', '4050-0003',
+                    '{"volume_id":"4050-1000"}'::json, NOW(), NOW()),
+                (8104, 'comicvine', 'issue', '4050-1001',
+                    '{"volume_id":"4050-2000"}'::json, NOW(), NOW());
+            INSERT INTO catalog_series (id, canonical_external_identity_id, created_at, updated_at)
+            VALUES (1001, 8001, NOW(), NOW()), (1002, 8002, NOW(), NOW());
+            INSERT INTO catalog_issues
+                (id, canonical_external_identity_id, catalog_series_id, created_at, updated_at)
+            VALUES (9001, 8101, 1001, NOW(), NOW()),
+                   (9002, 8102, 1002, NOW(), NOW()),
+                   (9003, 8104, 1002, NOW(), NOW());
+
+            INSERT INTO threads
+                (id, user_id, title, format, issues_remaining, queue_position, status,
+                 created_at, catalog_series_id, notes, last_rating, reading_progress)
+            VALUES
+                (9201, 9101, 'A catalog thread', 'comic', 2, 1, 'active', NOW(), NULL,
+                    'A private notes', 4.0, 'reading'),
+                (9401, 9102, 'B confirmed thread', 'comic', 2, 1, 'active', NOW(), 1001,
+                    'B private notes', 3.0, 'reading');
+            INSERT INTO issues
+                (id, thread_id, issue_number, status, created_at, position, catalog_issue_id)
+            VALUES
+                (9201, 9201, '1', 'unread', NOW(), 1, 9001),
+                (9202, 9201, '2', 'unread', NOW(), 2, 9002),
+                (9203, 9201, '3', 'unread', NOW(), 3, NULL),
+                (9401, 9401, '1', 'unread', NOW(), 1, 9001),
+                (9402, 9401, '2', 'unread', NOW(), 2, NULL),
+                (9403, 9401, '3', 'unread', NOW(), 3, 9003);
+
+            -- Both readers confirm the same series identity.
+            INSERT INTO thread_external_series_mappings
+                (id, thread_id, external_identity_id, status, evidence_source, created_at, updated_at)
+            VALUES (9601, 9201, 8001, 'confirmed', 'rehearsal', NOW(), NOW()),
+                   (9602, 9401, 8001, 'confirmed', 'rehearsal', NOW(), NOW());
+            -- Reader B has confirmed issue evidence; reader A deliberately has
+            -- only catalog-only evidence plus one issue with no evidence at all.
+            INSERT INTO issue_external_identity_mappings
+                (id, issue_id, external_identity_id, status, evidence_source, evidence_json,
+                 created_at, updated_at)
+            VALUES (9701, 9402, 8103, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW()),
+                   (9702, 9403, 8104, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW());
+
+            INSERT INTO events (id, type, "timestamp", thread_id, issue_id, rating, user_id)
+            VALUES (9801, 'rate', NOW(), 9201, 9201, 4.0, 9101),
+                   (9802, 'roll', NOW(), 9401, 9402, 3.0, 9102);
+
+            INSERT INTO custom_cbl_lists
+                (id, user_id, name, created_at, updated_at, mode)
+            VALUES (9301, 9101, 'A strict', NOW(), NOW(), 'strict'),
+                   (9302, 9102, 'B loose', NOW(), NOW(), 'loose');
+            INSERT INTO custom_cbl_entries
+                (id, list_id, issue_id, position, created_at, gate, skipped)
+            VALUES (9501, 9301, 9201, 1, NOW(), 'none', false),
+                   (9502, 9301, 9202, 2, NOW(), 'after_previous', false),
+                   (9503, 9301, 9203, 3, NOW(), 'none', false),
+                   (9601, 9302, 9401, 1, NOW(), 'none', false),
+                   (9602, 9302, 9402, 2, NOW(), 'hold', false),
+                   (9603, 9302, 9403, 3, NOW(), 'none', false);
+
+            INSERT INTO dependencies
+                (id, created_at, source_issue_id, target_issue_id, origin, classification, provenance)
+            VALUES (9901, NOW(), 9201, 9202, 'reader', 'A', 'rehearsal-authored'),
+                   (9902, NOW(), 9401, 9402, 'reader', 'B', 'rehearsal-authored');
+
+            INSERT INTO collection_exclusions
+                (id, user_id, provider, external_volume_id, created_at)
+            VALUES (9903, 9101, 'comicvine', '4050-1000', NOW()),
+                   (9904, 9102, 'comicvine', '4050-2000', NOW());
+            "#,
+        )
+        .await
+        .expect("seed #3231 rehearsal fixture");
+        drop(conn);
+        (state, guard)
+    }
+
+    #[tokio::test]
+    async fn rehearsal_two_readers_keep_private_state_while_sharing_confirmed_identity() {
+        let (state, _guard) = rehearsal_fixture().await;
+        let conn = db::checkout(&state).await.expect("rehearsal verification connection");
+
+        // The shared external series identity is confirmed for both readers.
+        let shared: Vec<i32> = conn
+            .query(
+                "SELECT t.user_id FROM thread_external_series_mappings m \
+                 JOIN threads t ON t.id = m.thread_id \
+                 WHERE m.external_identity_id = 8001 AND m.status = 'confirmed' \
+                 ORDER BY t.user_id",
+                &[],
+            )
+            .await
+            .expect("shared confirmed identity");
+        assert_eq!(
+            shared.iter().map(|r| r.get::<_, i32>(0)).collect::<Vec<_>>(),
+            vec![9101, 9102]
+        );
+        // The same catalog issue is referenced by both readers; the issue rows
+        // themselves stay private.
+        let shared_catalog: Vec<i32> = conn
+            .query(
+                "SELECT user_id FROM ( \
+                    SELECT t.user_id, i.catalog_issue_id FROM issues i \
+                    JOIN threads t ON t.id = i.thread_id WHERE i.catalog_issue_id = 9001 \
+                 ) s ORDER BY user_id",
+                &[],
+            )
+            .await
+            .expect("shared catalog reference");
+        assert_eq!(
+            shared_catalog
+                .iter()
+                .map(|r| r.get::<_, i32>(0))
+                .collect::<Vec<_>>(),
+            vec![9101, 9102]
+        );
+
+        for (user_id, ids, notes, rating, queue, mode, gate, exclusion, dependency) in [
+            (
+                9101,
+                vec![9201, 9202, 9203],
+                "A private notes",
+                4.0,
+                1,
+                "strict",
+                "after_previous",
+                "1000",
+                (9201, 9202),
+            ),
+            (
+                9102,
+                vec![9401, 9402, 9403],
+                "B private notes",
+                3.0,
+                1,
+                "loose",
+                "hold",
+                "2000",
+                (9401, 9402),
+            ),
+        ] {
+            let owned: Vec<i32> = conn
+                .query(
+                    "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id \
+                     WHERE t.user_id = $1 ORDER BY i.id",
+                    &[&user_id],
+                )
+                .await
+                .expect("owned issues");
+            assert_eq!(
+                owned.iter().map(|r| r.get::<_, i32>(0)).collect::<Vec<_>>(),
+                ids,
+                "reader {user_id} issue IDs must stay private"
+            );
+            let private: (String, f64, i32) = {
+                let row = conn
+                    .query_one(
+                        "SELECT notes, last_rating, queue_position FROM threads WHERE user_id = $1",
+                        &[&user_id],
+                    )
+                    .await
+                    .expect("reader thread private state");
+                (row.get(0), row.get(1), row.get(2))
+            };
+            assert_eq!(private.0, notes);
+            assert_eq!(private.1, rating);
+            assert_eq!(private.2, queue);
+            let list: (String, String) = {
+                let row = conn
+                    .query_one(
+                        "SELECT l.mode, e.gate FROM custom_cbl_lists l \
+                         JOIN custom_cbl_entries e ON e.list_id = l.id \
+                         WHERE l.user_id = $1 ORDER BY e.position LIMIT 1 OFFSET 1",
+                        &[&user_id],
+                    )
+                    .await
+                    .expect("reader Reading List gate");
+                (row.get(0), row.get(1))
+            };
+            assert_eq!(list, (mode.to_string(), gate.to_string()));
+            let excluded: String = conn
+                .query_one(
+                    "SELECT external_volume_id FROM collection_exclusions WHERE user_id = $1",
+                    &[&user_id],
+                )
+                .await
+                .expect("reader exclusion")
+                .get(0);
+            assert_eq!(excluded, exclusion);
+            let authored: (i32, i32) = {
+                let row = conn
+                    .query_one(
+                        "SELECT d.source_issue_id, d.target_issue_id FROM dependencies d \
+                         JOIN issues i ON i.id = d.target_issue_id \
+                         JOIN threads t ON t.id = i.thread_id \
+                         WHERE t.user_id = $1 AND d.origin = 'reader'",
+                        &[&user_id],
+                    )
+                    .await
+                    .expect("reader-authored prerequisite");
+                (row.get(0), row.get(1))
+            };
+            assert_eq!(authored, dependency);
+        }
+        drop(conn);
+    }
+
+    #[tokio::test]
+    async fn rehearsal_before_after_eligibility_volume_and_blocker_parity() {
+        let (state, _guard) = rehearsal_fixture().await;
+
+        // "Before": the original catalog-only volume evidence query from the
+        // pre-#3221 `issue_volume_rows` branch, run on the same fixture.
+        let conn = db::checkout(&state).await.expect("baseline connection");
+        let baseline = conn
+            .query(
+                "SELECT i.id, e.provider, e.external_id FROM issues i \
+                 JOIN threads t ON t.id = i.thread_id \
+                 JOIN catalog_issues ci ON ci.id = i.catalog_issue_id \
+                 JOIN catalog_series s ON s.id = ci.catalog_series_id \
+                 JOIN external_identities e ON e.id = s.canonical_external_identity_id \
+                 WHERE t.user_id = $1",
+                &[&9101],
+            )
+            .await
+            .expect("baseline catalog evidence");
+        drop(conn);
+        let mut before: BTreeMap<i32, BTreeSet<(String, String)>> = BTreeMap::new();
+        for row in &baseline {
+            before
+                .entry(row.get(0))
+                .or_default()
+                .insert(normalize_volume(&row.get::<_, String>(1), &row.get::<_, String>(2)));
+        }
+        assert_eq!(
+            before.get(&9201),
+            Some(&BTreeSet::from([("comicvine".into(), "1000".into())]))
+        );
+        assert_eq!(
+            before.get(&9202),
+            Some(&BTreeSet::from([("comicvine".into(), "2000".into())]))
+        );
+
+        // "After": the current owner-scoped snapshot CTE for each reader.
+        let a_snapshot = snapshot_for(&state, 9101).await;
+        let a_after = volume_map(&a_snapshot);
+        for (issue_id, keys) in &before {
+            for key in keys {
+                assert!(
+                    a_after.get(issue_id).is_some_and(|v| v.contains(key)),
+                    "catalog-only evidence {issue_id} {key:?} lost: {a_after:?}"
+                );
+            }
+        }
+        // The issue with no mapping and no catalog link stays unknown, never guessed.
+        assert!(!a_after.contains_key(&9203));
+
+        let a_inputs = assemble_snapshot(a_snapshot).expect("A snapshot");
+        a_inputs.require_resolved().expect("A resolved");
+        assert_eq!(
+            a_inputs.excluded_issue_ids.iter().copied().collect::<Vec<_>>(),
+            vec![9201],
+            "A's own volume exclusion applies only to A's catalog-only issue"
+        );
+        let a_validated = validated_contained(a_inputs).expect("A validated");
+        let a_edges = a_validated.unsatisfied_edges().expect("A edges");
+        assert!(
+            a_edges.iter().all(|e| e.origin != "reader" || e.source_issue_id == 9201),
+            "A's authored prerequisite must stay inside A: {a_edges:?}"
+        );
+        let a_blockers = a_validated.frontier_blockers().expect("A blockers");
+        assert_eq!(
+            a_blockers
+                .iter()
+                .map(|f| (f.queue_position, f.issue_id, f.unsatisfied.len()))
+                .collect::<Vec<_>>(),
+            vec![(1, 9202, 0), (2, 9203, 0)],
+            "exact A frontier/blocker shape: {a_blockers:?}"
+        );
+        let a_frontiers = a_validated.eligible_frontiers().expect("A frontiers");
+        assert_eq!(
+            a_frontiers.iter().map(|f| f.issue_id).collect::<Vec<_>>(),
+            vec![9202]
+        );
+
+        let b_snapshot = snapshot_for(&state, 9102).await;
+        let b_after = volume_map(&b_snapshot);
+        assert_eq!(
+            b_after.get(&9401),
+            Some(&BTreeSet::from([("comicvine".into(), "1000".into())])),
+            "B's catalog-only evidence survives"
+        );
+        assert_eq!(
+            b_after.get(&9402),
+            Some(&BTreeSet::from([("comicvine".into(), "1000".into())])),
+            "B's confirmed metadata volume survives"
+        );
+        assert_eq!(
+            b_after.get(&9403),
+            Some(&BTreeSet::from([("comicvine".into(), "2000".into())])),
+            "B's distinct edition keeps its own volume key"
+        );
+
+        let b_inputs = assemble_snapshot(b_snapshot).expect("B snapshot");
+        b_inputs.require_resolved().expect("B resolved");
+        assert_eq!(
+            b_inputs.excluded_issue_ids.iter().copied().collect::<Vec<_>>(),
+            vec![9403],
+            "A's volume exclusion must not leak to B; B excludes its own edition"
+        );
+        let b_validated = validated_contained(b_inputs).expect("B validated");
+        let b_edges = b_validated.unsatisfied_edges().expect("B edges");
+        assert_eq!(
+            b_edges
+                .iter()
+                .filter(|e| e.origin == "reader")
+                .map(|e| (e.source_issue_id, e.target_issue_id))
+                .collect::<Vec<_>>(),
+            vec![(9401, 9402)],
+            "B's authored prerequisite blocks only B: {b_edges:?}"
+        );
+        let b_blockers = b_validated.frontier_blockers().expect("B blockers");
+        assert_eq!(
+            b_blockers
+                .iter()
+                .map(|f| (f.queue_position, f.issue_id, f.unsatisfied.len()))
+                .collect::<Vec<_>>(),
+            vec![(1, 9401, 0), (2, 9402, 2)],
+            "B's hold + authored prerequisite keep exact blocker shape: {b_blockers:?}"
+        );
+        let b_frontiers = b_validated.eligible_frontiers().expect("B frontiers");
+        assert_eq!(
+            b_frontiers.iter().map(|f| f.issue_id).collect::<Vec<_>>(),
+            vec![9401]
+        );
+    }
+
+    #[tokio::test]
+    async fn rehearsal_card_projection_is_owner_scoped_confirmed_only_and_bounded() {
+        let (state, _guard) = rehearsal_fixture().await;
+        let conn = db::checkout(&state).await.expect("card projection connection");
+
+        // One set-based call for a mixed batch: A's issues, B's issue and an
+        // unknown id. The foreign and unknown ids are omitted, order preserved.
+        let response = crate::issue_service::cards(
+            &conn,
+            crate::auth::AuthenticatedUser::for_test(9101),
+            &[9201, 9401, 9202, 9999],
+        )
+        .await
+        .expect("A card projection");
+        assert_eq!(
+            response.items.iter().map(|c| c.issue_id).collect::<Vec<_>>(),
+            vec![9201, 9202],
+            "card projection must be owner-scoped and preserve first-request order"
+        );
+        let catalog_only = &response.items[0];
+        assert!(!catalog_only.has_confirmed_identity);
+        assert_eq!(catalog_only.mapping_state, "unmapped");
+        assert_eq!(catalog_only.comicvine_issue_id, None);
+        assert_eq!(catalog_only.cover_image_url, None);
+        assert_eq!(catalog_only.rating, Some(4.0), "A's own rating must survive");
+
+        let b_response = crate::issue_service::cards(
+            &conn,
+            crate::auth::AuthenticatedUser::for_test(9102),
+            &[9401, 9402, 9403, 9201],
+        )
+        .await
+        .expect("B card projection");
+        assert_eq!(
+            b_response.items.iter().map(|c| c.issue_id).collect::<Vec<_>>(),
+            vec![9401, 9402, 9403]
+        );
+        let confirmed = &b_response.items[1];
+        assert!(confirmed.has_confirmed_identity);
+        assert_eq!(confirmed.mapping_state, "confirmed");
+        assert_eq!(confirmed.comicvine_issue_id.as_deref(), Some("4050-0003"));
+        assert_eq!(confirmed.rating, None, "A's rating must not leak to B");
+        // A distinct edition is a separate confirmed identity, never merged
+        // into the shared volume just because both readers confirmed it.
+        assert_eq!(
+            b_response.items[2].comicvine_issue_id.as_deref(),
+            Some("4050-1001")
+        );
+
+        // Bounded input: the batch cap rejects oversized requests before any
+        // projection work, and a single call resolves the whole bounded batch.
+        assert!(
+            crate::issue_service::validate_cards(&crate::issue_service::IssueCardsRequest {
+                issue_ids: (1..=201).collect(),
+            })
+            .is_err()
+        );
+        drop(conn);
+    }
 }
