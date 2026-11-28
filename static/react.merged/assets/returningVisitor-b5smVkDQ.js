@@ -1,1 +1,0 @@
-import{v as e}from"./index-CSuBgtPQ.js";var t=`comic-pile:returning-visitor`;function n(){return typeof localStorage<`u`}function r(){if(!n())return!1;try{return localStorage.getItem(`comic-pile:returning-visitor`)===`1`||localStorage.getItem(e)!==null}catch{return!1}}function i(){if(n())try{localStorage.setItem(t,`1`)}catch{}}export{i as n,r as t};

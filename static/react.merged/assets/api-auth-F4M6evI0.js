@@ -1,1 +1,0 @@
-import{t as e}from"./httpClient-B_5thRbr.js";function t(e){return{forgotPassword:t=>e.post(`/v2/auth/forgot-password`,t),resetPassword:t=>e.post(`/v2/auth/reset-password`,t)}}var n=t(e());export{n as t};

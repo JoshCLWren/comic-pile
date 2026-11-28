@@ -1,1 +1,0 @@
-var e=null;function t(t){e=t}function n(){if(!e)throw Error(`The default HTTP client was requested before api.ts registered one`);return e}function r(){return{get:(e,t)=>n().get(e,t),delete:(e,t)=>n().delete(e,t),post:(e,t,r)=>n().post(e,t,r),put:(e,t,r)=>n().put(e,t,r),patch:(e,t,r)=>n().patch(e,t,r)}}export{t as n,r as t};

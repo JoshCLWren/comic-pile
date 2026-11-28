@@ -1,1 +1,0 @@
-function e(e){if(!e)return null;let t=e.split(`:`);return t.length!==2||t[0]!==`creator`||!/^\d+$/.test(t[1])?null:Number(t[1])}function t(e){return`/creators/${encodeURIComponent(e)}`}export{e as n,t};

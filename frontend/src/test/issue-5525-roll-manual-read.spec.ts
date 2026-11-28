@@ -22,7 +22,12 @@ test.describe('P0 #5525 Roll manual selection', () => {
     page.on('request', (request) => {
       if (request.method() === 'GET') return
       const path = new URL(request.url()).pathname
-      if (path.includes('/roll/offers') || path.includes('/issues/')) {
+      // `/issues/cards` is the batched read-model projection used to hydrate
+      // the exact issue card, not a pending-offer or read-state write.
+      if (
+        (path.includes('/roll/offers') || path.includes('/issues/')) &&
+        !path.includes('/issues/cards')
+      ) {
         rollRequests.push(`${request.method()} ${path}`)
       }
     })
