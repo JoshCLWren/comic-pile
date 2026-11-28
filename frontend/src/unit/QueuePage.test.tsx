@@ -26,7 +26,12 @@ import { useToast } from '../contexts/useToast'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
-import { rollApi } from '../services/api-roll'
+import { rollApi, writeRollSnoozes } from '../services/api-roll'
+import {
+  clearAllPendingSelections,
+  resetRollPendingSelectionMemory,
+  writePendingSelection,
+} from '../services/rollPendingSelection'
 import type { ThreadListItem } from '../types'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
@@ -155,6 +160,9 @@ const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
+  clearAllPendingSelections(null)
+  resetRollPendingSelectionMemory()
+  writeRollSnoozes([])
   // Completed rows come from the independent Rust collection, never the active Queue response.
   // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
   mockedUseCompletedThreads.mockReturnValue({
@@ -346,10 +354,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('uses native reroll when the pending comic Snooze action is clicked', async () => {
-    mockedUseRollBootstrap.mockReturnValue({
-      data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
-      refetch: vi.fn(),
-    })
+    writePendingSelection(null, { thread_id: 1, issue_id: 1, selected_at: Date.now() })
 
     const user = userEvent.setup()
     render(
@@ -378,6 +383,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       },
       refetch: vi.fn(),
     })
+    writePendingSelection(null, { thread_id: 2, issue_id: 2, selected_at: Date.now() })
 
     const user = userEvent.setup()
     render(
@@ -399,14 +405,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('removes thread from snooze cookie when Unsnooze action is clicked', async () => {
-    mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
-        skipped_thread_ids: [],
-        skipped_threads: [],
-      },
-      refetch: vi.fn(),
-    })
+    writeRollSnoozes([1])
 
     const user = userEvent.setup()
     render(
@@ -429,10 +428,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('does not run a second session fetch after the snooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
-    mockedUseRollBootstrap.mockReturnValue({
-      data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
-      refetch: mockRefetchSession,
-    })
+    writePendingSelection(null, { thread_id: 1, issue_id: 1, selected_at: Date.now() })
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
@@ -465,14 +461,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('does not run a second session fetch after the unsnooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
-    mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
-        skipped_thread_ids: [],
-        skipped_threads: [],
-      },
-      refetch: mockRefetchSession,
-    })
+    writeRollSnoozes([1])
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },

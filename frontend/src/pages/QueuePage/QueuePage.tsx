@@ -7,7 +7,8 @@ import QueueBulkReadOperations from './QueueBulkReadOperations'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useCompletedThreads } from '../../hooks/useCompletedThreads'
-import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollPendingSelection } from '../../hooks/useRollPendingSelection'
+import { readRollSnoozes } from '../../services/api-roll'
 import { useRollPendingSync } from './useRollPendingSync'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
@@ -32,7 +33,6 @@ import { useQueueRestore } from './useQueueRestore'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
-
 /**
  * Route entry for the Queue page. The component composes the focused
  * retained feature modules (`QueueControls`, `QueueList`, `QueueModals`,
@@ -46,7 +46,6 @@ export default function QueuePage() {
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
   const isSearching = searchQuery.trim() !== ''
-
   const queueLoader = useQueueThreads(searchQuery, sortBy)
   const {
     data: threads,
@@ -61,7 +60,8 @@ export default function QueuePage() {
   // Series that show the per-row `Map series` repair action (everything except
   // fully mapped or non-issue-tracked rows) are the bulk action's scope; an open run keeps reading the cursor.
   const bulkMapping = useQueueBulkMapping(queueLoader)
-  const { data: rollBootstrap } = useRollBootstrap()
+  const { pending } = useRollPendingSelection()
+  const rollBootstrap = { pending_thread_id: pending?.thread_id ?? null, snoozed_thread_ids: readRollSnoozes(), snoozed_threads: [] }
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const reactivateMutation = useReactivateThread()

@@ -134,6 +134,13 @@ export function defaultHandlers(auth: AuthMode, user: HarnessUser): HandlerMap {
     'GET /api/v2/identity-inbox': () => ({ data: { items: [], total: 0, offset: 0, limit: 1 } }),
     'GET /api/v2/releases': () => ({ data: { releases: [], total: 0 } }),
     'GET /api/v2/demo-roll': () => ({ data: DEMO_ROLL }),
+    // #4350: the scoped Roll page now renders as soon as its scoped inputs
+    // settle, so the shared reading-graph recovery card mounts on a cold `/`
+    // load. Answer its bounded status read with a healthy graph; otherwise the
+    // ledger's empty fallback is not a valid ReadingGraphResponse (#6011).
+    'GET /api/v2/reading-graph': () => ({
+      data: { status: 'ok', cycles: [], cyclic_issue_ids: [], repairs: [], unresolved_reference_count: 0 },
+    }),
     'POST /api/v2/readingSessions': () => ({ data: { session_id: 1, created: false } }),
   }
 }

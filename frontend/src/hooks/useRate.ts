@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useContext, useRef, useState } from 'react'
+import { AuthContext } from '../contexts/AuthContext'
 import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi } from '../services/apiTypes'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { applyRatedThreadCache } from '../query/cacheEffects'
@@ -69,6 +70,9 @@ export function useRate(deps: RateDeps = {}) {
   const rollBootstrap = bootstrapApi
   const applyCache = cacheEffects?.applyRatedThreadCache ?? applyRatedThreadCache
   const client = queryClientInstance ?? queryClient
+  // Recovery must read the same browser partition the rating view writes. The
+  // context is optional so isolated hook tests keep working before auth resolves.
+  const userId = useContext(AuthContext)?.user?.id ?? null
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
   const inFlightRequest = useRef<Promise<RateMutationOutcome> | null>(null)
@@ -93,7 +97,7 @@ export function useRate(deps: RateDeps = {}) {
 
         let bootstrap: RollBootstrapResponse | null = null
         try {
-          bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap)
+          bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap, userId)
         } catch (reconciliationError: unknown) {
           console.error(
             'Rating saved but authoritative Roll state failed to refresh:',
@@ -110,6 +114,7 @@ export function useRate(deps: RateDeps = {}) {
               () => protectedRollApi.rate(data),
               undefined,
               protectedRollApi,
+              userId,
             )
             if (recovery.status === 'retried') {
               await applyCache(client, recovery.value, { refetchRollBootstrap: false })
@@ -118,7 +123,7 @@ export function useRate(deps: RateDeps = {}) {
               }
               let bootstrap: RollBootstrapResponse | null = null
               try {
-                bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap)
+                bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap, userId)
               } catch (reconciliationError: unknown) {
                 console.error(
                   'Rating saved but authoritative Roll state failed to refresh:',
@@ -140,13 +145,14 @@ export function useRate(deps: RateDeps = {}) {
             const reconciliation = await reconcileAmbiguousRollMutation(
               data.thread_id,
               rollBootstrap,
+              userId,
             )
             if (reconciliation.committed) {
               if (shouldSnoozeAfterRating(data, undefined)) {
                 // The reconciling bootstrap was fetched before the snooze was
                 // recorded; refetch so the published pool excludes the comic.
                 addRollSnooze(data.thread_id)
-                const bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap)
+                const bootstrap = await fetchAndPublishRollBootstrap(rollBootstrap, userId)
                 return { rate: undefined, bootstrap }
               }
               return { rate: undefined, bootstrap: reconciliation.bootstrap }

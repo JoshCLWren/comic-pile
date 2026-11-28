@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { AuthContext } from '../contexts/AuthContext'
 import { fetchAndPublishRollBootstrap, isAmbiguousNetworkFailure } from './rollMutationReconciliation'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -12,6 +13,7 @@ interface RollPrerequisiteSwitchState {
 
 export function useRollPrerequisiteSwitch(): RollPrerequisiteSwitchState {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const userId = useContext(AuthContext)?.user?.id ?? null
 
   const mutation = useMutation({
     mutationFn: async (issueId: number) => {
@@ -19,7 +21,7 @@ export function useRollPrerequisiteSwitch(): RollPrerequisiteSwitchState {
       try {
         await rollBootstrapApi.switchPrerequisite({ node_type: 'issue', node_id: issueId })
         try {
-          await fetchAndPublishRollBootstrap()
+          await fetchAndPublishRollBootstrap(rollBootstrapApi, userId)
         } catch {
           setErrorMessage(
             'The roll switched, but ComicPile could not refresh its recovery guidance. The new reading target may already be active.',
@@ -29,7 +31,7 @@ export function useRollPrerequisiteSwitch(): RollPrerequisiteSwitchState {
         const ambiguous = isAmbiguousNetworkFailure(error)
         const switchFailure = getApiErrorDetail(error)
         try {
-          await fetchAndPublishRollBootstrap()
+          await fetchAndPublishRollBootstrap(rollBootstrapApi, userId)
           setErrorMessage(
             ambiguous
               ? 'ComicPile could not confirm whether the roll switched. Recovery guidance has been refreshed.'

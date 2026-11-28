@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useContext, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { AuthContext } from '../contexts/AuthContext'
 import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, RollMutationDeps } from '../services/apiTypes'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
@@ -44,6 +45,8 @@ export function useSnooze(deps: RollMutationDeps = {}) {
   const rollBootstrap = bootstrapApi
   const invalidateSessionCache = cacheEffects?.invalidateCurrentSessionAfterSnooze ?? invalidateCurrentSessionAfterSnooze
   const queryClient = useQueryClient()
+  // Keep the recovery read in the signed-in reader's browser partition.
+  const userId = useContext(AuthContext)?.user?.id ?? null
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
   const [refreshError, setRefreshError] = useState<unknown>(null)
@@ -56,7 +59,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     const request = (async (): Promise<RefreshOutcome> => {
       for (let attempt = 1; attempt <= SNOOZE_REFRESH_ATTEMPTS; attempt += 1) {
         try {
-          await fetchAndPublishRollBootstrap(rollBootstrap)
+          await fetchAndPublishRollBootstrap(rollBootstrap, userId)
           setRefreshError(null)
           return { refreshed: true, error: null }
         } catch (error: unknown) {
@@ -75,7 +78,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     } finally {
       refreshRequest.current = null
     }
-  }, [rollBootstrap])
+  }, [rollBootstrap, userId])
 
   const retryRefresh = useCallback(async (): Promise<boolean> => {
     setIsPending(true)
@@ -115,6 +118,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
               () => protectedRollApi.snooze(),
               undefined,
               protectedRollApi,
+              userId,
             )
             if (recovery.status === 'retried') {
               await invalidateSessionCache(queryClient)
@@ -135,6 +139,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
             const { committed } = await reconcileAmbiguousRollMutation(
               expectedPendingThreadId,
               rollBootstrap,
+              userId,
             )
             if (committed) {
               // The reconciliation already fetched and published authoritative

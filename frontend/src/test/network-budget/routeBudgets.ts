@@ -103,5 +103,12 @@ export function auxBudget(path: string): readonly string[] {
  * @returns True when the row belongs to the authenticated Roll surface.
  */
 export function isPeerRollRow(row: string): boolean {
-  return row.startsWith('GET /api/v2/roll/') || row.startsWith('POST /api/v2/readingSessions')
+  return (
+    row.startsWith('GET /api/v2/roll/') ||
+    row.startsWith('POST /api/v2/readingSessions') ||
+    // Mounted by the scoped Roll page's recovery card and reading-mode launcher,
+    // not by the public or auxiliary routes whose budgets this filter protects
+    // (#6011).
+    row.startsWith('GET /api/v2/reading-graph') || row.startsWith('GET /api/v2/reading-mode')
+  )
 }

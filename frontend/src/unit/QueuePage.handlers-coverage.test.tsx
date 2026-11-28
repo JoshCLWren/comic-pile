@@ -11,7 +11,7 @@ import { useSnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
-import { rollApi } from '../services/api-roll'
+import { rollApi, writeRollSnoozes } from '../services/api-roll'
 
 const toastMocks = vi.hoisted(() => ({ showToast: vi.fn(), removeToast: vi.fn() }))
 vi.mock('../hooks/useCompletedThreads', () => ({
@@ -501,7 +501,7 @@ describe('QueuePage callback coverage', () => {
     const user = userEvent.setup()
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useRollBootstrap).mockReturnValue({ data: { snoozed_threads: [{ id: 1 }] }, refetch: mocks.refetchSession } as never)
+    writeRollSnoozes([1])
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
@@ -524,7 +524,7 @@ describe('QueuePage callback coverage', () => {
     const user = userEvent.setup()
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useRollBootstrap).mockReturnValue({ data: { snoozed_threads: [{ id: 1 }] }, refetch: mocks.refetchSession } as never)
+    writeRollSnoozes([1])
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])

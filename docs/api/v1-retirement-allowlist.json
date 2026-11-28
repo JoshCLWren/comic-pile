@@ -2189,6 +2189,7 @@
       "consumers": [
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/rollBootstrapScopedComposition.test.ts",
         "frontend/src/unit/rollResourcesApi.test.ts"
       ]
     },

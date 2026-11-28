@@ -17,6 +17,8 @@ interface UseRollRatingParams {
   rateMutation: { mutate: (payload: RatePayload) => Promise<RateMutationOutcome>; isPending: boolean }
   dismissPendingMutation: { mutate: () => Promise<void>; isPending: boolean }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
+  /** Clear the browser-owned selection after a committed rate of that issue. */
+  clearPending?: (issueId?: number) => void
 }
 
 /**
@@ -31,7 +33,9 @@ export function useRollRating({
   rateMutation,
   dismissPendingMutation,
   refetchBootstrap,
+  clearPending,
 }: UseRollRatingParams) {
+  void dismissPendingMutation
   const {
     activeRatingThread,
     threadToMigrate,
@@ -209,6 +213,7 @@ export function useRollRating({
             issueNumber,
             rating,
           })
+          clearPending?.(issueId)
           suppressPendingAutoOpenRef.current = true
           setIsRolling(false)
           setIsRatingView(false)
@@ -225,6 +230,7 @@ export function useRollRating({
       activeRatingThread,
       rating,
       rateMutation,
+      clearPending,
       setShowSimpleMigration,
       suppressPendingAutoOpenRef,
       setIsRolling,
@@ -304,6 +310,11 @@ export function useRollRating({
           activeRatingThread.next_issue_number ?? activeRatingThread.issue_number ?? '',
         rating,
       })
+      // Only a committed rate of the exact selected issue clears the browser
+      // selection. A direct read of an unrelated issue leaves it intact.
+      clearPending?.(
+        activeRatingThread.issue_id ?? activeRatingThread.next_issue_id ?? undefined,
+      )
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)
@@ -351,24 +362,15 @@ export function useRollRating({
   }
 
   /**
-   * Leaves the rating view without rating, discarding the in-flight pending read.
-   *
-   * Clearing local state alone is not enough: `useRollPendingSession` rehydrates
-   * the rating view from `bootstrap.pending_thread_id` whenever one exists, so a
-   * purely local exit is undone on the next render. Dismissing the pending read
-   * and refetching is what makes the exit stick. This is also the single exit
-   * path for the header's `Back to queue` chrome (issue #2712), so the header
-   * action and the decision card's cancel cannot drift into different semantics.
+   * Leaves the rating view without rating, clearing only the browser-owned
+   * selection. There is no server pending pointer and no dismiss/refetch pair:
+   * cancelling must not issue a request, and local state stays cleared across
+   * reloads because the selection itself is removed.
    */
   const handleCancelRating = useCallback(
     async () => {
-      try {
-        await dismissPendingMutation.mutate()
-        await refetchBootstrap()
-      } catch (error) {
-        setErrorMessage(getApiErrorDetail(error))
-        return
-      }
+      clearPending?.()
+      suppressPendingAutoOpenRef.current = true
       setIsRatingView(false)
       setRolledResult(null)
       setSelectedThreadId(null)
@@ -376,8 +378,8 @@ export function useRollRating({
       setErrorMessage('')
     },
     [
-      dismissPendingMutation,
-      refetchBootstrap,
+      clearPending,
+      suppressPendingAutoOpenRef,
       setIsRatingView,
       setRolledResult,
       setSelectedThreadId,
