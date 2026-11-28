@@ -134,7 +134,7 @@ beforeEach(() => {
   mutateMock.mockResolvedValue(SAVED_THREAD)
   mockedUseUpdateThread.mockReturnValue({ mutate: mutateMock, isPending: false } as never)
   mockedThreadsApiGet.mockReset()
-  mockedThreadsApiGet.mockImplementation(async () => serverThread)
+  mockedThreadsApiGet.mockImplementation(async () => serverThread as never)
   mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockResolvedValue({
     issues: [{ id: 1, thread_id: 1, issue_number: '6', status: 'unread', read_at: null, created_at: 'now' }],
