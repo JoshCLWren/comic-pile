@@ -7,7 +7,7 @@
 //! removed and temporarily malformed sources are deactivated rather than
 //! deleted, and that a legacy repository alias is reconciled in place.
 
-use chrono::{TimeZone, Utc};
+use chrono::{Duration, TimeZone, Utc};
 use comicpile_roll_service::{
     cbl_ingest::{
         build_inventory, discover_cbl_files, parse_cbl_file, sync_cbl_lists, CBLList,
@@ -20,6 +20,7 @@ use std::{
     collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
+    process::Command,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -66,6 +67,49 @@ impl MirrorFixture {
         }
         (parsed, failures)
     }
+
+    fn init_git(&self) -> String {
+        git(&self.root, &["init", "--quiet"]);
+        git(
+            &self.root,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/JoshCLWren/CBL-ReadingLists.git",
+            ],
+        );
+        git(&self.root, &["add", "."]);
+        git(
+            &self.root,
+            &[
+                "-c",
+                "user.name=CBL Test",
+                "-c",
+                "user.email=cbl-test@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "fixture",
+            ],
+        );
+        git(&self.root, &["rev-parse", "HEAD"]).trim().to_string()
+    }
+}
+
+fn git(root: &Path, arguments: &[&str]) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(arguments)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "git {arguments:?} failed");
+    String::from_utf8(output.stdout).unwrap()
+}
+
+fn revision(byte: char) -> String {
+    std::iter::repeat_n(byte, 40).collect()
 }
 
 impl Drop for MirrorFixture {

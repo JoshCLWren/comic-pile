@@ -1593,6 +1593,62 @@ mod tests {
     }
 
     #[test]
+    fn rejects_wrong_roots_and_database_bound_violations() {
+        let wrong_root = b"<Foo><Books><Book Series=\"X\" Number=\"1\" /></Books></Foo>";
+        let error = parse_cbl_bytes(wrong_root, "DC/Wrong.cbl").expect_err("wrong root");
+        assert!(error.to_string().contains("ReadingList"));
+
+        let missing_books = b"<ReadingList><Name>Empty</Name></ReadingList>";
+        assert!(parse_cbl_bytes(missing_books, "DC/MissingBooks.cbl").is_err());
+
+        let long_series = format!(
+            "<ReadingList><Books><Book Series=\"{}\" Number=\"1\" /></Books></ReadingList>",
+            "S".repeat(MAX_SERIES_NAME_LENGTH + 1)
+        );
+        assert!(parse_cbl_bytes(long_series.as_bytes(), "DC/Series.cbl").is_err());
+
+        let long_issue = format!(
+            "<ReadingList><Books><Book Series=\"X\" Number=\"{}\" /></Books></ReadingList>",
+            "1".repeat(MAX_ISSUE_NUMBER_LENGTH + 1)
+        );
+        assert!(parse_cbl_bytes(long_issue.as_bytes(), "DC/Issue.cbl").is_err());
+
+        let nested_id = format!(
+            "<ReadingList><Books><Book Series=\"X\" Number=\"1\"><Database Name=\"ComicVine\" Issue=\"{}\" /></Book></Books></ReadingList>",
+            "9".repeat(MAX_EXTERNAL_ID_LENGTH + 1)
+        );
+        assert!(parse_cbl_bytes(nested_id.as_bytes(), "DC/Identity.cbl").is_err());
+    }
+
+    #[test]
+    fn pinned_checkout_requires_exact_clean_origin_and_head() {
+        let fixture = GitFixture::new(DEFAULT_REPOSITORY);
+        verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
+            .expect("clean pinned checkout");
+        assert!(verify_pinned_checkout(
+            &fixture.root,
+            &"0".repeat(40),
+            DEFAULT_REPOSITORY
+        )
+        .is_err());
+
+        fs::write(fixture.root.join("DC.cbl"), "<ReadingList><Books /></ReadingList>").unwrap();
+        assert!(verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
+            .expect_err("dirty checkout")
+            .to_string()
+            .contains("clean"));
+        git(&fixture.root, &["checkout", "--", "DC.cbl"]);
+        fs::write(fixture.root.join("untracked.cbl"), "<ReadingList><Books /></ReadingList>")
+            .unwrap();
+        assert!(verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
+            .is_err());
+        fs::remove_file(fixture.root.join("untracked.cbl")).unwrap();
+        git(&fixture.root, &["remote", "set-url", "origin", "https://github.com/other/fork.git"]);
+        assert!(verify_pinned_checkout(&fixture.root, &fixture.revision, DEFAULT_REPOSITORY)
+            .is_err());
+    }
+
+    #[test]
     fn inventory_counts_publishers_duplicates_and_failures() {
         let good = parse_cbl_bytes(
             &minimal_cbl("<Book Series=\"X\" Number=\"1\" />"),
@@ -1625,7 +1681,7 @@ mod tests {
         let arguments = vec![
             "/mirror".to_string(),
             "--revision-sha".to_string(),
-            "abc1234".to_string(),
+            "a".repeat(40),
             "--reconcile-repository".to_string(),
             DEFAULT_REPOSITORY.to_string(),
         ];
@@ -1633,7 +1689,7 @@ mod tests {
         let options = parse_options(&[
             "/mirror".to_string(),
             "--revision-sha".to_string(),
-            "abc1234".to_string(),
+            "a".repeat(40),
             "--dry-run".to_string(),
         ])
         .expect("options");
