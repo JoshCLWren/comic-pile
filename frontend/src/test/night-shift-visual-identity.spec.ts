@@ -119,6 +119,23 @@ test.describe('Night Shift single visual identity (#5980)', () => {
         expect(
           await page.evaluate(() => document.documentElement.getAttribute('data-theme')),
         ).toBeNull()
+        if (label === 'queue') {
+          expect(
+            await controlContrast(page.getByRole('button', { name: 'Add Series', exact: true }).first()),
+          ).toBeGreaterThanOrEqual(4.5)
+          expect(
+            await controlContrast(page.getByRole('button', { name: 'Shuffle', exact: true })),
+          ).toBeGreaterThanOrEqual(4.5)
+          await expect(page.getByRole('button', { name: 'Position', exact: true })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+          )
+        }
+        if (label === 'reading-lists') {
+          expect(
+            await controlContrast(page.getByRole('button', { name: 'Create', exact: true })),
+          ).toBeGreaterThanOrEqual(4.5)
+        }
 
         await page.screenshot({
           path: join(SCREENSHOT_DIRECTORY, `${label}-${viewportName}.png`),
