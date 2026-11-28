@@ -216,7 +216,6 @@ pub struct SetPendingRequest {
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct CheckDuplicatesRequest {
     pub title: String,
-    pub format: String,
     pub comicvine_volume_id: Option<i32>,
     pub exclude_thread_id: Option<i32>,
 }
@@ -232,7 +231,6 @@ pub struct GroupsBatchRequest {
 pub struct PotentialDuplicateMatch {
     pub thread_id: i32,
     pub title: String,
-    pub format: String,
     pub status: String,
     pub issues_remaining: i32,
     pub total_issues: Option<i32>,
@@ -277,16 +275,6 @@ fn not_found(thread_id: i64) -> ApiError {
 
 fn json_response(status: StatusCode, body: impl Serialize) -> Response {
     (status, Json(body)).into_response()
-}
-
-/// Mirror `app.models.thread.normalize_format_value`.
-fn normalize_format_value(value: &str) -> String {
-    let stripped = value.trim();
-    match stripped.to_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => stripped.to_string(),
-    }
 }
 
 /// Mirror `app.models.thread.normalize_notes_value`.
@@ -476,7 +464,7 @@ async fn load_views(
              FROM threads
              WHERE user_id = $1 AND status = 'active' AND queue_position >= 1
          )
-         SELECT t.id, t.title, t.format,
+         SELECT t.id, t.title,
                 CASE WHEN t.total_issues IS NOT NULL
                      THEN (SELECT count(*)::int FROM issues i
                            WHERE i.thread_id = t.id AND i.status = 'unread')
