@@ -4,13 +4,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   useDismissPending,
-  useOverrideRoll,
   useReroll,
   useRoll,
   useSetDie,
 } from '../hooks/useRoll'
 import { rollApi } from '../services/api-roll'
-import type { OverrideRollPayload } from '../types'
 import { cast } from '../utils/cast'
 import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
 
@@ -24,7 +22,6 @@ function wrapper({ children }: { children: ReactNode }) {
 vi.mock('../services/api-roll', () => ({
   rollApi: {
     roll: vi.fn(),
-    override: vi.fn(),
     dismissPending: vi.fn(),
     setDie: vi.fn(),
     reroll: vi.fn(),
@@ -55,8 +52,6 @@ async function setupMutation<TArg, TReturn>(
 beforeEach(() => {
   // SAFETY: Mocked roll payload is not inspected by the assertions; empty object satisfies the success path shape.
   mockedRollApi.roll.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.roll>>>({}))
-  // SAFETY: Override mock uses the same empty success shape; safe because only call count is asserted.
-  mockedRollApi.override.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.override>>>({}))
   // SAFETY: dismissPending resolves void; undefined is the expected value.
   mockedRollApi.dismissPending.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.dismissPending>>>(undefined))
   // SAFETY: setDie resolves void; undefined matches the mocked resolution.
@@ -68,12 +63,6 @@ beforeEach(() => {
 it('calls roll mutation', async () => {
   await setupMutation(useRoll, undefined)
   expect(mockedRollApi.roll).toHaveBeenCalled()
-})
-
-it('calls override mutation', async () => {
-  const payload: OverrideRollPayload = { thread_id: 9 }
-  await setupMutation(useOverrideRoll, payload)
-  expect(mockedRollApi.override).toHaveBeenCalledWith(payload)
 })
 
 it('calls dismiss pending mutation', async () => {

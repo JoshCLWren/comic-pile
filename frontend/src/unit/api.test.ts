@@ -152,7 +152,6 @@ it('calls every remaining API resource endpoint', async () => {
   await threadsApi.listStale(7)
   await threadsApi.setPending(1)
   await rollApi.roll()
-  await rollApi.override({ thread_id: 1 })
   await rollApi.dismissPending()
   await rollApi.reroll()
   await rollApi.setDie(6)
