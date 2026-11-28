@@ -22879,6 +22879,60 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Case-insensitive literal text search over series, issue number and action type",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Case-insensitive literal series-title filter",
+            "in": "query",
+            "name": "series",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Reader-visible activity type filter",
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Inclusive reader-local start date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Inclusive reader-local end date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA time zone used to resolve reader-local date bounds",
+            "in": "query",
+            "name": "timezone",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -22893,7 +22947,7 @@
             "description": "Owner-scoped activity history"
           },
           "400": {
-            "description": "Malformed or unrecognized page token"
+            "description": "Malformed page token or invalid activity filter"
           },
           "401": {
             "description": "Not authenticated"

@@ -12653,6 +12653,18 @@ export interface operations {
                 limit?: number;
                 /** @description Opaque continuation cursor */
                 page_token?: string;
+                /** @description Case-insensitive literal text search over series, issue number and action type */
+                q?: string;
+                /** @description Case-insensitive literal series-title filter */
+                series?: string;
+                /** @description Reader-visible activity type filter */
+                type?: string;
+                /** @description Inclusive reader-local start date (YYYY-MM-DD) */
+                date_from?: string;
+                /** @description Inclusive reader-local end date (YYYY-MM-DD) */
+                date_to?: string;
+                /** @description IANA time zone used to resolve reader-local date bounds */
+                timezone?: string;
             };
             header?: never;
             path?: never;
@@ -12669,7 +12681,7 @@ export interface operations {
                     "application/json": components["schemas"]["ActivityResponse"];
                 };
             };
-            /** @description Malformed or unrecognized page token */
+            /** @description Malformed page token or invalid activity filter */
             400: {
                 headers: {
                     [name: string]: unknown;
