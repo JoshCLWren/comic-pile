@@ -280,7 +280,6 @@ Non-browser / helper / infrastructure surface included in the census:
 
 - #4341: `POST /api/v1/roll/override` — not-live; retire-without-replacement.
 - #4343: `GET /api/v1/sessions/current/` — not-live; retire-without-replacement.
-- #5525: `POST /api/v1/threads/{thread_id}/set-pending` — live-p0-evidence; retire-without-replacement.
 - #5707: `POST /api/v1/threads/{thread_id}:setCurrentIssue` — not-live; POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
 - #5710: `GET /api/v1/reading-order-groups/` — not-live; GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}].
@@ -307,4 +306,4 @@ None. Every live v1 method has an owner or an explicit disposition.
 
 ## Verification
 
-`node scripts/generate_live_route_census.mjs --check` regenerates the matrix, compares the checked-in artifacts byte-for-byte, and fails on duplicate registrations, unowned new routes, unknown ingress/runtime, stale allowlist entries, or a new first-party v1 call. The regression `POST /api/v1/threads/{thread_id}/set-pending` must always be present with owner #4344.
+`node scripts/generate_live_route_census.mjs --check` regenerates the matrix, compares the checked-in artifacts byte-for-byte, and fails on duplicate registrations, unowned new routes, unknown ingress/runtime, stale allowlist entries, or a new first-party v1 call.

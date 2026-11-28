@@ -5509,14 +5509,6 @@
       "notes": "Event-derived v2 state supersedes the legacy current-session resource."
     },
     {
-      "issue": 5525,
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
-      "status": "live-p0-evidence",
-      "disposition": "retire-without-replacement",
-      "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
-    },
-    {
       "issue": 5707,
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
