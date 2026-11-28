@@ -298,6 +298,10 @@ Non-browser / helper / infrastructure surface included in the census:
 - #4343: `GET /api/v1/sessions/current/` — not-live; retire-without-replacement.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
 - #5702: `POST /api/v1/threads/` — not-live; POST /api/v2/threads.
+- #5705: `POST /api/v1/threads/check-duplicates` — not-live; retire-without-replacement.
+- #5711: `POST /api/v1/threads/groups:batch` — not-live; retire-without-replacement.
+- #5703: `DELETE /api/v1/threads/{thread_id}` — not-live; retire-without-replacement.
+- #5703: `PUT /api/v1/threads/{thread_id}` — not-live; retire-without-replacement.
 - #5706: `GET /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
 - #5706: `POST /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
 - #5706: `GET /api/v1/threads/{thread_id}/issues/creators` — not-live; GET /api/v2/threads/{thread_id}/creatorCredits.

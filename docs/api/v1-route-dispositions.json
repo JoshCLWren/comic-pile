@@ -363,6 +363,42 @@
       "retired_by_issue": 5958
     },
     {
+      "issue": 5705,
+      "method": "POST",
+      "path": "/api/v1/threads/check-duplicates",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "retired_by_issue": 5958,
+      "notes": "#5958: retired; retained only as an explicit 404 tombstone because it overlaps a still-owned v1 catch-all."
+    },
+    {
+      "issue": 5711,
+      "method": "POST",
+      "path": "/api/v1/threads/groups:batch",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "retired_by_issue": 5958,
+      "notes": "#5958: retired; retained only as an explicit 404 tombstone because it overlaps a still-owned v1 catch-all."
+    },
+    {
+      "issue": 5703,
+      "method": "DELETE",
+      "path": "/api/v1/threads/{thread_id}",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "retired_by_issue": 5958,
+      "notes": "#5958: retired; retained only as an explicit 404 tombstone because it overlaps a still-owned v1 catch-all."
+    },
+    {
+      "issue": 5703,
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "retired_by_issue": 5958,
+      "notes": "#5958: retired; retained only as an explicit 404 tombstone because it overlaps a still-owned v1 catch-all."
+    },
+    {
       "issue": 5706,
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues",
