@@ -34,8 +34,12 @@ const thread: ThreadListItem = {
   created_at: '2026-01-01T00:00:00Z',
 }
 
-function issuePage(issues: Issue[], next_page_token: string | null): IssueListResponse {
-  return { issues, total_count: 2, page_size: 100, next_page_token }
+function issuePage(
+  issues: Issue[],
+  next_page_token: string | null,
+  total_count = issues.length,
+): IssueListResponse {
+  return { issues, total_count, page_size: 100, next_page_token }
 }
 
 describe('canonical hook pagination', () => {
@@ -65,32 +69,50 @@ describe('canonical hook pagination', () => {
     expect(list).toHaveBeenCalledTimes(2)
   })
 
-  it('loads the full supported unread issue collection across 100 pages', async () => {
+  it('loads the full supported 10,000-issue unread collection across 100 pages', async () => {
     let count = 0
-    const list = vi.fn(async () => issuePage(
-      [firstIssue],
-      ++count < SUPPORTED_ISSUE_PAGES ? String(count) : null,
-    ))
+    const list = vi.fn(async () => {
+      count += 1
+      const issues = Array.from({ length: 100 }, (_, index) => ({
+        ...firstIssue,
+        id: (count - 1) * 100 + index + 1,
+        position: (count - 1) * 100 + index + 1,
+      }))
+      return issuePage(
+        issues,
+        count < SUPPORTED_ISSUE_PAGES ? String(count) : null,
+        10_000,
+      )
+    })
     const { result } = renderHook(
       () => useThreadIssuesForDependency(7, true, { list }),
       { wrapper: createWrapper() },
     )
-    await waitFor(() => expect(result.current.data).toHaveLength(SUPPORTED_ISSUE_PAGES))
+    await waitFor(() => expect(result.current.data).toHaveLength(10_000))
     expect(result.current.isError).toBe(false)
     expect(list).toHaveBeenCalledTimes(SUPPORTED_ISSUE_PAGES)
   })
 
-  it('loads the full supported crossover issue range across 100 pages', async () => {
+  it('loads the full supported 10,000-issue crossover range across 100 pages', async () => {
     let count = 0
-    const list = vi.fn(async () => issuePage(
-      [firstIssue],
-      ++count < SUPPORTED_ISSUE_PAGES ? String(count) : null,
-    ))
+    const list = vi.fn(async () => {
+      count += 1
+      const issues = Array.from({ length: 100 }, (_, index) => ({
+        ...firstIssue,
+        id: (count - 1) * 100 + index + 1,
+        position: (count - 1) * 100 + index + 1,
+      }))
+      return issuePage(
+        issues,
+        count < SUPPORTED_ISSUE_PAGES ? String(count) : null,
+        10_000,
+      )
+    })
     const { result } = renderHook(
       () => useCrossoverIssuesForRange(7, { issues: { list } }),
       { wrapper: createWrapper() },
     )
-    await waitFor(() => expect(result.current.data).toHaveLength(SUPPORTED_ISSUE_PAGES))
+    await waitFor(() => expect(result.current.data).toHaveLength(10_000))
     expect(result.current.isError).toBe(false)
     expect(list).toHaveBeenCalledTimes(SUPPORTED_ISSUE_PAGES)
   })
