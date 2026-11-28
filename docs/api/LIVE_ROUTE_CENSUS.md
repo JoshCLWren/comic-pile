@@ -13,11 +13,11 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 213 (v1 33, v2 177, unversioned 3).
+- Live API routes: 216 (v1 33, v2 180, unversioned 3).
 - v1 routes with a named retirement owner: 33.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 918.
+- Scanned first-party call sites: 920.
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 135 (owner 135, baseline debt 0, nonconforming v2 99).
 
@@ -175,6 +175,9 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/reading-lists/{list_id}/reader` | `reading_list::read_reading_list` | v2 | frontend/src/services/api-custom-cbl.ts, frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts, frontend/src/test/reading-plan-reader.spec.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
 | POST | `/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits` | `issue_identity::cbl_targeted_adoption_commit` | v2 | frontend/src/services/api-cbl-sources.ts, frontend/src/unit/api-cbl-sources.test.ts | /api/native_roll.rs | #4844 | canonical-v2 | live-target |
 | POST | `/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications` | `apply_custom_cbl` | v2 | frontend/src/services/api-custom-cbl.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/api-custom-cbl.test.ts | /api/native_roll.rs | #4844 | canonical-v2 | live-target |
+| POST | `/api/v2/reading-lists/{list_id}/replacements` | `commit_replacement` | v2 | none | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
+| POST | `/api/v2/reading-lists/{list_id}/replacements:preview` | `preview_replacement` | v2 | none | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
+| POST | `/api/v2/reading-lists/{list_id}/replacements:undo` | `undo_replacement` | v2 | none | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/reading-mode` | `reading_mode::get_reading_mode` | v2 | frontend/src/services/readingMode.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/test/reading-mode-quiz.spec.ts, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/readingMode.service.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | PUT | `/api/v2/reading-mode` | `reading_mode::set_reading_mode` | v2 | frontend/src/services/readingMode.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/test/reading-mode-quiz.spec.ts, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/readingMode.service.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/reading-mode/suggestion-dismissals` | `reading_mode::dismiss_reading_mode_suggestion` | v2 | frontend/src/services/readingMode.ts, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/readingMode.service.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |

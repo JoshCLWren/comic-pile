@@ -29,10 +29,10 @@ import {
   mockPreview,
   mockPlan,
   mockCommit,
+  mockCommitSource,
   mockCommitNew,
   mockGraphPreview,
-  mockListPlans,
-  mockGetPlan,
+  mockGetOwnedList,
   mockApplyCommitted,
   source,
   renderPage,
@@ -47,6 +47,7 @@ import {
   expandVolume,
 } from './CblBrowserPage.fixture'
 import { issueCardsApi } from '../services/issueCardsApi'
+import { saveOwnedCblList } from '../utils/cblAdoptionOwnership'
 vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 describe('CblBrowserPage adoption', () => {
@@ -175,152 +176,146 @@ describe('CblBrowserPage adoption', () => {
     ).toBeInTheDocument()
   })
 
-  it('confirms before adding and opens the plan', async () => {
+  it('confirms before adding and opens the owned Reading List by its canonical ID', async () => {
     const user = userEvent.setup()
-    const committed = { id: 42, name: 'Ultimate Universe' }
-    mockCommitNew.mockResolvedValue(committed)
+    const committed = {
+      id: 42,
+      name: 'Ultimate Universe',
+      custom_cbl_list_id: 900,
+      list_version: 1,
+    }
+    mockCommitSource.mockResolvedValue(committed)
     mockApplyCommitted.mockResolvedValue(undefined)
     renderPage()
     await searchFor(user)
     await selectSource(user)
     await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
-    expect(mockCommitNew).not.toHaveBeenCalled()
+    expect(mockCommitSource).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: 'Add this reading order?' })).toBeInTheDocument()
+    expect(screen.getByText(/Add Ultimate Universe to a new Reading List you own/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Add reading order' }))
     await waitFor(() => {
-      expect(mockCommitNew).toHaveBeenCalledWith(
+      expect(mockCommitSource).toHaveBeenCalledWith(
         7,
         expect.objectContaining({ total_positions: 2 }),
-        { series_decisions: {}, entry_decisions: {}, overlap_decisions: [] },
+        expect.objectContaining({
+          series_decisions: {},
+          entry_decisions: {},
+          overlap_decisions: [],
+          list_version: null,
+        }),
       )
     })
     await waitFor(() => {
-      expect(mockApplyCommitted).toHaveBeenCalled()
-      expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/42')
+      expect(mockApplyCommitted).toHaveBeenCalledWith(expect.anything(), 900)
+      expect(screen.getByTestId('location')).toHaveTextContent('/reading-lists/900')
     })
   })
 
-  it('requires an explicit target for a same-named Reading Plan', async () => {
+  it('does not offer a legacy Reading Plan target when another list shares the source name', async () => {
     const user = userEvent.setup()
-    mockListPlans.mockResolvedValue([
-      {
-        id: 88,
-        name: 'Ultimate Universe',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 12,
-        source_paths: [],
-        updated_at: '2026-11-20T00:00:00Z',
-      },
-    ])
-    mockCommit.mockResolvedValue({ id: 88, name: 'Ultimate Universe' })
+    mockCommitSource.mockResolvedValue({
+      id: 88,
+      name: 'Ultimate Universe',
+      custom_cbl_list_id: 901,
+      list_version: 1,
+    })
     mockApplyCommitted.mockResolvedValue(undefined)
     renderPage()
     await searchFor(user)
     await selectSource(user)
 
-    const target = await screen.findByRole('radio', {
-      name: 'Update Ultimate Universe (Reading Plan #88)',
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Choose an existing Reading Plan/)).not.toBeInTheDocument()
+    const add = screen.getByRole('button', { name: 'Add this reading order' })
+    expect(add).toBeEnabled()
+    await user.click(add)
+    await user.click(screen.getByRole('button', { name: 'Add reading order' }))
+    await waitFor(() => {
+      expect(mockCommitSource).toHaveBeenCalledWith(7, expect.anything(), expect.anything())
+      expect(mockCommit).not.toHaveBeenCalled()
+      expect(screen.getByTestId('location')).toHaveTextContent('/reading-lists/901')
     })
-    expect(target).not.toBeChecked()
-    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
-    expect(
-      screen.getByText('Choose the exact Reading Plan to update before adding this source.'),
-    ).toBeInTheDocument()
-    expect(mockCommitNew).not.toHaveBeenCalled()
+  })
 
-    await user.click(target)
-    const update = screen.getByRole('button', { name: 'Update selected Reading Plan' })
-    expect(update).toBeEnabled()
-    await user.click(update)
-    expect(screen.getByRole('heading', { name: 'Update this Reading Plan?' })).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Update Ultimate Universe (Reading Plan #88) with Ultimate Universe? Only the checked entries are applied; Cancel leaves it unchanged.',
-      ),
-    ).toBeInTheDocument()
+  it('reopens the same owned list with saved choices and guards a second update by list version', async () => {
+    const user = userEvent.setup()
+    saveOwnedCblList({
+      sourceId: 7,
+      listId: 900,
+      listVersion: 3,
+      contentHash: 'hash-1',
+      revisionSha: 'abcdef1234567890',
+    })
+    mockBrowse.mockResolvedValue(browsePage({ items: [source], total: 1, total_pages: 1 }))
+    mockGetOwnedList.mockResolvedValue({
+      id: 900,
+      name: 'My Ultimate List',
+      issue_count: 1,
+      list_version: 3,
+      source_content_hash: 'hash-1',
+      source_revision_sha: 'abcdef1234567890',
+      selections: {
+        entry_decisions: {},
+        series_decisions: {},
+        series_overrides: { '1': 'exclude', '2': 'include' },
+      },
+      overlap_decisions: [],
+    })
+    mockCommitSource.mockResolvedValue({
+      id: 900,
+      name: 'My Ultimate List',
+      custom_cbl_list_id: 900,
+      list_version: 4,
+    })
+    mockApplyCommitted.mockResolvedValue(undefined)
+    renderPage('/cbl-sources?list=7')
+    await waitFor(() => {
+      expect(screen.getByTestId('cbl-owned-list')).toHaveTextContent(
+        'Previously added. Linked to Reading List #900',
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Update this Reading List' })).toBeEnabled()
+    })
 
+    await user.click(screen.getByRole('button', { name: 'Customize' }))
+    await waitFor(() => {
+      const checkboxes = screen.getAllByRole('checkbox', { name: /Include .* series/i })
+      expect(checkboxes[0]).not.toBeChecked()
+    })
+    await user.click(screen.getByRole('button', { name: 'Update this Reading List' }))
+    expect(screen.getByRole('heading', { name: 'Update this Reading List?' })).toBeInTheDocument()
+    expect(screen.getByText(/Reading List #900 · 1 issues/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(mockCommit).not.toHaveBeenCalled()
-    expect(mockCommitNew).not.toHaveBeenCalled()
-    expect(screen.queryByRole('heading', { name: 'Update this Reading Plan?' })).not.toBeInTheDocument()
+    expect(mockCommitSource).not.toHaveBeenCalled()
 
-    await user.click(screen.getByRole('button', { name: 'Update selected Reading Plan' }))
-    await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
+    await user.click(screen.getByRole('button', { name: 'Update this Reading List' }))
+    await user.click(screen.getByRole('button', { name: 'Update Reading List' }))
     await waitFor(() => {
-      expect(mockCommit).toHaveBeenCalledWith(
-        7,
-        88,
-        expect.objectContaining({ total_positions: 2 }),
-        { series_decisions: {}, entry_decisions: {}, overlap_decisions: [] },
-      )
-    })
-    expect(mockCommitNew).not.toHaveBeenCalled()
-  })
-
-  it('requires confirmation before updating a plan already linked to the source', async () => {
-    const user = userEvent.setup()
-    mockListPlans.mockResolvedValue([
-      {
-        id: 89,
-        name: 'Curated Ultimate Reading',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 2,
-        source_paths: ['Ultimate.cbl'],
-        updated_at: '2026-11-20T00:00:00Z',
-      },
-    ])
-    mockCommit.mockResolvedValue({ id: 89, name: 'Curated Ultimate Reading' })
-    mockApplyCommitted.mockResolvedValue(undefined)
-    renderPage()
-    await searchFor(user)
-    await selectSource(user)
-
-    const target = await screen.findByRole('radio', {
-      name: 'Update Curated Ultimate Reading (Reading Plan #89)',
-    })
-    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
-    await user.click(target)
-    await user.click(screen.getByRole('button', { name: 'Update selected Reading Plan' }))
-    expect(
-      screen.getByText(
-        'Update Curated Ultimate Reading (Reading Plan #89) with Ultimate Universe? Only the checked entries are applied; Cancel leaves it unchanged.',
-      ),
-    ).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
-
-    await waitFor(() => {
-      expect(mockCommit).toHaveBeenCalledWith(7, 89, expect.anything(), expect.anything())
-    })
-    expect(mockCommitNew).not.toHaveBeenCalled()
-  })
-
-  it('keeps Add blocked until the existing Reading Plan check succeeds', async () => {
-    const user = userEvent.setup()
-    mockListPlans.mockRejectedValueOnce(new Error('plans unavailable')).mockResolvedValue([])
-    renderPage()
-    await searchFor(user)
-    await selectSource(user)
-
-    expect(await screen.findByRole('button', { name: 'Retry Reading Plan check' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
-    expect(
-      screen.getByText('Check existing Reading Plans before adding this source.'),
-    ).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Retry Reading Plan check' }))
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeEnabled()
+      const [, , choices] = mockCommitSource.mock.calls[0]
+      expect(choices.list_version).toBe(3)
+      expect(choices.entry_decisions).toEqual({ '101': false, '102': true })
+      expect(screen.getByTestId('location')).toHaveTextContent('/reading-lists/900')
     })
   })
 
   it('keeps an in-flight commit tracked when Back changes the source view (#4136)', async () => {
     const user = userEvent.setup()
-    let resolveCommit: (value: { id: number; name: string }) => void = () => undefined
+    let resolveCommit: (value: {
+      id: number
+      name: string
+      custom_cbl_list_id: number
+      list_version: number
+    }) => void = () => undefined
     mockCommitNew.mockImplementation(
       () =>
-        new Promise<{ id: number; name: string }>((resolve) => {
+        new Promise<{
+          id: number
+          name: string
+          custom_cbl_list_id: number
+          list_version: number
+        }>((resolve) => {
           resolveCommit = resolve
         }),
     )
@@ -349,7 +344,7 @@ describe('CblBrowserPage adoption', () => {
     // When the request completes it must not drag the reader away from the
     // view that no longer shows the added source; the cache still learns it.
     await act(async () => {
-      resolveCommit({ id: 42, name: 'Ultimate Universe' })
+      resolveCommit({ id: 42, name: 'Ultimate Universe', custom_cbl_list_id: 900, list_version: 1 })
     })
     await waitFor(() => {
       expect(mockApplyCommitted).toHaveBeenCalledTimes(1)
@@ -367,7 +362,7 @@ describe('CblBrowserPage adoption', () => {
   it('does not navigate after Back lands during post-commit cache updates (#4136)', async () => {
     const user = userEvent.setup()
     let resolveCacheUpdate: () => void = () => undefined
-    mockCommitNew.mockResolvedValue({ id: 42, name: 'Ultimate Universe' })
+    mockCommitNew.mockResolvedValue({ id: 42, name: 'Ultimate Universe', custom_cbl_list_id: 900, list_version: 1 })
     // Hold the cache update open so Back can land after the commit settled but
     // before its success callback decides whether to navigate.
     mockApplyCommitted.mockImplementation(
@@ -608,6 +603,8 @@ describe('CblBrowserPage adoption', () => {
     const user = userEvent.setup()
     mockCommitNew.mockResolvedValue({
       id: 88,
+      custom_cbl_list_id: 900,
+      list_version: 1,
       reused_positions: [],
       created_positions: [2],
       excluded_positions: [1],
@@ -648,7 +645,7 @@ describe('CblBrowserPage adoption', () => {
     await confirmAdd(user)
     await waitFor(() => {
       expect(
-        screen.getByText(/This source changed after you reviewed it/),
+        screen.getByText(/This source or its Reading List changed after you reviewed it/),
       ).toBeInTheDocument()
     })
     expect(
@@ -661,44 +658,35 @@ describe('CblBrowserPage adoption', () => {
     })
   })
 
-  it('recovers a timed-out commit by polling the created plan (#3364)', async () => {
+  it('recovers a timed-out commit by replaying its idempotency key, not a second save', async () => {
     const user = userEvent.setup()
     const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
       code: 'ECONNABORTED',
     })
-    mockCommitNew.mockRejectedValue(timeout)
-    mockListPlans.mockResolvedValueOnce([]).mockResolvedValue([
-      {
-        id: 88,
-        name: 'Ultimate Universe',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 2,
-        source_paths: ['Ultimate.cbl'],
-        updated_at: '2026-10-12T00:00:00Z',
-      },
-    ])
-    const recovered = { id: 88, name: 'Ultimate Universe' }
-    mockGetPlan.mockResolvedValue(recovered)
+    mockCommitSource
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce({ id: 88, custom_cbl_list_id: 900, list_version: 1 })
     mockApplyCommitted.mockResolvedValue(undefined)
     renderPage()
     await searchFor(user)
     await selectSource(user)
     await confirmAdd(user)
     await waitFor(() => {
-      expect(mockListPlans).toHaveBeenCalled()
-      expect(mockGetPlan).toHaveBeenCalledWith(88)
-      expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/88')
+      expect(mockCommitSource).toHaveBeenCalledTimes(2)
+      expect(screen.getByTestId('location')).toHaveTextContent('/reading-lists/900')
     })
-    expect(screen.queryByText(/Network error/)).not.toBeInTheDocument()
+    const firstKey = mockCommitSource.mock.calls[0][2].idempotency_key
+    expect(firstKey).toBeTruthy()
+    expect(mockCommitSource.mock.calls[1][2].idempotency_key).toBe(firstKey)
+    expect(mockApplyCommitted).toHaveBeenCalledWith(expect.anything(), 900)
   })
 
   it('recovers a timed-out commit even after Back changed the source view (#4136)', async () => {
     const user = userEvent.setup()
     let rejectCommit: (error: unknown) => void = () => undefined
-    mockCommitNew.mockImplementation(
+    mockCommitSource.mockImplementation(
       () =>
-        new Promise<{ id: number; name: string }>((_resolve, reject) => {
+        new Promise((_resolve, reject) => {
           rejectCommit = reject
         }),
     )
@@ -712,7 +700,7 @@ describe('CblBrowserPage adoption', () => {
     await user.click(await screen.findByRole('button', { name: /Ultimate Universe/ }))
     await confirmAdd(user)
     await waitFor(() => {
-      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+      expect(mockCommitSource).toHaveBeenCalledTimes(1)
     })
 
     // Pressing browser Back leaves the write running and changes the view away
@@ -721,39 +709,23 @@ describe('CblBrowserPage adoption', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/cbl-sources')
     expect(screen.getByLabelText('Search source lists')).toBeDisabled()
 
-    // The server settled the add but its response was lost (an ambiguous
-    // network failure). Recovery and cache updates must still run even though
-    // the reader is no longer viewing the added source; only navigation and
-    // the stale message belong to the view that made the request.
+    // The server settled the add but its response was lost. The idempotent
+    // replay still updates caches, but navigation belongs to the view that
+    // made the request: the reader stays on the catalog they returned to.
+    mockCommitSource.mockResolvedValueOnce({ id: 88, custom_cbl_list_id: 900, list_version: 1 })
     const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
       code: 'ECONNABORTED',
     })
-    mockListPlans.mockResolvedValue([
-      {
-        id: 88,
-        name: 'Ultimate Universe',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 2,
-        source_paths: ['Ultimate.cbl'],
-        updated_at: '2026-10-12T00:00:00Z',
-      },
-    ])
-    const recovered = { id: 88, name: 'Ultimate Universe' }
-    mockGetPlan.mockResolvedValue(recovered)
-
     await act(async () => {
       rejectCommit(timeout)
     })
     await waitFor(() => {
-      expect(mockListPlans).toHaveBeenCalled()
-      expect(mockGetPlan).toHaveBeenCalledWith(88)
+      expect(mockCommitSource).toHaveBeenCalledTimes(2)
       expect(mockApplyCommitted).toHaveBeenCalled()
     })
-    // No navigation hijack: the reader stays on the catalog they returned to.
     expect(screen.getByTestId('location')).toHaveTextContent('/cbl-sources')
     expect(screen.queryByRole('heading', { name: 'Add this reading order?' })).not.toBeInTheDocument()
-    expect(screen.queryByText(/ComicPile did not confirm the new plan in time/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ComicPile did not confirm the saved Reading List in time/)).not.toBeInTheDocument()
   })
 
   it('a new search resets the selection and decisions', async () => {
@@ -1106,7 +1078,7 @@ describe('CblBrowserPage adoption', () => {
       '3 series · 2 rollable · 3 waiting',
     )
 
-    mockCommitNew.mockResolvedValue({ id: 51 })
+    mockCommitNew.mockResolvedValue({ id: 51, custom_cbl_list_id: 900, list_version: 1 })
     mockApplyCommitted.mockResolvedValue(undefined)
     await user.click(screen.getByRole('button', { name: 'Add reading order' }))
     await waitFor(() => {
@@ -1142,7 +1114,7 @@ describe('CblBrowserPage adoption', () => {
       screen.queryByRole('heading', { name: 'Resolve overlapping series' }),
     ).not.toBeInTheDocument()
 
-    mockCommitNew.mockResolvedValue({ id: 52 })
+    mockCommitNew.mockResolvedValue({ id: 52, custom_cbl_list_id: 900, list_version: 1 })
     mockApplyCommitted.mockResolvedValue(undefined)
     await user.click(screen.getByRole('button', { name: 'Add reading order' }))
     await waitFor(() => {
@@ -1196,7 +1168,7 @@ describe('CblBrowserPage adoption', () => {
 
   it('keeps the one-decision flow when the reading graph is unavailable (#4020)', async () => {
     const user = userEvent.setup()
-    const committed = { id: 42, name: 'Ultimate Universe' }
+    const committed = { id: 42, name: 'Ultimate Universe', custom_cbl_list_id: 900, list_version: 1 }
     mockCommitNew.mockResolvedValue(committed)
     mockApplyCommitted.mockResolvedValue(undefined)
     mockGraphPreview.mockRejectedValue(new Error('Not Found'))
@@ -1221,7 +1193,7 @@ describe('CblBrowserPage adoption', () => {
     })
     await waitFor(() => {
       expect(mockApplyCommitted).toHaveBeenCalled()
-      expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/42')
+      expect(screen.getByTestId('location')).toHaveTextContent('/reading-lists/900')
     })
   })
 
@@ -1437,7 +1409,7 @@ describe('CblBrowserPage adoption', () => {
     ).not.toBeChecked()
 
     // The commit uses Source A's restored choice.
-    mockCommitNew.mockResolvedValue({ id: 88 })
+    mockCommitNew.mockResolvedValue({ id: 88, custom_cbl_list_id: 900, list_version: 1 })
     mockApplyCommitted.mockResolvedValue(undefined)
     await confirmAdd(user)
     await waitFor(() => {

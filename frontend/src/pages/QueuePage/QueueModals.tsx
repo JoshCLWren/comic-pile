@@ -199,6 +199,8 @@ interface QueueModalsProps {
   editForm: QueueFormState
   /** Failure feedback for the Add Series submit, rendered inside the dialog. */
   createError?: string | null
+  /** Failure feedback for the Edit Series save, rendered inside the dialog. */
+  editError?: string | null
   setCreateForm: (next: QueueFormState) => void
   setEditForm: (next: QueueFormState) => void
   issuePreview: number | null
@@ -265,6 +267,7 @@ export function QueueModals({
   createForm,
   editForm,
   createError = null,
+  editError = null,
   setCreateForm,
   setEditForm,
   issuePreview,
@@ -769,6 +772,16 @@ export function QueueModals({
               onLoad={onIssuesLoaded}
               onPendingMutationsChange={setHasPendingIssueEdits}
             />
+          )}
+
+          {editError && (
+            <p
+              role="alert"
+              data-testid="edit-thread-error"
+              className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-danger)]"
+            >
+              {editError}
+            </p>
           )}
 
           <div className="flex flex-col-reverse sm:flex-row gap-2">
