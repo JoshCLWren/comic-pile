@@ -19,7 +19,15 @@ it('migrates a thread through scoped v2 issue resources', async () => {
     issue_number: String(index + 1),
   }))
   client.post.mockResolvedValueOnce({ issues, next_page_token: null })
-  client.get.mockResolvedValueOnce({ id: 42, total_issues: 12 })
+  const updatedThread = {
+    id: 42,
+    total_issues: 12,
+    issues_remaining: 5,
+    reading_progress: 'in_progress',
+    queue_position: 3,
+    next_unread_issue_id: issues[7].id,
+  }
+  client.get.mockResolvedValueOnce(updatedThread)
 
   const thread = await issuesApi.migrateThread(42, 7, 12)
 
@@ -30,7 +38,9 @@ it('migrates a thread through scoped v2 issue resources', async () => {
     issue_ids: issues.slice(0, 7).map((issue) => issue.id),
   })
   expect(client.get).toHaveBeenCalledWith('/v1/threads/42')
-  expect(thread).toEqual({ id: 42, total_issues: 12 })
+  // Reading progress, queue position and next-unread state come from the
+  // server-owned v2 writes; the client never stores its own pointer.
+  expect(thread).toEqual(updatedThread)
 })
 
 it('chunks bulk read markers at 100 issues without per-issue requests', async () => {
