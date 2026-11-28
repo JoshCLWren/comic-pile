@@ -177,14 +177,14 @@ export default function ResumeRecovery({
       {recoveryState !== 'idle' && (
         <div
           aria-live="assertive"
-          className="fixed inset-x-3 top-3 z-[100] mx-auto max-w-md rounded-xl border border-[var(--theme-border)] bg-white p-4 shadow-lg"
+          className="fixed inset-x-3 top-3 z-[100] mx-auto max-w-md rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4 shadow-lg"
           role={recoveryState === 'failed' ? 'alert' : 'status'}
         >
           {recoveryState === 'reconnecting' ? (
             <p className="text-sm font-medium text-[var(--theme-text-muted)]">Reconnecting ComicPile...</p>
           ) : (
             <>
-              <p className="font-semibold text-[var(--theme-primary-action-text)]">ComicPile could not reconnect</p>
+              <p className="font-semibold text-[var(--theme-text-primary)]">ComicPile could not reconnect</p>
               <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
                 Your last screen is still here. Retry the connection or reload the app.
               </p>

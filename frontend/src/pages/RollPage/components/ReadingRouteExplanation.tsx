@@ -80,7 +80,7 @@ export function ReadingRouteExplanation({
       ) : null}
 
       {sortedReadingOrders.length > 0 ? (
-        <section className="mt-4 rounded-2xl border border-[var(--theme-border)] bg-white/[0.04] p-3" aria-labelledby="routes-heading">
+        <section className="mt-4 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] p-3" aria-labelledby="routes-heading">
           <h3 id="routes-heading" className="text-xs font-black text-[var(--theme-text-primary)]">Reading-order context</h3>
           <p className="mt-1 text-[11px] text-[var(--theme-text-muted)]">
             Membership is informational here. Roll remains the source of truth for what is next.

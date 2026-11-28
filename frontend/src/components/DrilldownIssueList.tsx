@@ -55,7 +55,7 @@ export function DrilldownIssueList({ issues }: DrilldownIssueListProps) {
               <span
                 className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                   issue.status === 'read'
-                    ? 'bg-green-100 text-green-800'
+                    ? 'bg-[var(--theme-success)]/10 text-[var(--theme-success)]'
                     : 'bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)]'
                 }`}
               >

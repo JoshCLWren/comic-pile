@@ -362,7 +362,7 @@ function InboxItemCard({
 
   return (
     <div className="border border-[var(--theme-border)] rounded-xl bg-[var(--theme-bg-panel)] shadow-sm overflow-hidden">
-      <div className="w-full px-4 py-3 hover:bg-white/[0.04] transition-colors flex items-start justify-between gap-3">
+      <div className="w-full px-4 py-3 hover:bg-[var(--theme-bg-hover)] transition-colors flex items-start justify-between gap-3">
         <button
           type="button"
           onClick={() => toggleExpand(item.mapping_id)}

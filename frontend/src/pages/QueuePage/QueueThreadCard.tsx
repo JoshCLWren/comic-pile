@@ -170,7 +170,7 @@ export default function QueueThreadCard({
     <>
     <div
       data-testid="queue-thread-item"
-      className={`queue-thread-card group relative flex flex-col gap-3 px-3 py-3 @2xl:flex-row @2xl:items-center @2xl:gap-4 @2xl:px-4 @2xl:py-3.5 cursor-pointer transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset`}
+      className={`queue-thread-card group relative flex flex-col gap-3 px-3 py-3 @2xl:flex-row @2xl:items-center @2xl:gap-4 @2xl:px-4 @2xl:py-3.5 cursor-pointer transition-colors hover:bg-[var(--theme-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset`}
       role="link"
       tabIndex={0}
       aria-label={`Open ${thread.title} details`}

@@ -385,11 +385,11 @@ export function ReadingContextPillar({
                     key={`dependency-${edge.id}`}
                     className="flex items-start gap-3 rounded-lg px-3 py-2"
                     style={{
-                      borderLeft: '3px solid var(--theme-comic-accent)',
-                      backgroundColor: 'color-mix(in srgb, var(--theme-comic-accent) 5%, transparent)'
+                      borderLeft: '3px solid var(--theme-continuity-accent)',
+                      backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 5%, transparent)'
                     }}
                   >
-                    <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'var(--theme-comic-accent)' }}></div>
+                    <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'var(--theme-continuity-accent)' }}></div>
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <EdgeEndpoint
@@ -497,8 +497,8 @@ export function ReadingContextPillar({
                       className="min-h-11 rounded-lg px-3 font-black text-[var(--theme-comic-accent)] transition focus:ring-2 hover:brightness-125"
                       style={{
                         ...readingContextType('actionLabel'),
-                        border: '1px solid color-mix(in srgb, var(--theme-comic-accent) 40%, transparent)',
-                        backgroundColor: 'color-mix(in srgb, var(--theme-comic-accent) 9%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--theme-continuity-accent) 40%, transparent)',
+                        backgroundColor: 'color-mix(in srgb, var(--theme-continuity-accent) 9%, transparent)',
                       }}
                       aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
                     >

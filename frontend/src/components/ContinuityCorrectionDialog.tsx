@@ -172,7 +172,7 @@ export default function ContinuityCorrectionDialog({
       data-testid="continuity-correction-dialog"
       overlayClassName="bg-[var(--theme-bg-page)]/70 surface-glass"
     >
-      <section aria-labelledby="continuity-current-heading" className="rounded-2xl border border-[var(--theme-border)] bg-white/[0.04] p-3">
+      <section aria-labelledby="continuity-current-heading" className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] p-3">
         <h3 id="continuity-current-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-text-dim)]">
           Current Comic
         </h3>

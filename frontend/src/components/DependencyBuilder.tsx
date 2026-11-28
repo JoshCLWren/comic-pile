@@ -467,7 +467,7 @@ export default function DependencyBuilder({
                     onClick={() => handleSelectReadingView('timeline')}
                     className={`flex-1 rounded-2xl border px-3 py-3 ${
                       readingView === 'timeline'
-                        ? 'border-white text-[var(--theme-text-primary)]'
+                        ? 'border-[var(--theme-text-primary)] text-[var(--theme-text-primary)]'
                         : 'border-[var(--theme-border)] text-[var(--theme-text-muted)]'
                     }`}
                   >
@@ -482,7 +482,7 @@ export default function DependencyBuilder({
                     onClick={() => handleSelectReadingView('graph')}
                     className={`flex-1 rounded-2xl border px-3 py-3 ${
                       readingView === 'graph'
-                        ? 'border-white text-[var(--theme-text-primary)]'
+                        ? 'border-[var(--theme-text-primary)] text-[var(--theme-text-primary)]'
                         : 'border-[var(--theme-border)] text-[var(--theme-text-muted)]'
                     }`}
                   >
