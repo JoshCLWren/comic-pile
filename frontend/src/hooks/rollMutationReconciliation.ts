@@ -6,6 +6,9 @@ import type {
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
+import { clearAllPendingSelections } from '../services/rollPendingSelection'
 import {
   isNumber,
   isObject,
@@ -63,6 +66,9 @@ export function isAuthenticationMutationFailure(error: unknown): boolean {
 }
 
 export function publishRollBootstrap(state: RollBootstrapResponse): void {
+  // Active Roll observers consume this cache-only snapshot immediately; the
+  // event remains for non-React reconciliation listeners and focused tests.
+  queryClient.setQueryData(queryKeys.roll.bootstrap(), state)
   if (!isWindowDefined() || !isFunction(CustomEvent)) return
 
   window.dispatchEvent(new CustomEvent<RollBootstrapResponse>(
@@ -97,6 +103,7 @@ export async function reconcileAmbiguousRollMutation(
   const committed = expectedPendingThreadId === undefined
     ? pendingThreadId === null
     : pendingThreadId !== expectedPendingThreadId
+  if (committed) clearAllPendingSelections(userId)
 
   return { committed, bootstrap: state }
 }

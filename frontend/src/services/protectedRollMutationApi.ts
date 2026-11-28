@@ -3,8 +3,28 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { RollPendingUserId } from './apiTypes'
 import { createRollBootstrapApi } from './rollBootstrapApi'
 import { createNativeRollMutationApi } from './nativeRollMutationApi'
-import { defaultHttpClient, type HttpClient } from './httpClient'
+import {
+  defaultHttpClient,
+  type ApiRequestConfig,
+  type HttpClient,
+} from './httpClient'
 import { createRollApi } from './api-roll'
+
+/** Keep recovery reads inside the retry loop instead of redirecting to login. */
+function withRollRecoveryConfig(client: HttpClient): HttpClient {
+  return {
+    get: <T = unknown>(url: string, config?: ApiRequestConfig) =>
+      client.get<T>(url, { ...config, skipAuthRedirect: true }),
+    post: <T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>) =>
+      client.post<T, D>(url, data, { ...config, skipAuthRedirect: true }),
+    patch: <T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>) =>
+      client.patch<T, D>(url, data, { ...config, skipAuthRedirect: true }),
+    put: <T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>) =>
+      client.put<T, D>(url, data, { ...config, skipAuthRedirect: true }),
+    delete: <T = unknown>(url: string, config?: ApiRequestConfig) =>
+      client.delete<T>(url, { ...config, skipAuthRedirect: true }),
+  }
+}
 
 /**
  * Build the protected roll-mutation service bound to an HTTP client.
@@ -34,7 +54,7 @@ export function createProtectedRollMutationApi(client: HttpClient) {
      * built lazily so transports can be injected in focused tests.
      */
     bootstrap: async (userId?: RollPendingUserId): Promise<RollBootstrapResponse> =>
-      createRollBootstrapApi(client).get(userId),
+      createRollBootstrapApi(withRollRecoveryConfig(client)).get(userId),
   }
 }
 

@@ -11,7 +11,7 @@ import { dependenciesApi } from '../services/api-dependencies'
 import { buildRollRecovery } from '../services/rollRecovery'
 import { useRollDieState, useRollEligibleIssueIds, useRollIssueCards } from './useRollResources'
 import { useRollPendingSelection } from './useRollPendingSelection'
-import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
+import { publishRollBootstrap } from './rollMutationReconciliation'
 
 /** Best-effort browser IANA timezone, retained for callers that display it. */
 export function resolveBrowserTimezone(): string | undefined {
@@ -288,10 +288,5 @@ export function useRollBootstrap(): UseRollBootstrapResult {
  * reconciliation event has one owner and never performs a network fetch.
  */
 export function publishScopedRollSnapshot(snapshot: RollBootstrapResponse): void {
-  queryClient.setQueryData(queryKeys.roll.bootstrap(), snapshot)
-  if (typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent<RollBootstrapResponse>(
-    ROLL_BOOTSTRAP_RECONCILED_EVENT,
-    { detail: snapshot },
-  ))
+  publishRollBootstrap(snapshot)
 }

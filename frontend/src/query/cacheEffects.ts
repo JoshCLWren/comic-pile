@@ -113,6 +113,8 @@ export interface ApplyRatedThreadCacheOptions {
    * bootstrap themselves should disable auto-refetch to avoid duplicates.
    */
   refetchRollBootstrap?: boolean
+  /** False when a mutation-owned scoped snapshot will replace these queries. */
+  refetchRollResources?: boolean
 }
 
 export async function applyRatedThreadCache(
@@ -172,7 +174,11 @@ export async function applyRatedThreadCache(
     // Rating reorders the Queue, so the paginated loader is reset (not just
     // invalidated) to avoid refetching loaded pages through stale cursors
     // (#933). Other read/progress flows keep ordinary invalidation semantics.
-    invalidateAfterReaderProgress(client, { refetchRollBootstrap, resetQueue: true }),
+    invalidateAfterReaderProgress(client, {
+      refetchRollBootstrap,
+      refetchRollResources: !refetchRollBootstrap,
+      resetQueue: true,
+    }),
   ])
 }
 
@@ -1158,6 +1164,8 @@ interface ReadingEligibilityInvalidationOptions {
    * bootstrap itself (e.g. Roll rating flow) to avoid duplicate requests.
    */
   refetchRollBootstrap?: boolean
+  /** Skip scoped Roll refetches when an authoritative snapshot is already owned. */
+  refetchRollResources?: boolean
   /**
    * Reset the paginated Queue instead of invalidating it. Rating can reorder
    * the Queue, and refetching loaded pages through their pre-mutation cursors
@@ -1175,8 +1183,13 @@ async function invalidateReadingEligibility(
   const {
     includeAuthoringLists = false,
     refetchRollBootstrap = true,
+    refetchRollResources = true,
     resetQueue = false,
   } = options
+  // A published snapshot is a replacement, not another cache layer. Remove it
+  // before scoped queries invalidate so normal Roll commands cannot keep
+  // rendering an older reconciled snapshot forever.
+  client.removeQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true })
   // An initial request with no cached data is not restarted by invalidateQueries.
   // It may have started before the committed read and return stale blockers or
   // progress. Cancel those requests before refetching the same projections.
@@ -1185,9 +1198,11 @@ async function invalidateReadingEligibility(
     queryKeys.issueCards.all,
     queryKeys.queue.all,
     queryKeys.completed.pages(),
-    queryKeys.roll.eligibleIssueIdsAll(),
-    queryKeys.roll.issueCardsAll(),
-    queryKeys.roll.dieState(),
+    ...(refetchRollResources ? [
+      queryKeys.roll.eligibleIssueIdsAll(),
+      queryKeys.roll.issueCardsAll(),
+      queryKeys.roll.dieState(),
+    ] : []),
     queryKeys.roll.lastRead(),
     ...(refetchRollBootstrap ? [queryKeys.roll.bootstrap()] : []),
     queryKeys.dependencies.all,
@@ -1222,9 +1237,11 @@ async function invalidateReadingEligibility(
     client.invalidateQueries({ queryKey: queryKeys.completed.pages() }),
     // Keep other Roll surfaces actively refreshed; bootstrap may be owned by an
     // explicit authoritative fetch in some rating flows.
-    client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
-    client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
-    client.invalidateQueries({ queryKey: queryKeys.roll.dieState(), exact: true }),
+    ...(refetchRollResources ? [
+      client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
+      client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
+      client.invalidateQueries({ queryKey: queryKeys.roll.dieState(), exact: true }),
+    ] : []),
     client.invalidateQueries({ queryKey: queryKeys.roll.lastRead(), exact: true }),
     client.invalidateQueries(
       refetchRollBootstrap
@@ -1246,11 +1263,16 @@ async function invalidateReadingEligibility(
 /** Refresh global read state without refetching a just-saved authoring draft. */
 export async function invalidateAfterReaderProgress(
   client: QueryClient,
-  options: { refetchRollBootstrap?: boolean; resetQueue?: boolean } = {},
+  options: {
+    refetchRollBootstrap?: boolean
+    refetchRollResources?: boolean
+    resetQueue?: boolean
+  } = {},
 ): Promise<void> {
   await invalidateReadingEligibility(client, {
     includeAuthoringLists: true,
     refetchRollBootstrap: options.refetchRollBootstrap,
+    refetchRollResources: options.refetchRollResources,
     resetQueue: options.resetQueue,
   })
 }

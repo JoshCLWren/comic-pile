@@ -14,6 +14,7 @@ import {
   recoverProtectedRollMutation,
 } from './rollMutationReconciliation'
 import { addRollSnooze } from '../services/api-roll'
+import { clearPendingSelectionForIssue } from '../services/rollPendingSelection'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
 
 /**
@@ -86,6 +87,7 @@ export function useRate(deps: RateDeps = {}) {
     const request: Promise<RateMutationOutcome> = (async () => {
       try {
         const result = await protectedRollApi.rate(data)
+        clearPendingSelectionForIssue(data.issue_id)
         await applyCache(client, result, { refetchRollBootstrap: false })
 
         // Write the temporary snooze before refetching bootstrap so the
@@ -117,6 +119,7 @@ export function useRate(deps: RateDeps = {}) {
               userId,
             )
             if (recovery.status === 'retried') {
+              clearPendingSelectionForIssue(data.issue_id)
               await applyCache(client, recovery.value, { refetchRollBootstrap: false })
               if (shouldSnoozeAfterRating(data, recovery.value?.issues_remaining)) {
                 addRollSnooze(data.thread_id)
@@ -148,6 +151,7 @@ export function useRate(deps: RateDeps = {}) {
               userId,
             )
             if (reconciliation.committed) {
+              clearPendingSelectionForIssue(data.issue_id)
               if (shouldSnoozeAfterRating(data, undefined)) {
                 // The reconciling bootstrap was fetched before the snooze was
                 // recorded; refetch so the published pool excludes the comic.
