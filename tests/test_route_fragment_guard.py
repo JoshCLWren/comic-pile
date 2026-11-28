@@ -51,6 +51,95 @@ def test_source_fragments_are_contributor_editable() -> None:
     assert not is_source_fragment("vercel.json")
 
 
+def _fragment(*operations: tuple[str, str]) -> str:
+    """Render a minimal source fragment for resource-route policy tests."""
+    return json.dumps(
+        {
+            "operations": [
+                {"method": method, "path": path} for method, path in operations
+            ]
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v2/threads:checkDuplicates",
+        "/api/v2/threads/{thread_id}/issues:reorder",
+        "/api/v2/roll/dismissPending",
+        "/api/v2/threads/{thread_id}/issues-reorder",
+        "/api/v2/roll/reset",
+    ],
+)
+def test_resource_policy_rejects_new_action_shaped_routes(path: str) -> None:
+    """Colon, bare-verb, and verb-suffixed additions need an exemption."""
+    source = "docs/api/route-fragments/test.json"
+    violations = find_action_route_violations(
+        {},
+        {source: _fragment(("POST", path))},
+        "",
+    )
+    assert len(violations) == 1
+    assert f"POST {path}" in violations[0]
+    assert "owner-approved" in violations[0]
+    assert is_action_shaped_route(path)
+
+
+def test_resource_policy_accepts_resource_routes_and_preexisting_actions() -> None:
+    """Nested resources are free; existing debt is not retroactively blocked."""
+    source = "docs/api/route-fragments/test.json"
+    existing = _fragment(("POST", "/api/v2/threads:checkDuplicates"))
+    resources = _fragment(
+        ("GET", "/api/v2/readingLists/{list_id}"),
+        ("GET", "/api/v2/threads/{thread_id}/issues"),
+        ("POST", "/api/v1/threads:reorder"),
+    )
+    assert find_action_route_violations({source: existing}, {source: existing}, "") == []
+    assert find_action_route_violations({}, {source: resources}, "") == []
+
+
+def test_resource_policy_requires_owned_action_specific_exemption() -> None:
+    """An anonymous or unrelated baseline reason cannot hide a new action."""
+    source = "docs/api/route-fragments/test.json"
+    path = "/api/v2/threads:checkDuplicates"
+    head = {source: _fragment(("POST", path))}
+
+    def baseline(owner: object, reason: str) -> str:
+        return json.dumps(
+            {
+                "entries": [
+                    {
+                        "method": "POST",
+                        "path": path,
+                        "owning_issue": owner,
+                        "reason": reason,
+                    }
+                ]
+            }
+        )
+
+    assert find_action_route_violations({}, head, baseline(5705, "action-shaped-subpath")) == []
+    for owner, reason in [
+        (None, "action-shaped-subpath"),
+        (0, "action-shaped-subpath"),
+        (5705, "non-lowercamelcase-segment"),
+    ]:
+        violations = find_action_route_violations({}, head, baseline(owner, reason))
+        assert len(violations) == 1
+
+
+def test_resource_policy_checks_each_added_method_path_key() -> None:
+    """Adding a mutating method to an existing action path is still new debt."""
+    source = "docs/api/route-fragments/test.json"
+    path = "/api/v2/roll/reset"
+    base = {source: _fragment(("GET", path))}
+    head = {source: _fragment(("GET", path), ("POST", path))}
+    violations = find_action_route_violations(base, head, "")
+    assert len(violations) == 1
+    assert f"POST {path}" in violations[0]
+
+
 def test_agents_path_alone_is_not_unconditionally_generated() -> None:
     """AGENTS.md is editable outside the generated burndown markers."""
     assert not is_generated_path("AGENTS.md")
