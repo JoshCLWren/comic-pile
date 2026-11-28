@@ -10,11 +10,8 @@
 //! * `POST /api/v1/threads/{thread_id}/issues`
 //! * `GET  /api/v1/threads/{thread_id}/issues/creators`
 //! * `POST /api/v1/threads/{thread_id}/issues:reorder`
-//! * `POST /api/v1/threads/{thread_id}:migrateToIssues`
-//! * `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`
-//! * `POST /api/v1/threads/{thread_id}:setCurrentIssue`
 //!
-//! The three `{thread_id}:action` operations are routed through the single
+//! The v1 `{thread_id}:getBlockingInfo` action remains on the same
 //! `POST /api/v1/threads/{thread_id}` dispatcher in
 //! [`crate::thread_ordering::post_thread_action`], which splits the segment on
 //! the first colon.
@@ -36,9 +33,7 @@
 
 use crate::{
     auth::AuthenticatedUser,
-    db, option_inputs, queue, reading_eligibility,
-    reading_session::{self, SessionPolicy},
-    roll_exclusions, thread_ordering, ApiError, AppState,
+    db, option_inputs, queue, thread_ordering, ApiError, AppState,
 };
 use axum::{
     body::Bytes,
