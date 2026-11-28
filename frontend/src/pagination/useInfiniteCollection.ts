@@ -57,6 +57,8 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   isInitialLoading: boolean
   /** True while an additional cursor page is being appended. */
   isNextPageLoading: boolean
+  /** Alias for `isNextPageLoading` for TanStack-shaped call sites. */
+  isFetchingNextPage: boolean
   /** True while any fetch is in flight (initial, refetch, or next page). */
   isLoading: boolean
   /** Alias for `isLoading` used by callers that render a fetching affordance. */
@@ -181,6 +183,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     pages,
     isInitialLoading,
     isNextPageLoading,
+    isFetchingNextPage: query.isFetchingNextPage,
     isLoading: query.isFetching,
     isFetching: query.isFetching,
     failureCount: query.failureCount,
