@@ -38,7 +38,7 @@ test.describe('Issue #4350: browser-owned Roll pending', () => {
     const ledger = startRequestLedger(page)
     await gotoRollPage(page)
 
-    await page.getByTestId('roll-primary-action').click()
+    await page.locator('#main-die-3d').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
 
     // Reload restores the exact pending selection from browser storage.
@@ -52,11 +52,11 @@ test.describe('Issue #4350: browser-owned Roll pending', () => {
       el.dispatchEvent(new Event('change', { bubbles: true }))
     }, '4')
     await page.getByTestId('save-and-continue').click()
-    await expect(page.getByTestId('roll-primary-action')).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('#main-die-3d')).toBeVisible({ timeout: 20000 })
 
     // A second roll works after the committed rate; neither retired operation
     // was used on either pass.
-    await page.getByTestId('roll-primary-action').click()
+    await page.locator('#main-die-3d').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
     expect(retiredRequestCounts(ledger)).toEqual({ bootstrap: 0, sessionPost: 0 })
   })
@@ -73,16 +73,16 @@ test.describe('Issue #4350: browser-owned Roll pending', () => {
     })
     const ledger = startRequestLedger(page)
     await gotoRollPage(page)
-    await page.getByTestId('roll-primary-action').click()
+    await page.locator('#main-die-3d').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
 
     const before = retiredRequestCounts(ledger)
     await page.getByRole('button', { name: 'Cancel roll', exact: true }).click()
-    await expect(page.getByTestId('roll-primary-action')).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('#main-die-3d')).toBeVisible({ timeout: 20000 })
     expect(retiredRequestCounts(ledger)).toEqual(before)
 
     // Reload must not rehydrate a cancelled selection.
     await page.reload()
-    await expect(page.getByTestId('roll-primary-action')).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('#main-die-3d')).toBeVisible({ timeout: 20000 })
   })
 })
